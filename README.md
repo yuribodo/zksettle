@@ -47,7 +47,7 @@ ZKSettle provides a production-ready compliance primitive on Solana:
 2. Issuer adds the wallet to a private Merkle tree and publishes the root on-chain via `register_issuer()`.
 3. When transferring USDC, the user generates a ZK proof locally in under 10 seconds. No data leaves the browser.
 4. The user submits a standard SPL transfer instruction with the proof attached as an extra account.
-5. The Transfer Hook intercepts the transfer, verifies the Groth16 proof via `alt_bn128` syscalls (<200K compute units, <$0.001).
+5. The Transfer Hook intercepts the transfer, verifies the Groth16 proof via `alt_bn128` syscalls (<200K compute units, <$0.001). The thin-slice program uses Reilabs' [`gnark-verifier-solana`](https://github.com/reilabs/sunspot) (Sunspot) crate, which wraps those syscalls — we do not call them directly.
 6. Valid proof → transfer settles atomically. Invalid proof → transfer reverts.
 7. A `ComplianceAttestation` is emitted on-chain as an immutable audit record.
 
@@ -119,6 +119,8 @@ sequenceDiagram
 | Component | Purpose | Location |
 |---|---|---|
 | **ZK Compliance Circuit** | Proves Merkle membership, sanctions exclusion, jurisdiction check, expiry, and nullifier — all in one Groth16 proof | `circuits/` (Noir) |
+
+> ⚠️ **Thin-slice placeholder:** `circuits/src/main.nr` currently implements `x*x == y` only. The verifier key baked into `backend/programs/zksettle/src/generated_vk.rs` is bound to that placeholder circuit, so any proof generated against the real compliance circuit will fail verification until the circuit is replaced and `generated_vk.rs` is regenerated via `build.rs`.
 | **Anchor program** | On-chain verifier. Exposes `register_issuer()`, `verify_proof()`, `check_attestation()` | `backend/programs/zksettle/` (Rust) |
 | **Transfer Hook** | Atomic compliance gate for SPL transfers | `backend/programs/zksettle/` |
 | **Issuer service** | Credential issuance, Merkle tree maintenance, root publication | `backend/crates/issuer-service/` (Rust) |

@@ -1,0 +1,6 @@
+[package]
+name = "zksettle_slice"
+type = "bin"
+authors = [""]
+
+[dependencies]

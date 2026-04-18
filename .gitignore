@@ -1,0 +1,9 @@
+target/
+test-ledger/
+node_modules/
+*.proof
+*.wtns
+*.pk
+.anchor/
+.DS_Store
+backend/programs/zksettle/src/generated_vk.rs
