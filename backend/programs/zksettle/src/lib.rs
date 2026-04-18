@@ -26,7 +26,11 @@ pub mod zksettle {
         instructions::register_issuer::update_handler(ctx, merkle_root)
     }
 
-    pub fn verify_proof(ctx: Context<VerifyProof>, proof_and_witness: Vec<u8>) -> Result<()> {
-        instructions::verify_proof::handler(ctx, proof_and_witness)
+    pub fn verify_proof(
+        ctx: Context<VerifyProof>,
+        proof_and_witness: Vec<u8>,
+        nullifier_hash: [u8; 32],
+    ) -> Result<()> {
+        instructions::verify_proof::handler(ctx, proof_and_witness, nullifier_hash)
     }
 }

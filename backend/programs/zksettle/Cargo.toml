@@ -9,7 +9,11 @@ crate-type = ["cdylib", "lib"]
 name = "zksettle"
 
 [features]
-default = []
+# Drop `placeholder-vk` from `default` once `generated_vk.rs` is regenerated
+# against the real compliance circuit — only then do public-input bindings
+# line up with MERKLE_ROOT_IDX/NULLIFIER_IDX.
+default = ["placeholder-vk"]
+placeholder-vk = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []
