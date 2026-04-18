@@ -6,4 +6,8 @@ pub enum ZkSettleError {
     MalformedProof,
     #[msg("Proof verification failed")]
     ProofInvalid,
+    #[msg("Merkle root must be non-zero")]
+    ZeroMerkleRoot,
+    #[msg("Signer is not the issuer authority")]
+    UnauthorizedIssuer,
 }
