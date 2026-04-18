@@ -5,6 +5,7 @@ package_manager = "npm"
 resolution = true
 skip-lint = false
 
+
 [programs.devnet]
 zksettle = "AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo"
 
