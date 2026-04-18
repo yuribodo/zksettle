@@ -3,6 +3,9 @@ use gnark_verifier_solana::{proof::GnarkProof, verifier::GnarkVerifier, witness:
 
 use crate::error::ZkSettleError;
 use crate::generated_vk::VK;
+use crate::state::{
+    Issuer, Nullifier, ISSUER_SEED, MERKLE_ROOT_IDX, NULLIFIER_IDX, NULLIFIER_SEED,
+};
 
 // gnark-verifier-solana serializes a witness as a 12-byte header followed by
 // `nr_pubinputs` 32-byte field elements.
@@ -12,21 +15,74 @@ pub(crate) const fn expected_witness_len(nr_inputs: usize) -> usize {
     GNARK_WITNESS_HEADER_LEN + nr_inputs * 32
 }
 
+// When the real compliance VK is wired in, the witness must expose at least
+// MERKLE_ROOT_IDX and NULLIFIER_IDX. Fail loudly at compile time otherwise.
+#[cfg(not(feature = "placeholder-vk"))]
+const _: () = assert!(
+    VK.nr_pubinputs > NULLIFIER_IDX,
+    "real VK must expose at least MERKLE_ROOT_IDX and NULLIFIER_IDX public inputs",
+);
+
 /// Split `proof_and_witness` into `(proof_bytes, witness_bytes)` or fail with
 /// `MalformedProof` if the buffer cannot fit both a non-empty proof and the
 /// fixed-size witness.
 fn split_proof_and_witness(data: &[u8], witness_len: usize) -> Result<(&[u8], &[u8])> {
-    // Equal length would leave proof_bytes empty; reject alongside too-short input.
     if data.len() <= witness_len {
         return err!(ZkSettleError::MalformedProof);
     }
     Ok(data.split_at(data.len() - witness_len))
 }
 
-#[derive(Accounts)]
-pub struct VerifyProof {}
+/// Enforce that the witness publicly commits to the issuer's merkle root and to
+/// the instruction's nullifier hash. Compiled unconditionally so unit tests run
+/// under the default feature set; the call site in `handler` stays cfg-gated.
+#[cfg_attr(feature = "placeholder-vk", allow(dead_code))]
+pub(crate) fn check_bindings<const N: usize>(
+    witness: &GnarkWitness<N>,
+    merkle_root: &[u8; 32],
+    nullifier_hash: &[u8; 32],
+) -> Result<()> {
+    require!(N > NULLIFIER_IDX, ZkSettleError::WitnessTooShort);
+    require!(
+        &witness.entries[MERKLE_ROOT_IDX] == merkle_root,
+        ZkSettleError::MerkleRootMismatch
+    );
+    require!(
+        &witness.entries[NULLIFIER_IDX] == nullifier_hash,
+        ZkSettleError::NullifierMismatch
+    );
+    Ok(())
+}
 
-pub fn handler(_ctx: Context<VerifyProof>, proof_and_witness: Vec<u8>) -> Result<()> {
+#[derive(Accounts)]
+#[instruction(proof_and_witness: Vec<u8>, nullifier_hash: [u8; 32])]
+pub struct VerifyProof<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    #[account(
+        seeds = [ISSUER_SEED, issuer.authority.as_ref()],
+        bump = issuer.bump,
+    )]
+    pub issuer: Account<'info, Issuer>,
+
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + Nullifier::LEN,
+        seeds = [NULLIFIER_SEED, issuer.key().as_ref(), nullifier_hash.as_ref()],
+        bump,
+    )]
+    pub nullifier: Account<'info, Nullifier>,
+
+    pub system_program: Program<'info, System>,
+}
+
+pub fn handler(
+    ctx: Context<VerifyProof>,
+    proof_and_witness: Vec<u8>,
+    nullifier_hash: [u8; 32],
+) -> Result<()> {
     const NR_INPUTS: usize = VK.nr_pubinputs;
     const N_COMMITMENTS: usize = VK.commitment_keys.len();
 
@@ -43,6 +99,13 @@ pub fn handler(_ctx: Context<VerifyProof>, proof_and_witness: Vec<u8>) -> Result
         error!(ZkSettleError::MalformedProof)
     })?;
 
+    #[cfg(not(feature = "placeholder-vk"))]
+    check_bindings(
+        &witness,
+        &ctx.accounts.issuer.merkle_root,
+        &nullifier_hash,
+    )?;
+
     let mut verifier: GnarkVerifier<NR_INPUTS> = GnarkVerifier::new(&VK);
 
     verifier.verify(proof, witness).map_err(|e| {
@@ -50,7 +113,10 @@ pub fn handler(_ctx: Context<VerifyProof>, proof_and_witness: Vec<u8>) -> Result
         error!(ZkSettleError::ProofInvalid)
     })?;
 
-    msg!("Proof verified");
+    #[cfg(feature = "placeholder-vk")]
+    let _ = &ctx;
+
+    msg!("Proof settled: nullifier={:?}", nullifier_hash);
     Ok(())
 }
 
@@ -94,5 +160,42 @@ mod tests {
         let (proof, witness) = split_proof_and_witness(&buf, witness_len).unwrap();
         assert_eq!(proof, &[0xaa]);
         assert_eq!(witness.len(), witness_len);
+    }
+
+    mod bindings {
+        use super::*;
+
+        fn witness_with(root: [u8; 32], nullifier: [u8; 32]) -> GnarkWitness<2> {
+            let mut entries = [[0u8; 32]; 2];
+            entries[MERKLE_ROOT_IDX] = root;
+            entries[NULLIFIER_IDX] = nullifier;
+            GnarkWitness { entries }
+        }
+
+        #[test]
+        fn binding_check_accepts_matching_root_and_nullifier() {
+            let root = [1u8; 32];
+            let nul = [2u8; 32];
+            let w = witness_with(root, nul);
+            assert!(check_bindings(&w, &root, &nul).is_ok());
+        }
+
+        #[test]
+        fn binding_check_rejects_root_mismatch() {
+            let w = witness_with([1u8; 32], [2u8; 32]);
+            assert_eq!(
+                err_code(check_bindings(&w, &[9u8; 32], &[2u8; 32])),
+                ERROR_CODE_OFFSET + ZkSettleError::MerkleRootMismatch as u32,
+            );
+        }
+
+        #[test]
+        fn binding_check_rejects_nullifier_mismatch() {
+            let w = witness_with([1u8; 32], [2u8; 32]);
+            assert_eq!(
+                err_code(check_bindings(&w, &[1u8; 32], &[9u8; 32])),
+                ERROR_CODE_OFFSET + ZkSettleError::NullifierMismatch as u32,
+            );
+        }
     }
 }

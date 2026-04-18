@@ -10,4 +10,10 @@ pub enum ZkSettleError {
     ZeroMerkleRoot,
     #[msg("Signer is not the issuer authority")]
     UnauthorizedIssuer,
+    #[msg("Witness merkle_root does not match issuer PDA")]
+    MerkleRootMismatch,
+    #[msg("Witness nullifier does not match instruction argument")]
+    NullifierMismatch,
+    #[msg("Witness has fewer public inputs than required")]
+    WitnessTooShort,
 }

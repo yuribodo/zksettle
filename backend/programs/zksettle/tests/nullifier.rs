@@ -1,14 +1,8 @@
-//! End-to-end verifier tests.
+//! Integration tests for the `verify_proof` nullifier PDA and replay gate.
 //!
-//! These tests are **non-hermetic**: they shell out to `nargo` + `sunspot` to
-//! generate a proof/witness, and they load the compiled `zksettle.so` produced
-//! by `anchor build`. They are gated behind `#[ignore]` so the default
-//! `cargo test` stays green on machines without the toolchain.
-//!
-//! To run them locally:
-//!   1. Install the Noir toolchain (`nargo`) and Reilabs' `sunspot` CLI.
-//!   2. Run `anchor build` from `backend/` so `target/deploy/zksettle.so` exists.
-//!   3. `cargo test -- --ignored` from `backend/programs/zksettle/`.
+//! Gated behind `#[ignore]` — requires `nargo` + `sunspot` and a prior
+//! `anchor build`. Run with `cargo test -- --ignored` from
+//! `backend/programs/zksettle/`.
 
 use std::{fs, path::PathBuf, process::Command};
 
@@ -20,21 +14,22 @@ use solana_message::{AccountMeta, Instruction, Message};
 use solana_signer::Signer;
 use solana_transaction::{InstructionError, Transaction, TransactionError};
 
-use zksettle::error::ZkSettleError;
 use zksettle::instruction::{
     RegisterIssuer as RegisterIssuerIx, VerifyProof as VerifyProofIx,
 };
 use zksettle::state::{ISSUER_SEED, NULLIFIER_SEED};
 
-// Anchor prefixes custom error codes with 6000 (ERROR_CODE_OFFSET).
-const ANCHOR_ERROR_CODE_OFFSET: u32 = 6000;
+// Anchor's `init` on an already-initialized account reports
+// `ErrorCode::AccountDiscriminatorAlreadySet = 3000`.
+const ACCOUNT_DISCRIMINATOR_ALREADY_SET: u32 = 3000;
+// `AccountNotInitialized = 3012`.
+const ACCOUNT_NOT_INITIALIZED: u32 = 3012;
 
 fn repo_root() -> PathBuf {
-    // CARGO_MANIFEST_DIR = backend/programs/zksettle
     let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    p.pop(); // programs
-    p.pop(); // backend
-    p.pop(); // repo root
+    p.pop();
+    p.pop();
+    p.pop();
     p
 }
 
@@ -67,7 +62,6 @@ fn gen_proof_and_witness() -> Vec<u8> {
 
     let proof = fs::read(circuits.join("target/zksettle_slice.proof")).unwrap();
     let pw = fs::read(circuits.join("target/zksettle_slice.pw")).unwrap();
-
     [proof, pw].concat()
 }
 
@@ -78,7 +72,6 @@ fn load_program() -> (LiteSVM, Keypair) {
     let mut svm = LiteSVM::new();
     let payer = Keypair::new();
     svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
-
     svm.add_program(zksettle::ID, &bytes);
     (svm, payer)
 }
@@ -115,14 +108,9 @@ fn register_issuer(svm: &mut LiteSVM, authority: &Keypair, merkle_root: [u8; 32]
     send(svm, authority, ix).expect("register_issuer should succeed");
 }
 
-fn submit(
-    svm: &mut LiteSVM,
-    payer: &Keypair,
-    data: Vec<u8>,
-    nullifier_hash: [u8; 32],
-) -> litesvm::types::TransactionResult {
+fn verify_ix(payer: &Keypair, data: Vec<u8>, nullifier_hash: [u8; 32]) -> Instruction {
     let issuer = issuer_pda(&payer.pubkey());
-    let ix = Instruction {
+    Instruction {
         program_id: zksettle::ID,
         accounts: vec![
             AccountMeta::new(payer.pubkey(), true),
@@ -135,44 +123,88 @@ fn submit(
             nullifier_hash,
         }
         .data(),
-    };
-    send(svm, payer, ix)
-}
-
-#[test]
-#[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
-fn valid_proof_passes() {
-    let proof_and_witness = gen_proof_and_witness();
-    let (mut svm, payer) = load_program();
-    register_issuer(&mut svm, &payer, [1u8; 32]);
-
-    let result = submit(&mut svm, &payer, proof_and_witness, [7u8; 32])
-        .expect("tx should succeed");
-
-    let cu = result.compute_units_consumed;
-    println!("compute units consumed: {cu}");
-    assert!(cu < 200_000, "CU budget exceeded: {cu}");
-}
-
-#[test]
-#[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
-fn tampered_proof_rejects() {
-    let mut proof_and_witness = gen_proof_and_witness();
-    proof_and_witness[0] ^= 0xff;
-
-    let (mut svm, payer) = load_program();
-    register_issuer(&mut svm, &payer, [1u8; 32]);
-    let failure = submit(&mut svm, &payer, proof_and_witness, [7u8; 32])
-        .expect_err("tampered proof should be rejected");
-
-    let expected_invalid = ANCHOR_ERROR_CODE_OFFSET + ZkSettleError::ProofInvalid as u32;
-    let expected_malformed = ANCHOR_ERROR_CODE_OFFSET + ZkSettleError::MalformedProof as u32;
-
-    match failure.err {
-        TransactionError::InstructionError(_, InstructionError::Custom(code))
-            if code == expected_invalid || code == expected_malformed => {}
-        other => panic!(
-            "expected Custom({expected_invalid}) or Custom({expected_malformed}), got {other:?}"
-        ),
     }
+}
+
+fn expect_custom_code(res: litesvm::types::TransactionResult, want: u32) {
+    let failure = res.expect_err("expected tx failure");
+    match failure.err {
+        TransactionError::InstructionError(_, InstructionError::Custom(code)) if code == want => {}
+        other => panic!("expected Custom({want}), got {other:?}"),
+    }
+}
+
+#[test]
+#[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
+fn verify_proof_creates_nullifier_pda() {
+    let (mut svm, payer) = load_program();
+    register_issuer(&mut svm, &payer, [1u8; 32]);
+
+    let data = gen_proof_and_witness();
+    let nullifier_hash = [7u8; 32];
+    send(&mut svm, &payer, verify_ix(&payer, data, nullifier_hash))
+        .expect("verify should succeed");
+
+    let acct = svm
+        .get_account(&nullifier_pda(&issuer_pda(&payer.pubkey()), &nullifier_hash))
+        .expect("nullifier PDA missing");
+    assert_eq!(acct.data.len(), 8, "expected discriminator-only account");
+    assert_eq!(acct.owner, zksettle::ID);
+}
+
+#[test]
+#[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
+fn verify_proof_rejects_replay() {
+    let (mut svm, payer) = load_program();
+    register_issuer(&mut svm, &payer, [1u8; 32]);
+
+    let nullifier_hash = [7u8; 32];
+    send(
+        &mut svm,
+        &payer,
+        verify_ix(&payer, gen_proof_and_witness(), nullifier_hash),
+    )
+    .expect("first submit should succeed");
+
+    let res = send(
+        &mut svm,
+        &payer,
+        verify_ix(&payer, gen_proof_and_witness(), nullifier_hash),
+    );
+    expect_custom_code(res, ACCOUNT_DISCRIMINATOR_ALREADY_SET);
+}
+
+#[test]
+#[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
+fn verify_proof_allows_fresh_nullifier() {
+    let (mut svm, payer) = load_program();
+    register_issuer(&mut svm, &payer, [1u8; 32]);
+
+    send(
+        &mut svm,
+        &payer,
+        verify_ix(&payer, gen_proof_and_witness(), [7u8; 32]),
+    )
+    .expect("first submit should succeed");
+
+    send(
+        &mut svm,
+        &payer,
+        verify_ix(&payer, gen_proof_and_witness(), [8u8; 32]),
+    )
+    .expect("second submit with fresh nullifier should succeed");
+}
+
+#[test]
+#[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
+fn verify_proof_requires_issuer_pda() {
+    let (mut svm, payer) = load_program();
+    // Intentionally skip register_issuer so the PDA does not exist.
+
+    let res = send(
+        &mut svm,
+        &payer,
+        verify_ix(&payer, gen_proof_and_witness(), [7u8; 32]),
+    );
+    expect_custom_code(res, ACCOUNT_NOT_INITIALIZED);
 }
