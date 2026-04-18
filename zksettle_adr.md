@@ -198,3 +198,228 @@ Billing via Stripe ou similar off-chain inicialmente. On-chain billing via x402 
 | ADR-006 | Light Protocol compression | Manual compressed accounts |
 | ADR-007 | Nullifier on-chain | Timestamp expiry only (inseguro) |
 | ADR-008 | Pay-per-proof sem token | Token próprio (complexidade desnecessária) |
+
+---
+
+## ADRs candidatos — propostas de arquitetura
+
+Decisões derivadas das propostas de melhoria no PRD §15. Status **Proposto** — precisam de review do time e não bloqueiam o MVP atual. Referências `PRD §15.x` apontam para a descrição completa da feature no PRD.
+
+---
+
+## ADR-009 · Batch proof verification
+
+**Status:** Proposto (PRD §15.1)
+
+### Contexto
+Verificação individual custa ~200K CU por proof. Fintechs com alto volume pagam linearmente. Múltiplas proofs no mesmo bloco poderiam compartilhar custo de pairing.
+
+### Decisão proposta
+Adicionar instrução `verify_proof_batch(proofs, public_inputs)` que agrega N proofs em um pairing check amortizado (random linear combination) ou via recursive Groth16.
+
+### Por quê
+Pairing é o dominador de custo. Batching amortiza para ~50K CU/proof em N=10. Reduz custo efetivo para fintechs de alto volume, diferencial direto no pitch de economia.
+
+### Alternativas rejeitadas
+- **Recursive SNARK per-user:** complexidade alta, setup custoso no MVP.
+- **Off-chain aggregator:** perde atomicidade com Transfer Hook.
+
+### Consequências
+SDK expõe `zksettle.proveBatch()`. Transfer Hook precisa suportar batch mode opcional. Implementação pós-MVP — requer benchmarking de CU real.
+
+---
+
+## ADR-010 · Credential schema versioning
+
+**Status:** Proposto (PRD §15.2)
+
+### Contexto
+Credentials emitidas com schema vN invalidam quando issuer migra para schema vN+1. Sem versionamento, toda atualização quebra base de users.
+
+### Decisão proposta
+Circuit expõe `schema_version: u32` como public input. Program mantém registry de versões aceitas por issuer. Deprecation com grace period configurável.
+
+### Consequências
+Circuit recebe input adicional (1 field). Issuer account ganha campo `accepted_versions: Vec<u32>`. Custo negligível em constraints.
+
+---
+
+## ADR-011 · Revocation via Sparse Merkle Tree separada
+
+**Status:** Proposto (PRD §15.3)
+
+### Contexto
+Revogar 1 credential exige republicar Merkle root da árvore de users inteira — O(n) por revogação. Inviável para sanctions updates diários (OFAC).
+
+### Decisão proposta
+Manter **SMT de revogação separada** da árvore de membership. Circuit prova (a) membership na tree de users E (b) non-membership na SMT de revogados. Issuer publica apenas delta.
+
+### Alternativas rejeitadas
+- **Rebuild da árvore principal:** O(n) por revogação, inaceitável.
+- **Expiry curto sem revogação:** força re-emissão massiva, ruim pra UX.
+
+### Consequências
+Circuit ganha ~2× constraints do current membership check. Issuer publica 2 roots por update: users + revogados.
+
+---
+
+## ADR-012 · Session-based proofs (proof delegation)
+
+**Status:** Proposto (PRD §15.4)
+
+### Contexto
+1 proof por tx é caro em UX. User pagando 3 tx seguidas gera 3 proofs = 30s de espera.
+
+### Decisão proposta
+Circuit emite `session_commitment = Poseidon(sk, mint, epoch, max_uses)`. Hook aceita N tx sob mesma session até expiry. Nullifier escopado à session, não à tx.
+
+### Consequências
+Anti-replay preservado via nullifier por session. Requer UI no SDK para gerenciar sessions ativas. Trade-off: leak de pattern (N tx da mesma session são linkáveis).
+
+---
+
+## ADR-013 · Jurisdiction set como Merkle root
+
+**Status:** Proposto (PRD §15.5, substitui implicitamente decisão do PRD §7)
+
+### Contexto
+`jurisdiction_set_hash` como public input invalida todas proofs antigas quando issuer muda conjunto. Adicionar país = força re-prove global.
+
+### Decisão proposta
+Substituir `jurisdiction_set_hash` por **Merkle root do conjunto permitido**. Circuit prova membership da jurisdiction do user na tree. Issuer adiciona país = publica root novo, proofs antigas continuam válidas se jurisdiction ainda permitida.
+
+### Consequências
+Circuit ganha Merkle path check adicional (~pequenos constraints com Poseidon). Issuer account armazena root de jurisdiction em vez de hash.
+
+---
+
+## ADR-014 · Transfer Hook como policy engine
+
+**Status:** Proposto (PRD §15.6)
+
+### Contexto
+Hook binário (aceita/rejeita) não escala para casos além de travel rule. Accredited investor gating, RWA compliance e multi-jurisdiction precisam de lógica configurável.
+
+### Decisão proposta
+Attestation carrega payload rico: `{jurisdiction, risk_tier, amount_cap, accredited_flag, ...}`. Cada mint tem `PolicyAccount` associada com regras. Hook avalia policy vs attestation e decide.
+
+### Consequências
+1 program core serve múltiplos produtos (travel rule, accredited, RWA). Complexidade de policy DSL — iniciar com enum simples (Allow/Deny por campo), evoluir depois.
+
+---
+
+## ADR-015 · Witness caching local no SDK
+
+**Status:** Proposto (PRD §15.7)
+
+### Contexto
+Prover regenera witness completo a cada `prove()`. Para um user que faz múltiplas tx/dia, desperdício.
+
+### Decisão proposta
+SDK cacheia witness + partial proof em IndexedDB indexado por credential hash. Re-prove recomputa apenas gates dependentes do novo contexto (nullifier, recipient, amount).
+
+### Consequências
+Puro DX win, zero impacto on-chain. Precisa invalidação do cache quando credential expira ou issuer root muda.
+
+---
+
+## ADR-016 · Circuit split em 2 sub-proofs
+
+**Status:** Proposto (PRD §15.8, contingente)
+
+### Contexto
+Circuit único (membership + sanctions + jurisdiction + expiry + nullifier) pode estourar constraint budget ou exceder 10s no browser. Ativar apenas se checkpoint S1 indicar >10s.
+
+### Decisão proposta
+Split em (a) proof de membership + jurisdiction, (b) proof de sanctions + nullifier. Hook verifica ambos no mesmo tx via 2 pairing checks (<200K CU combinado). Browser paraleliza em 2 web workers.
+
+### Consequências
+Hook mais complexo. Proof payload 2× maior. Trade-off aceito se proof time cair ~40%.
+
+---
+
+## ADR-017 · Audit trail merkleizado por epoch
+
+**Status:** Proposto (PRD §15.9)
+
+### Contexto
+`ComplianceAttestation` account por tx cresce linearmente com volume. Inviável em produção sem compressão agressiva.
+
+### Decisão proposta
+Program acumula Merkle root de attestations por epoch (24h) em state único. Full attestations armazenadas off-chain (Helius webhook → S3/Arweave). Auditor pede prova de inclusion off-chain.
+
+### Alternativas rejeitadas
+- **Light Protocol compressed per-attestation (ADR-006):** ainda O(N) storage, só comprimido.
+- **Drop attestations:** perde audit trail, não-negociável.
+
+### Consequências
+On-chain state O(1) por epoch. Requer serviço de indexação confiável off-chain. Compatível com ADR-006 (pode usar Light para o root history).
+
+---
+
+## ADR-018 · Credential format = W3C Verifiable Credentials + BBS+
+
+**Status:** Proposto (PRD §15.10)
+
+### Contexto
+Schema custom de credential obriga issuers a adotar stack proprietária. W3C VC é padrão indústria com suporte de Jumio, Onfido, Persona.
+
+### Decisão proposta
+Credentials emitidos como W3C VC JSON-LD com signature BBS+ (selective disclosure nativa). Circuit recebe BBS+ signature verification como input, prova posse + disclosure seletiva.
+
+### Consequências
+Issuers reusam stack existente. Credentials portáveis entre protocolos. Circuit ganha complexidade de BBS+ verification (~vs Poseidon-native custom format). Trade-off: padrão indústria vale DX loss.
+
+---
+
+## ADR-019 · Attestation como compressed NFT (Bubblegum)
+
+**Status:** Proposto (PRD §15.11)
+
+### Contexto
+`check_attestation(wallet)` via CPI cross-program acopla consumers (Kamino, MarginFi) ao ZKSettle program. Fricção de integração.
+
+### Decisão proposta
+Emitir attestation como **compressed NFT via Bubblegum** no wallet do user. Consumers leem account padrão, zero CPI para ZKSettle program.
+
+### Consequências
+Padrão Solana reconhecido. Desbloqueia UC-03/UC-04 sem mudança do core. Requer Bubblegum setup + metadata schema. cNFT per attestation é barato via state compression.
+
+---
+
+## ADR-020 · Nullifier context explícito
+
+**Status:** Proposto (refina ADR-007, PRD §15.12)
+
+### Contexto
+ADR-007 define `nullifier = Poseidon(sk, context_hash)` mas deixa `context` sem especificação formal. Risco de implementações inconsistentes.
+
+### Decisão proposta
+Especificação formal:
+```
+nullifier = Poseidon(sk, mint_pubkey, epoch_index, recipient, amount)
+epoch_index = floor(unix_timestamp / 86400)
+```
+Bind a `recipient` + `amount` previne front-running (ver threat model). `epoch_index` permite 1 proof/dia/token (UX) mantendo anti-replay.
+
+### Consequências
+Circuit recebe `mint`, `epoch`, `recipient`, `amount` como public inputs. Hook valida esses campos vs tx corrente. Fix de segurança crítico além da melhoria de UX.
+
+---
+
+## Resumo das propostas
+
+| ADR | Feature | Prioridade |
+|---|---|---|
+| ADR-009 | Batch verification | Alta (pitch) |
+| ADR-010 | Schema versioning | Alta (produção) |
+| ADR-011 | Revocation SMT | Crítica (sanctions) |
+| ADR-012 | Session proofs | Média (UX) |
+| ADR-013 | Jurisdiction Merkle | Alta (produção) |
+| ADR-014 | Policy engine | Alta (pitch) |
+| ADR-015 | Witness caching | Baixa (DX) |
+| ADR-016 | Circuit split | Contingente (S1 bench) |
+| ADR-017 | Audit epoch merkleizado | Alta (produção) |
+| ADR-018 | W3C VC + BBS+ | Alta (pitch) |
+| ADR-019 | cNFT attestation | Média (UC-03/04) |
+| ADR-020 | Nullifier context explícito | Crítica (security) |

@@ -251,3 +251,63 @@ Qualquer item abaixo é scope creep que compromete o demo em 5 semanas.
 | Launch | Jun–Jul/26 | 1º cliente pagante, integração Persona/Sumsub, mainnet USDC |
 | Expansão | Ago–Nov/26 | Multi-jurisdição, MiCA Travel Rule EU (Q3), proof of solvency (UC-02) |
 | Protocolo | 2027 | Proof of reserves, ZK credit score, seed round $2–5M |
+
+---
+
+## 15. Propostas de melhorias arquitetura/feature
+
+Melhorias que não cortam o escopo atual do MVP mas elevam o produto. Ordenadas por impacto no pitch e viabilidade dentro das 5 semanas.
+
+### 15.1 · Batch proof verification
+
+Hoje 1 proof = 1 tx. Adicionar `verify_proof_batch(proofs: Vec<Proof>, public_inputs: Vec<Vec<u8>>)` agregando N proofs via pairing check amortizado ou recursive Groth16. Fintech com alto volume paga significativamente menos CU. Diferencial forte no pitch de economia.
+
+### 15.2 · Credential versioning no circuit
+
+Adicionar `schema_version` como public input do circuit. Issuer evolui schema (ex: novo campo `risk_score`, `pep_flag`) sem invalidar proofs antigas. Sem isso, qualquer update de schema quebra toda a base de credentials emitidas — dor garantida em produção.
+
+### 15.3 · Issuer revocation list (delta-based)
+
+ADR-001..008 só cobre root update. Revogação de credential exige republicar Merkle root inteiro = caro e lento. Adicionar **Sparse Merkle Tree de revogação separada** com proof de non-membership no circuit. Issuer revoga 1 wallet em O(log n) sem recomputar árvore de usuários. Feature crítica para sanctions updates diários (OFAC).
+
+### 15.4 · Proof delegation / session keys
+
+Usuário gera 1 proof → deriva session token válido por N tx no mesmo contexto (ex: dia de trading). Circuit emite `session_commitment` como public input, hook aceita múltiplas tx até expiry. UX 100× melhor sem quebrar anti-replay — nullifier por sessão, não por tx.
+
+### 15.5 · Jurisdiction set como Merkle tree, não hash
+
+PRD define `jurisdiction_set_hash` como public input. Se issuer adiciona/remove país do conjunto permitido, toda proof antiga invalida. Substituir por **Merkle root do conjunto permitido + proof de membership da jurisdiction do user**. Issuer atualiza lista sem invalidar proofs existentes.
+
+### 15.6 · Transfer Hook com policy engine
+
+Hook hoje = binário (proof válida / inválida). Generalizar: attestation carrega `{jurisdiction, risk_tier, amount_cap, accredited_flag}`, hook lê `PolicyAccount` associada ao mint e decide via regras configuráveis. Mesmo program core serve travel rule, accredited investor gating, RWA compliance — 3 produtos do roadmap com 1 arquitetura.
+
+### 15.7 · Proof caching / memoization no SDK
+
+`zksettle.prove()` regenera witness do zero em toda chamada. Cachear witness + partial proof localmente por credential. Re-prove com contexto novo recomputa só os últimos gates afetados. Proof time 10s → ~2s em calls repetidas. Zero custo on-chain, pura melhoria de DX.
+
+### 15.8 · Gadget split (2 circuits paralelos)
+
+Se circuit único estourar constraints ou exceder 10s no browser, separar em 2 sub-proofs: (a) membership + jurisdiction, (b) sanctions + nullifier. Hook verifica ambas no mesmo tx via 2 pairing checks (ainda <200K CU). Proof generation paraleliza em 2 web workers. Tempo total cai ~40%.
+
+### 15.9 · Audit trail merkleizado por epoch
+
+`ComplianceAttestation` hoje = 1 account por tx → state cresce linear. Alternativa: acumular Merkle root de attestations por epoch (24h) no program state. Auditor pede proof off-chain de que tx X foi verificada no epoch Y. State on-chain passa de O(N) para O(1) por epoch. Root exportável como commitment imutável para reguladores.
+
+### 15.10 · Credential format = W3C VC + BBS+
+
+PRD define schema de credential custom. Adotar **W3C Verifiable Credentials** com signature BBS+ (selective disclosure nativa). Issuer reusa stack padrão da indústria, credentials portáveis entre protocolos. Posiciona ZKSettle como camada ZK de infra VC, não silo proprietário — narrativa de $100M+.
+
+### 15.11 · Attestation como cNFT (CPI-able primitive)
+
+Outros programas (Kamino, MarginFi) consumir `check_attestation(wallet)` via CPI acopla fortemente. Alternativa: emitir **compressed NFT via Bubblegum** como attestation no wallet do user. Qualquer program lê via account padrão sem CPI cross-program. Padrão Solana reconhecido. Desbloqueia UC-03/UC-04 sem mudar o core do program.
+
+### 15.12 · Nullifier context explícito (mint + epoch)
+
+ADR-007 define `nullifier = Poseidon(sk, context_hash)` mas deixa `context` vago. Especificar: `nullifier = Poseidon(sk, mint_pubkey, epoch_index)` com `epoch = floor(now / 24h)`. User tem 1 proof por dia por token, não por tx. UX dramaticamente melhor, mantém anti-replay (forjar exigiria sk).
+
+### Top 3 para pitch
+
+1. **§15.1 Batch verification** — economia de CU visível em slide de custo.
+2. **§15.6 Policy engine** — transforma "compliance API" em "compliance primitive".
+3. **§15.10 W3C VC** — posiciona como infra layer, não aplicação.
