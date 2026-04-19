@@ -390,8 +390,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "2026-04-19: dashboard chrome with 8-route IA; iconoir tree-shaken via optimizePackageImports."
     },
     {
       "id": "US-023",

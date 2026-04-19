@@ -647,3 +647,36 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - AUDIT_EVENTS are sorted newest-first at build time so paginated views (US-026) can `slice(page*n, (page+1)*n)` without re-sorting. Do not mutate the array — it's `readonly`.
   - `buildTransactionFrom(prng, index, nowMs)` is the canonical builder. Reuse it inside AUDIT_EVENTS + generateLiveEvent so the column shapes stay in lock-step even when new fields get added later.
 ---
+
+## 2026-04-19 - US-022 - Dashboard chrome (sidebar, topbar, layout)
+- Single source of truth for nav: `src/components/dashboard/nav-items.ts` — typed NAV_ITEMS with label, href, icon (Iconoir component), group ('overview'|'controls'|'account'), and the per-page subtitle mandated by the design spec. Groups ordered Overview → Controls → Account; each group's items render under a mono eyebrow label.
+- `src/components/dashboard/sidebar.tsx` ('use client', usePathname) — 240px fixed on md+, hidden on mobile. Workspace switcher "Acme Stablecoin" (mock button). Active state = `bg-surface-deep` row + 2px forest left rail (absolute `inset-y-1 left-0`). `aria-current="page"` on active link; `focus-visible` outline-2 outline-forest on every link. Footer: Devnet pill (with emerald dot) + `v0.1.0` mono.
+- `src/components/dashboard/top-bar.tsx` ('use client') — 56px, sticky, canvas/95 with backdrop-blur; hairline border-bottom ONLY when `window.scrollY > 4` (mirrors landing nav pattern). Right-aligned: Search button with `⌘K` kbd hint, bell with forest dot, mock avatar "MR" initials.
+- `src/components/dashboard/page-header.tsx` (RSC) — reusable title (DisplayHeading level="m") + stone subtitle + optional right-aligned actions slot. Every dashboard page starts with `<PageHeader ... />`.
+- `src/components/dashboard/placeholder-page.tsx` (RSC) — `<PlaceholderPage path="/dashboard/..." children?>` looks up nav item metadata, renders PageHeader, and shows a surface-bg "content renders here" block when no children are passed. Tier A pages (US-024–US-027) will replace children; Tier B (US-028) will swap with TierBScaffold.
+- Layout: `src/app/dashboard/layout.tsx` composes Sidebar + TopBar + `<main id="main-content" class="max-w-[1280px]">`. `src/app/dashboard/page.tsx` redirects to `/dashboard/transactions` via `next/navigation.redirect`.
+- All 8 routes exist as minimal page.tsx stubs (transactions has its own, 7 use PlaceholderPage). Sidebar links navigate cleanly; no 404s.
+- Added `experimental.optimizePackageImports: ["iconoir-react"]` to `next.config.ts` — without it, importing 9 icons in a client file balloons every dashboard route to ~400 kB first-load. With it, all dashboard routes sit at 104 kB (well under the US-032 120 kB target).
+- Files changed:
+  - `frontend/src/components/dashboard/{nav-items.ts,sidebar.tsx,top-bar.tsx,page-header.tsx,placeholder-page.tsx}` (new)
+  - `frontend/src/app/dashboard/layout.tsx` (new)
+  - `frontend/src/app/dashboard/page.tsx` (new redirect)
+  - `frontend/src/app/dashboard/{transactions,attestations,counterparties,policies,api-keys,audit-log,team,billing}/page.tsx` (new, 8 total)
+  - `frontend/next.config.ts` (added experimental.optimizePackageImports)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (36/36)
+  - `pnpm build` ✅ (landing 211 kB first-load, dashboard routes 104 kB)
+- **Learnings for future iterations:**
+  - `iconoir-react` MUST be listed in `next.config.ts` `experimental.optimizePackageImports`. Without it, every named import pulls the entire package graph into the client bundle and the dashboard ships ~400 kB first-load. With it, Next rewrites `import { X } from "iconoir-react"` to per-icon deep imports and tree-shaking works.
+  - `NAV_ITEMS` in `src/components/dashboard/nav-items.ts` is the one-and-only source for dashboard navigation. Future iterations adding a page MUST: (1) add an entry to NAV_ITEMS with label, href, icon, group, subtitle; (2) create the page.tsx; (3) if the page needs placeholder content, use `PlaceholderPage path="..."`. Never hand-write sidebar links or duplicate subtitles in page files.
+  - `findNavItem(pathname)` matches exact OR prefixed routes (e.g. `/dashboard/transactions/detail` would still resolve to the Transactions item). Pages that render under a shared sub-route will inherit the parent label unless the child registers its own NAV_ITEMS entry.
+  - Dashboard layout is purely server-side — only Sidebar + TopBar cross the client boundary. PageHeader + PlaceholderPage are RSC, so title + subtitle + content shells hydrate zero client JS. Keep per-page pages RSC unless they literally need state.
+  - Sidebar is `hidden md:flex`. Mobile fallback (hamburger drawer) is explicitly deferred to US-029 — don't add it here to avoid scope creep. Until US-029 lands, mobile users see the top bar + page content but no sidebar nav; acceptable per the spec's "Mobile fallbacks audit" story.
+  - `usePathname()` in Next 15 is client-only and lives under `next/navigation` (not `next/router`). Avoid recommending `useRouter` for read-only pathname access — it triggers a rerender cascade the sidebar doesn't need.
+  - For `<Link>` focus rings, use `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest` (not `outline-offset-4`) for interior links; offset-4 is only for the logo anchor where the tight container makes a thicker offset visually cleaner.
+  - Each dashboard page starts with `<PageHeader title subtitle />` — pull title + subtitle from NAV_ITEMS via `findNavItem()` so there's ONE source of truth per route. Future-you will thank you when refactoring copy.
+  - The `PlaceholderPage` component is temporary scaffolding: US-024/025/026/027 delete it for Tier A, US-028 replaces it with `<TierBScaffold>` for Tier B. Don't build features on top of it.
+  - Top bar `scrolled` threshold is 4px (not 8px like landing nav) because the dashboard's max-width content sits tighter to the top; a 4px trigger feels snappier and matches Stripe/Linear chrome.
+---
