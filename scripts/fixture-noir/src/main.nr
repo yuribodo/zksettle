@@ -1,19 +1,15 @@
-// Compliance thin-slice circuit: Merkle membership + nullifier derivation.
+// Fixture generator for the zksettle thin-slice circuit.
 //
-// Public-input order is load-bearing. It must match
-// MERKLE_ROOT_IDX=0 / NULLIFIER_IDX=1 in
-// backend/programs/zksettle/src/state/pubinputs.rs. Sunspot only promotes
-// `pub` function arguments to gnark public-witness slots (return values are
-// kept private), so merkle_root and nullifier are declared as `pub` here.
+// Same hash & merkle logic as `circuits/src/main.nr`, but with `merkle_root`
+// and `nullifier` exposed as the `pub` return tuple instead of as `pub`
+// inputs. Callers invoke `nargo execute` and parse the `Circuit output: [..]`
+// stdout line to obtain the two field elements that the main circuit's
+// Prover.toml should commit to.
 //
-// Canonical pub-input values are derived off-circuit by the fixture nargo
-// package in `scripts/fixture-noir/`. Its `nargo execute` prints the
-// expected (merkle_root, nullifier) pair for a given Prover.toml so tests
-// can fill the main Prover.toml and register_issuer with matching bytes.
-// Keep sponge in sync with scripts/fixture-noir/src/main.nr.
-//
-// Noir 1.0.0-beta.18's stdlib marks `Poseidon2::hash` as `pub(crate)`, so we
-// inline a sponge on top of the public `poseidon2_permutation` primitive.
+// This package intentionally duplicates the sponge from the main circuit.
+// Sharing via a library would require an extra Nargo.toml member and
+// nothing about the thin slice needs that yet.
+// Keep sponge logic below in sync with circuits/src/main.nr.
 
 use std::hash::poseidon2_permutation;
 
@@ -60,8 +56,7 @@ impl Sponge {
     }
 }
 
-pub fn poseidon2_hash<let N: u32>(input: [Field; N]) -> Field {
-    // Fixed-length sponge: in_len == N, no variable-length sentinel.
+fn poseidon2_hash<let N: u32>(input: [Field; N]) -> Field {
     let iv: Field = (N as Field) * TWO_POW_64;
     let mut sponge = Sponge::new(iv);
     for i in 0..N {
@@ -71,14 +66,12 @@ pub fn poseidon2_hash<let N: u32>(input: [Field; N]) -> Field {
 }
 
 fn main(
-    merkle_root: pub Field,
-    nullifier: pub Field,
     wallet: Field,
     path: [Field; MERKLE_DEPTH],
     path_indices: [u1; MERKLE_DEPTH],
     private_key: Field,
     context_hash: Field,
-) {
+) -> pub [Field; 2] {
     let leaf = poseidon2_hash([wallet]);
 
     let mut cur = leaf;
@@ -91,8 +84,8 @@ fn main(
         };
         cur = poseidon2_hash([l, r]);
     }
-    assert(cur == merkle_root);
 
-    let derived = poseidon2_hash([private_key, context_hash]);
-    assert(derived == nullifier);
+    let nullifier = poseidon2_hash([private_key, context_hash]);
+
+    [cur, nullifier]
 }

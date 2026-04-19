@@ -1,0 +1,6 @@
+[package]
+name = "zksettle_fixture"
+type = "bin"
+authors = [""]
+
+[dependencies]

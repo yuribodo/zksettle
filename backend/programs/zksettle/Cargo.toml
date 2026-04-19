@@ -9,7 +9,11 @@ crate-type = ["cdylib", "lib"]
 name = "zksettle"
 
 [features]
+# `placeholder-vk` is kept as an opt-in flag for bisecting against the old
+# single-pub-input verifying key. The committed `default.vk` is now the real
+# compliance VK (2 pub inputs: MERKLE_ROOT_IDX, NULLIFIER_IDX).
 default = []
+placeholder-vk = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-idl = []
