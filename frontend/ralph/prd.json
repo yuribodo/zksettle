@@ -1,0 +1,614 @@
+{
+  "project": "ZKSettle Frontend",
+  "branchName": "ralph/zksettle-landing-dashboard",
+  "description": "ZKSettle Landing + Dashboard for Colosseum Frontier 2026 — editorial marketing surface and read-only dashboard aligned with the canonical design system spec at docs/superpowers/specs/2026-04-18-zksettle-landing-design.md and implementation plan at docs/superpowers/plans/2026-04-18-zksettle-landing.md. Stack: Next.js 15 App Router, React 19, TypeScript strict, Tailwind v4, shadcn/ui (token-customized), GSAP + ScrollTrigger, motion v11, Three.js vanilla, Shiki, Iconoir v7, pnpm 9. All work happens in /home/mario/zksettle/frontend/. Deadline: 2026-05-11.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Initialize Next.js 15 project with TypeScript strict",
+      "description": "As a developer, I need a scaffolded Next.js 15 App Router project in frontend/ so the rest of the work has a home.",
+      "acceptanceCriteria": [
+        "frontend/package.json exists with Next 15, React 19, TypeScript, Tailwind, App Router, src/ dir, @/* alias, pnpm, Turbopack",
+        "frontend/tsconfig.json has strict: true, noUncheckedIndexedAccess: true, noImplicitOverride: true, forceConsistentCasingInFileNames: true",
+        "frontend/package.json scripts include: dev, build, start, typecheck, lint, test, test:watch",
+        "frontend/package.json has engines.node >=20.10 and packageManager pnpm@9.12.0",
+        "frontend/README.md exists with stack and pnpm dev instructions",
+        "pnpm install completes without error",
+        "pnpm build succeeds on the default scaffold",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Scaffolded Next 15.5.15 (patched 15.x) + React 19.0.0 + Tailwind v4 + TS strict. Build and typecheck pass. next.config.ts pins outputFileTracingRoot to the frontend/ dir to silence the multi-lockfile warning from /home/mario."
+    },
+    {
+      "id": "US-002",
+      "title": "Install ESLint flat config + Prettier + Vitest",
+      "description": "As a developer, I need lint and test tooling before writing code so every subsequent task can verify cleanly.",
+      "acceptanceCriteria": [
+        "Dev deps installed: eslint@9, eslint-config-next@15, typescript-eslint@8, prettier, prettier-plugin-tailwindcss, vitest@2, @vitest/ui, jsdom",
+        "frontend/eslint.config.mjs exists as flat config composing typescript-eslint and eslint-config-next",
+        "frontend/.prettierrc exists with semi: true, singleQuote: false, trailingComma: all, printWidth: 100, tailwind plugin",
+        "frontend/vitest.config.ts exists with node environment and @ alias pointing to src",
+        "pnpm lint exits 0",
+        "pnpm test exits 0 with no test files message",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Install runtime dependencies (fonts, Iconoir, motion, GSAP, Three, Shiki)",
+      "description": "As a developer, I need all runtime libraries installed so UI work can begin.",
+      "acceptanceCriteria": [
+        "Runtime deps installed: geist, iconoir-react, motion, three, @types/three, gsap, shiki, clsx, tailwind-merge, class-variance-authority",
+        "frontend/public/fonts/ directory exists with a .gitkeep",
+        "pnpm ls lists all listed packages at expected versions",
+        "pnpm build still succeeds",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Author design tokens in globals.css",
+      "description": "As a designer, I need the full ZKSettle token system available via Tailwind v4 @theme so components can consume the canonical palette, typography, radii, and easing.",
+      "acceptanceCriteria": [
+        "frontend/src/app/globals.css imports tailwindcss and defines @theme block with all color tokens: canvas, surface, surface-deep, border-subtle, border, ink, quill, stone, muted, ghost, forest, forest-hover, emerald, mint, warning-bg/text, danger-bg/text, info-bg/text",
+        "Tokens also include font-display (Georgia), font-sans (Geist), font-mono (JetBrains/Berkeley fallback), radii 2/3/6/10, and --ease-brand cubic-bezier(0.32, 0.72, 0, 1)",
+        "Global html/body rules apply canvas background, ink color, sans font family, font smoothing",
+        "em element rule: italic, forest color, inherit weight",
+        "::selection uses forest background with canvas text",
+        "prefers-reduced-motion media query disables animations",
+        "pnpm build succeeds",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Root layout with fonts, metadata, and skip link",
+      "description": "As a user, I need every page to serve the correct fonts, SEO metadata, and a skip-to-content link.",
+      "acceptanceCriteria": [
+        "frontend/src/app/layout.tsx registers Geist Sans via next/font with --font-geist-sans CSS variable",
+        "JetBrains Mono (or Berkeley fallback) registered via next/font with --font-mono CSS variable",
+        "Metadata object defines title default + template, description, openGraph (title, description, type website, images placeholder), twitter card summary_large_image",
+        "html lang=\"en\" suppressHydrationWarning",
+        "body applies font variables to className and contains a skip-to-content anchor before children",
+        "pnpm dev renders / with Geist body copy and Georgia display headings",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Build The Seal logo SVG component",
+      "description": "As a brand, I need The Seal — circular forest ring with cancelled serif Z and registration ticks at 12/3/6/9 — as a reusable React component.",
+      "acceptanceCriteria": [
+        "frontend/src/components/icons/logo.tsx exports a Logo component with props: variant (canvas-ink | surface-forest | forest-surface), size (number, default 48), showWordmark (boolean, default true)",
+        "SVG contains: hairline ring 1.25px, serif Z centered, 2.5px horizontal settlement bar across Z midpoint, 4 registration ticks at 12/3/6/9",
+        "Wordmark (when shown) reads ZKSettle in Georgia serif at seal-diameter × 0.4 gap to the right",
+        "All three variants render correct fg/bg pairs from design tokens",
+        "Logo renders crisp at 16px (favicon) and 200px (hero)",
+        "Logo imported and rendered on landing nav so /",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Landing copy single source of truth",
+      "description": "As a copywriter, I need all landing copy centralized in typed modules so iteration is one-file.",
+      "acceptanceCriteria": [
+        "frontend/src/content/copy.ts exports a COPY constant with entries for hero, paradox, twoRealities, howItWorks, numbers, demo, useCases, developers, momentum, closingCta, footer — each section matching the Design Spec §4 strings exactly",
+        "frontend/src/content/use-cases.ts exports a USE_CASES array of 5 items (Travel rule, Proof of solvency, ZK credit score, AML by behavior, Proof of reserves) with name, tagline, footnote",
+        "All exports are typed (no any)",
+        "Numbers block exposes {label, number, sub} tuples for each of <5s, <$0.001, 0, 256 bytes",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Utility lib — cn, format, seeded PRNG",
+      "description": "As a developer, I need shared utilities (cn class merger, format helpers, deterministic PRNG) before building components that consume them.",
+      "acceptanceCriteria": [
+        "frontend/src/lib/cn.ts exports cn() merging clsx + tailwind-merge",
+        "frontend/src/lib/format.ts exports truncateWallet(address, head=4, tail=4), fmtAmount(value, currency='USDC'), fmtCompact(n)",
+        "frontend/src/lib/prng.ts exports createPrng(seed) returning an object with next(), range(min,max), pick(array) using deterministic mulberry32 (or similar)",
+        "Vitest tests cover format and prng with at least 3 assertions each including determinism for prng",
+        "pnpm test passes",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Reusable UI primitives (Button, Input, Select, Slider, Badge, Tabs)",
+      "description": "As a developer, I need token-driven shadcn primitives so sections share one visual language.",
+      "acceptanceCriteria": [
+        "frontend/src/components/ui/ contains button.tsx, input.tsx, select.tsx, slider.tsx, badge.tsx, tabs.tsx",
+        "Button has variants: primary (forest bg, canvas text), ghost (ink outline), link (forest underline); sizes: sm/md/lg; radius token 3",
+        "All primitives use cn() and consume design tokens via Tailwind classes (no hardcoded hex)",
+        "Focus state uses 2px forest outline with 2px offset on every primitive",
+        "Primitives render a demo route or Storybook-like test page for visual verification",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "DisplayHeading helper with forest em support",
+      "description": "As a designer, I need a heading component that renders display-xl/l/m variants with inline italic forest em on named primitives.",
+      "acceptanceCriteria": [
+        "frontend/src/components/ui/display-heading.tsx exports DisplayHeading({ level: 'xl'|'l'|'m', children, as })",
+        "Sizes per spec §3.4: display-xl clamp(56px,7vw,128px)/0.95/-3.5%, display-l clamp(40px,5vw,72px)/1.03/-3.5%, display-m 32-48px/1.05/-2%",
+        "Font-family: Georgia (via --font-display)",
+        "Embedded <em> renders italic forest via the global em rule already defined",
+        "Rendered on a demo section proving all three sizes",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Landing nav + 10 section shells composed in page.tsx",
+      "description": "As a user, I need the landing to render all 10 sections end-to-end (static content, no motion yet) so the narrative is scrollable.",
+      "acceptanceCriteria": [
+        "frontend/src/components/landing/nav.tsx renders: Seal logo left, links (Demo, SDK, GitHub) right, forest 'Try demo' button, 56px height, canvas bg, hairline border-bottom on scroll",
+        "Section shell components created in frontend/src/components/landing/: hero/hero.tsx, paradox-section.tsx, two-realities-section.tsx, how-it-works-section.tsx, numbers-section.tsx, demo-section.tsx, use-cases-section.tsx, developers-section.tsx, momentum-section.tsx, closing-cta.tsx",
+        "Each section renders eyebrow + headline + body copy from COPY (no motion, no demo logic, no WebGL yet — static layout)",
+        "frontend/src/app/page.tsx composes nav + all 10 sections in the Design Spec order",
+        "Section vertical rhythm matches spec: 160px desktop / 96px mobile",
+        "Eyebrow uses Berkeley Mono 12px UPPER tracking +8% forest + 20px forest rule above headline",
+        "Use Cases renders 5 cards (3+2) from USE_CASES",
+        "Momentum renders 3 hairline-divided columns",
+        "Closing CTA is forest full-width panel with canvas text and inverted CTAs",
+        "Footer contains wordmark, links row, mono bottom line",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Reduced-motion + scroll-progress + mounted hooks",
+      "description": "As a developer, I need shared hooks so every animated component can respect accessibility and track scroll progress without duplication.",
+      "acceptanceCriteria": [
+        "frontend/src/hooks/use-reduced-motion.ts exports useReducedMotion() returning boolean from window.matchMedia",
+        "frontend/src/hooks/use-scroll-progress.ts exports useScrollProgress(ref) returning 0-1 progress through the referenced element",
+        "frontend/src/hooks/use-mounted.ts exports useMounted() returning boolean after first effect",
+        "All hooks are 'use client'",
+        "Vitest tests (using jsdom) cover useReducedMotion and useMounted with at least one assertion each",
+        "pnpm test passes",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Veil canvas — Three.js hero particle shader",
+      "description": "As a user, I want the hero to show ~12k warm-ash particles drifting that converge into a single forest commitment glyph as I scroll, carrying the ZK metaphor visually.",
+      "acceptanceCriteria": [
+        "frontend/src/components/landing/hero/veil-canvas.tsx is 'use client' and mounts a Three.js scene full-bleed behind the hero text",
+        "frontend/src/components/landing/hero/veil-shaders.ts exports vertex + fragment GLSL strings rendering 12,000 particles on canvas-colored bg",
+        "Particles converge over 0→1 scroll progress into a central forest commitment glyph",
+        "Mount/unmount/dispose lifecycle correct: no memory leaks on hot reload, renderer.dispose() on unmount",
+        "useReducedMotion short-circuits to a static rendered frame (no animation loop)",
+        "FPS monitor auto-downgrades particle count if <50fps for 2s",
+        "Viewport <768px falls back to a static SVG (no WebGL)",
+        "Landing renders with the canvas behind the hero text at 60fps on an M1-class laptop",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "GSAP setup + PinnedSection primitive",
+      "description": "As a developer, I need GSAP + ScrollTrigger registered once and a PinnedSection wrapper that encapsulates the pin/scrub pattern cleanly.",
+      "acceptanceCriteria": [
+        "frontend/src/lib/gsap.ts registers ScrollTrigger plugin and sets defaults; exports a typed matchMedia helper",
+        "frontend/src/components/motion/pinned-section.tsx ('use client') wraps children and runs gsap.matchMedia: desktop pins the section for N× viewport, mobile skips pin, prefers-reduced-motion skips pin",
+        "PinnedSection accepts children, pinDuration (multiplier of viewport height), and onProgress callback (0-1)",
+        "Cleanup: pin kill + scrolltrigger.kill on unmount (no duplicate pins on route navigation)",
+        "Demo section uses PinnedSection and scroll progress is visible",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Two Realities scroll-locked PII redaction",
+      "description": "As a user, I want to see the left card's PII fields dissolve top-down into redacted blocks as I scroll, morphing into the right ZK-compliant state.",
+      "acceptanceCriteria": [
+        "frontend/src/components/landing/two-realities-section.tsx implements the pinned split view per Design Spec §4 §3",
+        "Left card (Without ZK) shows Recipient/Tax ID/Country/Amount + Danger pill with Iconoir Warning triangle + VIOLATES GDPR·LGPD·MiCA label",
+        "Right card (With ZK) shows same labels with ▓▓▓▓▓▓▓ redacted values + Proof 0xa3f8...c91b in mono forest with Iconoir Check + Forest pill CHECK + COMPLIANT·VERIFIED on mint bg",
+        "Caption underneath both: 'Both prove the user is verified. Only one can stand in court.'",
+        "On desktop: section pins while PII characters dissolve top-down into blocks as scroll progresses; pin releases when both states are fully visible",
+        "On <768px: stacks vertically with sequential fade-in (no pin) via gsap.matchMedia",
+        "prefers-reduced-motion: both cards render final state immediately, no redaction animation",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "CountUp primitive + Benchmarks numbers section",
+      "description": "As a user, I want the 4 benchmark numbers (<5s, <$0.001, 0, 256 bytes) to count up into view when they enter the viewport.",
+      "acceptanceCriteria": [
+        "frontend/src/components/motion/count-up.tsx ('use client') accepts target, duration, formatter, teaseTo props; animates from 0 to target on viewport entry",
+        "<5s teases e.g. 9.99 → <5s (not straight count)",
+        "0 teases down from a non-zero value to 0",
+        "frontend/src/components/landing/numbers-section.tsx renders 4 numbers in 2x2 grid (display-xl) with mono-l sub-labels",
+        "prefers-reduced-motion: renders final value without animation",
+        "Scrolling the landing triggers CountUp for all four numbers",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "FadeIn pass on remaining static sections",
+      "description": "As a user, I want subtle fade-ins on Paradox, How it works, Use Cases, Developers, Momentum, Closing CTA so the page doesn't snap into view.",
+      "acceptanceCriteria": [
+        "frontend/src/components/motion/fade-in.tsx ('use client') wraps children and fades in via motion v11 whileInView with brand easing cubic-bezier(0.32,0.72,0,1)",
+        "Paradox: headline pins at top; body paragraphs fade in line-by-line",
+        "How it works: each of 3 steps fades in sequentially as viewport entries; SVG diagrams reveal via stroke-dasharray",
+        "Use Cases, Developers, Momentum, Closing CTA: cards/columns fade + translateY(8px→0) on entry",
+        "prefers-reduced-motion disables all fades (immediate render)",
+        "No stacked ScrollTriggers leak when navigating away and back",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Deterministic proof-bytes + demo-script data",
+      "description": "As a demo, I need a pre-generated valid Groth16 proof byte sequence and a deterministic script of terminal lines so the simulation is reproducible.",
+      "acceptanceCriteria": [
+        "frontend/src/lib/proof-bytes.ts exports VALID_PROOF (hex string, 256 bytes), NULLIFIER (hex), EXPIRED_PROOF_ERROR constant",
+        "frontend/src/lib/demo-script.ts exports DEMO_STEPS array: [{label, durationMs, status}] totaling 4,710ms wall-clock covering 4 steps (credential, Merkle path, Poseidon, Groth16)",
+        "Also exports EXPIRED_DEMO_STEPS where step 3 fails with proof rejected · credential expired (block 287,901,433)",
+        "DEVNET_TX_HASH constant matches a real pre-existing Solscan devnet transaction (placeholder allowed; documented in comment)",
+        "Vitest test asserts VALID_PROOF length and DEMO_STEPS total duration",
+        "pnpm test passes",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Demo section — form + proof console",
+      "description": "As a user, I want to click Generate proof and see a 4-step terminal log run in real wall-clock 4.71s, then submit the proof to devnet and see a Solscan link.",
+      "acceptanceCriteria": [
+        "frontend/src/components/landing/demo-section.tsx renders two-column: form left, proof console right",
+        "Form contains: Recipient wallet text input (pre-filled 5g8H4nP3eR...), Amount slider 100-10,000 default 1200, Jurisdiction select (US|EU|UK|BR), 'Generate proof' forest button, Toggle 'Try with expired credential'",
+        "frontend/src/components/landing/proof-console.tsx renders a Berkeley Mono terminal block on surface-deep",
+        "Click Generate proof: steps [1/4]..[4/4] appear sequentially using real setTimeouts from DEMO_STEPS; terminal concludes with proof: 0x..., nullifier: 0x..., duration: 4.71s",
+        "Button morphs to 'Submit to devnet →'; click pauses 1.5s then appends 'Transaction confirmed · {hash} · View on Solscan ↗' linking to the devnet tx",
+        "Expired flow: [3/4] fails in danger-text 'proof rejected · credential expired (block 287,901,433)'",
+        "Honesty footer below demo: 'Simulation. Click View on Solscan to verify the hash is real on-chain.' in mono muted small",
+        "aria-live polite region announces state changes",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Shiki SSR code block for Developers section",
+      "description": "As a developer, I want the SDK 3-line TypeScript example rendered with syntax highlighting using Shiki SSR so no client JS is added.",
+      "acceptanceCriteria": [
+        "frontend/src/lib/shiki.ts defines a custom theme using design tokens (forest, ink, stone, muted) and exports a codeToHtml helper",
+        "frontend/src/components/ui/code-block.tsx (Server Component) renders highlighted HTML via Shiki, accepts code/lang props",
+        "frontend/src/components/landing/developers-section.tsx uses CodeBlock to render the 3-line SDK example (import { zksettle } ... await connection.sendTransaction(tx);)",
+        "Tabs component (client) toggles TypeScript | Rust | Anchor CPI; non-TS tabs show 'Coming soon · TypeScript first'",
+        "Side panel has install command, copy button, version v0.1.0, GitHub link, 'MIT licensed · Open source from day one'",
+        "No Shiki JS runs on the client (verified via build output)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Mock data layer for dashboard",
+      "description": "As a dashboard, I need typed mock data for issuers, transactions, audit events, policies, api keys, team, billing so all pages render without a backend.",
+      "acceptanceCriteria": [
+        "frontend/src/lib/mock-data.ts exports: ISSUERS (6 entries: Persona, Sumsub, Onfido, Jumio, Veriff, MockKYC), INITIAL_TRANSACTIONS (100 rows), AUDIT_EVENTS (>200 rows spanning 30 days), BILLING_USAGE (30 days), INVOICES (3), TEAM, POLICIES, API_KEYS",
+        "All arrays are typed via exported interfaces (no any)",
+        "Transaction shape: {id, time, wallet, issuerId, status: verified|blocked|pending, amount, currency, jurisdiction, txHash, proofHash, slot, cu}",
+        "generateLiveEvent(seed, index) returns a deterministic next transaction for the live feed",
+        "Vitest test confirms generateLiveEvent is deterministic for a fixed seed",
+        "pnpm test passes",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Dashboard chrome — sidebar, topbar, layout",
+      "description": "As a user, I want the dashboard's sidebar and topbar to frame every /dashboard/* route per the design system's 3-group IA.",
+      "acceptanceCriteria": [
+        "frontend/src/app/dashboard/layout.tsx composes Sidebar + TopBar + main content area; max-width 1280px, padding 32px",
+        "frontend/src/components/dashboard/sidebar.tsx: 240px fixed width, surface bg, border-right; mini wordmark top; workspace switcher (Acme Stablecoin ▾); 3 eyebrow-labeled groups (OVERVIEW, CONTROLS, ACCOUNT) with Iconoir icons; active state = surface-deep row bg + 2px forest vertical rule on left edge + ink text",
+        "frontend/src/components/dashboard/top-bar.tsx: 56px, canvas bg, hairline border-bottom only on scroll; page title display-m left with 1-line stone subtitle; right side ⌘K hint, bell icon with forest dot, avatar circle",
+        "frontend/src/app/dashboard/page.tsx redirects to /dashboard/transactions",
+        "Clicking each of 8 sidebar links navigates to the respective route without console errors (even if page is placeholder)",
+        "Keyboard navigation: Tab moves through sidebar items, active link has 2px forest focus outline",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "StatusPill + StatCard + TransactionRow primitives",
+      "description": "As a developer, I need reusable dashboard primitives so tables and headers share one visual language.",
+      "acceptanceCriteria": [
+        "frontend/src/components/dashboard/status-pill.tsx renders Iconoir glyph + label in one of: verified (mint bg, forest text, Check glyph), blocked (danger-bg, danger-text, Xmark), warning (warning-bg, warning-text, Warning triangle), info (info-bg, info-text, InfoCircle), test (surface-deep, muted, Sparks)",
+        "StatusPill never renders a bare colored dot — always Iconoir + label",
+        "frontend/src/components/dashboard/stat-card.tsx renders display-m number + mono-l sub-label on surface with border-subtle",
+        "frontend/src/components/dashboard/transaction-row.tsx renders a table row with 2px left vertical rule (emerald|danger-text|muted by status), columns Time/Wallet/Issuer/Status pill/Amount/Jurisdiction/Tx, hover reveals View proof bytes ▾",
+        "Stories/demo route shows all primitives",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "/dashboard/transactions — live feed (Tier A)",
+      "description": "As a user, I want the default dashboard to be a live feed of settlement events with stat cards, filters, and a pseudo-realtime ticker.",
+      "acceptanceCriteria": [
+        "frontend/src/app/dashboard/transactions/page.tsx renders page subtitle 'Live feed of settlement events. Every row carries a proof; every proof is replayable six months from now.'",
+        "4 stat cards at top: 1,847 proofs verified (+12% vs yesterday), 23 blocked (1.2% rejection rate), 4.7s avg proving (p95 6.2s), $0.00091 avg verify cost (Devnet)",
+        "Filter bar: toggles All | Verified | Blocked + date range picker (visual only)",
+        "Table uses TransactionRow; columns align with component",
+        "Pseudo-realtime: setInterval pushes a new event every 3-8s (deterministic by seed, URL ?seed=N override), new row fades in, DOM capped at 100 rows",
+        "Cleanup setInterval on route change (no zombie timers)",
+        "Zero console errors",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "/dashboard/counterparties — issuer list (Tier A)",
+      "description": "As a user, I want a table of registered issuers showing their Merkle roots, users, last update, and status.",
+      "acceptanceCriteria": [
+        "frontend/src/app/dashboard/counterparties/page.tsx renders page subtitle 'Issuers that have published a Merkle root your policies trust.'",
+        "Table columns: Name, Pubkey, Merkle root, Users, Last update, Status pill",
+        "6 rows from ISSUERS (Persona, Sumsub, Onfido, Jumio, Veriff, MockKYC) with status pills per design: Check+Active forest, Warning triangle+Stale, Sparks+Test",
+        "CTA top right: 'Register issuer →' forest button opens a modal scaffold with 'Available in private beta' footer (click closes modal)",
+        "All addresses rendered in Berkeley Mono truncated via format.ts",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "/dashboard/audit-log — exportable history (Tier A)",
+      "description": "As a user, I want a paginated audit log of every attestation with filters and export buttons (mock).",
+      "acceptanceCriteria": [
+        "frontend/src/app/dashboard/audit-log/page.tsx renders page subtitle 'Every attestation, exportable on request.'",
+        "Filter bar: date range, issuer dropdown, status, jurisdiction",
+        "Table columns: Time, Wallet, Issuer, Status pill, Amount, Jurisdiction, Proof hash, Block, Slot, CU consumed, Tx",
+        "Export bar top right: Export CSV, Export JSON, Webhook digest (ghost buttons). Click toasts 'Available in private beta · request access ↗'",
+        "Pagination uses Berkeley Mono '← 1 2 3 ... 47 →'",
+        "Footer line: 'Showing 50 of 23,481 attestations · Last 30 days'",
+        "Zero console errors",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "/dashboard/billing — usage + invoices (Tier A)",
+      "description": "As a user, I want to see my current tier, 30-day usage chart, and last 3 invoices.",
+      "acceptanceCriteria": [
+        "frontend/src/app/dashboard/billing/page.tsx renders page subtitle 'Pay for what you prove.'",
+        "Three stacked cards: Current tier (Startup · 50,000 proofs/mo · $0.05/proof), Used this month 18,432 (37%) with forest progress bar; Usage chart (30-day line chart, mono axis labels in muted, line in forest, no fill, hairline grid); Invoices table (3 rows, Download PDF ghost buttons toasting 'Available in private beta')",
+        "Chart built with SVG or a lightweight lib; no client-heavy chart lib",
+        "Progress bar and chart colors use forest and border-subtle tokens only",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "TierBScaffold + 4 scaffolded routes",
+      "description": "As a user, I want attestations, policies, api-keys, and team routes to render the same chrome with a clean coming-soon empty state.",
+      "acceptanceCriteria": [
+        "frontend/src/components/dashboard/tier-b-scaffold.tsx accepts {icon, title, body} and renders a centered empty state: 64px Iconoir glyph in ghost + display-m headline + one-line stone body + 'Request access ↗' ghost button",
+        "frontend/src/app/dashboard/attestations/page.tsx uses TierBScaffold with Check glyph, 'Attestation explorer · coming soon', 'Filter, search, and inspect every ComplianceAttestation. Available to private-beta participants.'",
+        "frontend/src/app/dashboard/policies/page.tsx uses TierBScaffold with Page glyph and policies copy",
+        "frontend/src/app/dashboard/api-keys/page.tsx uses TierBScaffold with Key glyph and api keys copy",
+        "frontend/src/app/dashboard/team/page.tsx uses TierBScaffold with Group glyph and team copy",
+        "All 4 routes share the Dashboard layout (sidebar + topbar + page title + subtitle)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title": "Mobile fallbacks audit + fixes",
+      "description": "As a mobile user, I want the landing to remain readable and usable without jank.",
+      "acceptanceCriteria": [
+        "Viewport <768px: Veil canvas swaps to a static SVG placeholder",
+        "Two Realities pin disabled; cards stack vertically with sequential fade-in",
+        "Dashboard sidebar collapses to a hamburger drawer (tap to open/close, focus trap active when open)",
+        "Section vertical rhythm reduced to 96px per spec",
+        "Outer page gutter 20px per spec",
+        "All CTAs remain full-width tappable (min 44x44px hit area)",
+        "Lighthouse mobile: Performance ≥ 85, A11y ≥ 95, SEO ≥ 95",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill (emulate iPhone 15 viewport)"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-030",
+      "title": "Accessibility pass",
+      "description": "As a keyboard or assistive-tech user, I need every interactive surface reachable, announced, and reduced-motion aware.",
+      "acceptanceCriteria": [
+        "Skip-to-content link focusable on Tab at the top of every page",
+        "All buttons/inputs/links have 2px forest focus outline with 2px offset",
+        "Demo section aria-live='polite' announces proof-generation state changes",
+        "Dashboard sidebar has aria-current='page' on active route; all nav links have visible label (not icon only)",
+        "prefers-reduced-motion disables GSAP pins, Three.js animation loop, and motion fades (verified via CDP override)",
+        "Contrast: ink on canvas ≥ 12:1, forest on canvas ≥ 10:1 (verified via axe or manual)",
+        "axe-core or Lighthouse a11y ≥ 95 on landing AND /dashboard/transactions",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-031",
+      "title": "OG image route + favicon + SEO metadata",
+      "description": "As a link share, I want a proper OG preview and favicon so the site looks intentional everywhere.",
+      "acceptanceCriteria": [
+        "frontend/src/app/og/route.tsx exports GET returning an ImageResponse (1200×630, forest bg, ZKSettle Georgia 96px + subline 'Compliance-grade rails for stablecoin settlement.' 36px)",
+        "frontend/public/favicon.svg exists as the Seal-only variant",
+        "metadata.openGraph.images in layout.tsx points to /og",
+        "metadata.icons.icon points to /favicon.svg",
+        "metadata.twitter.card = 'summary_large_image', title, description, images /og",
+        "Visiting /og renders a valid 1200×630 image in the browser",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill (navigate to /og)"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-032",
+      "title": "Lighthouse pass + performance fixes",
+      "description": "As a user, I want the landing and dashboard to meet the spec's performance budget.",
+      "acceptanceCriteria": [
+        "pnpm build produces a first-load JS on landing ≤ 220KB gzipped (verified via build output)",
+        "pnpm build produces a first-load JS on /dashboard/transactions ≤ 120KB gzipped",
+        "next.config.ts has experimental.optimizePackageImports including 'iconoir-react'",
+        "Three.js imports are tree-shaken (named imports, not import * as THREE)",
+        "Lighthouse run on http://localhost:3000 (after pnpm build && pnpm start): Performance ≥ 85, A11y ≥ 95, SEO ≥ 95, LCP < 2.5s, INP < 200ms",
+        "Lighthouse run on http://localhost:3000/dashboard/transactions: Performance ≥ 85, A11y ≥ 95, SEO ≥ 95",
+        "Lighthouse HTML reports saved to frontend/lighthouse-landing.html and frontend/lighthouse-dashboard.html",
+        "Typecheck passes"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-033",
+      "title": "Smoke test every flow end-to-end",
+      "description": "As a QA, I want a documented manual smoke that proves every page, CTA, and animation works at least in Chromium.",
+      "acceptanceCriteria": [
+        "Landing loads at / with no console errors; hero canvas renders or static fallback activates",
+        "Scroll through all 10 sections — fades and Two Realities pin work (no stuck pins)",
+        "Demo flow: click Generate proof, see 4-step animation, submit-to-devnet morph, Solscan link opens in new tab",
+        "Try expired credential toggle → [3/4] fails in danger-text",
+        "/dashboard redirects to /dashboard/transactions",
+        "Sidebar navigation to each of 8 routes works without console errors",
+        "Cmd-K visual hint present (non-functional)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill (run the full flow)"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-034",
+      "title": "Finalize README for submission",
+      "description": "As a Colosseum judge, I want a clear README covering stack, run, build, test, deploy, and design system links.",
+      "acceptanceCriteria": [
+        "frontend/README.md contains: project summary, Stack section (Next.js 15, React 19, TS strict, Tailwind v4, Three.js, GSAP, motion, Shiki, Iconoir, Geist + Berkeley Mono fallback)",
+        "Run section: pnpm install + pnpm dev",
+        "Build section: pnpm build + pnpm start",
+        "Test section: pnpm test, pnpm typecheck, pnpm lint",
+        "Deploy section: Vercel auto-deploy from main plus fallback URL note",
+        "Design system section: links to ../docs/superpowers/specs/2026-04-18-zksettle-landing-design.md and the canonical design board URL",
+        "No broken relative links",
+        "Typecheck passes"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

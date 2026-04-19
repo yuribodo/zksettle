@@ -1,0 +1,34 @@
+# Ralph Progress Log
+Started: sáb 18 abr 2026 22:51:13 -03
+---
+
+## Codebase Patterns
+- Next.js 15 must be pinned to a patched 15.x (e.g. 15.5.15 via backport tag). 15.1.6 is flagged for CVE-2025-66478 — do not use.
+- A parent `pnpm-lock.yaml` lives at `/home/mario/pnpm-lock.yaml` which Next detects as a rival workspace root. Set `outputFileTracingRoot: path.join(__dirname)` in `next.config.ts` to silence the warning.
+- Repo's root `.gitignore` already excludes `node_modules/`. Frontend-specific ignores go in `frontend/.gitignore`.
+- pnpm globally installed is 10.32.1 and corepack is NOT available. The `packageManager: pnpm@9.12.0` field is informational only — install works under pnpm 10 because `managePackageManagerVersions` defaults to false in pnpm 9+.
+- The `ralph/` directory inside `frontend/` is excluded from tsconfig.json `exclude`; keep it out of all tsc/next build globs so ralph scripts don't pollute type-checking.
+- Exact dep versions shipped in US-001 for reference: next 15.5.15, react/react-dom 19.0.0, typescript 5.9.x, tailwindcss + @tailwindcss/postcss 4.x, @types/node 22.x, @types/react 19.x.
+
+## 2026-04-18 - US-001 - Initialize Next.js 15 project with TypeScript strict
+- Scaffolded Next.js 15.5.15 App Router project in `frontend/` with TypeScript strict, Tailwind v4, src/ layout, and `@/*` alias.
+- Files added:
+  - `frontend/package.json` (scripts: dev/build/start/typecheck/lint/test/test:watch, engines.node>=20.10, packageManager pnpm@9.12.0)
+  - `frontend/tsconfig.json` (strict, noUncheckedIndexedAccess, noImplicitOverride, forceConsistentCasingInFileNames, `@/*` → `./src/*`, excludes `ralph`)
+  - `frontend/next.config.ts` (reactStrictMode + outputFileTracingRoot pinned to frontend/ to silence multi-lockfile warning)
+  - `frontend/postcss.config.mjs` (wires @tailwindcss/postcss)
+  - `frontend/src/app/{layout.tsx,page.tsx,globals.css}` (minimal App Router boot; globals imports `tailwindcss`)
+  - `frontend/.gitignore` (Next/Vercel/pnpm defaults)
+  - `frontend/README.md` (stack + pnpm dev + scripts table)
+- Verification:
+  - `pnpm install` ✅ (59 packages)
+  - `pnpm build` ✅ (static /, /_not-found; ~102 kB first-load JS; no warnings)
+  - `pnpm typecheck` ✅
+- **Learnings for future iterations:**
+  - Always pin to a backport-tagged 15.x; Next's `next` dist-tags show `backport: 15.5.15` for the latest patched 15.x.
+  - Multi-lockfile detection bites any Next project under `/home/mario/…` — set `outputFileTracingRoot` up front.
+  - `pnpm` on this machine is 10.32.1, corepack is absent; don't rely on `corepack prepare` or auto-switch.
+  - Keep `tsconfig.json` `exclude` list including `ralph` so agent scripts never land in `tsc`.
+  - The landing page UI (hero text, Georgia display font, forest tokens, etc.) has NOT been built yet — US-001 intentionally left `src/app/page.tsx` as a minimal placeholder. US-004/US-005/US-011 will replace this content.
+  - Lint and test scripts exist but will only run once US-002 installs eslint-config-next, typescript-eslint, vitest, etc.
+---
