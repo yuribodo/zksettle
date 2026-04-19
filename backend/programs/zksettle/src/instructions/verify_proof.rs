@@ -4,7 +4,8 @@ use gnark_verifier_solana::{proof::GnarkProof, verifier::GnarkVerifier, witness:
 use crate::error::ZkSettleError;
 use crate::generated_vk::VK;
 use crate::state::{
-    Issuer, Nullifier, ISSUER_SEED, MERKLE_ROOT_IDX, NULLIFIER_IDX, NULLIFIER_SEED,
+    Attestation, Issuer, Nullifier, ATTESTATION_SEED, ISSUER_SEED, MERKLE_ROOT_IDX, NULLIFIER_IDX,
+    NULLIFIER_SEED,
 };
 
 // gnark-verifier-solana serializes a witness as a 12-byte header followed by
@@ -75,7 +76,25 @@ pub struct VerifyProof<'info> {
     )]
     pub nullifier: Account<'info, Nullifier>,
 
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + Attestation::LEN,
+        seeds = [ATTESTATION_SEED, issuer.key().as_ref(), nullifier_hash.as_ref()],
+        bump,
+    )]
+    pub attestation: Account<'info, Attestation>,
+
     pub system_program: Program<'info, System>,
+}
+
+#[event]
+pub struct ProofSettled {
+    pub issuer: Pubkey,
+    pub nullifier_hash: [u8; 32],
+    pub merkle_root: [u8; 32],
+    pub slot: u64,
+    pub payer: Pubkey,
 }
 
 pub fn handler(
@@ -113,10 +132,27 @@ pub fn handler(
         error!(ZkSettleError::ProofInvalid)
     })?;
 
-    #[cfg(feature = "placeholder-vk")]
-    let _ = &ctx;
+    let issuer_key = ctx.accounts.issuer.key();
+    let merkle_root = ctx.accounts.issuer.merkle_root;
+    let payer_key = ctx.accounts.payer.key();
+    let slot = Clock::get()?.slot;
 
-    msg!("Proof settled: nullifier={:?}", nullifier_hash);
+    let attestation = &mut ctx.accounts.attestation;
+    attestation.issuer = issuer_key;
+    attestation.nullifier_hash = nullifier_hash;
+    attestation.merkle_root = merkle_root;
+    attestation.slot = slot;
+    attestation.payer = payer_key;
+    attestation.bump = ctx.bumps.attestation;
+
+    emit!(ProofSettled {
+        issuer: issuer_key,
+        nullifier_hash,
+        merkle_root,
+        slot,
+        payer: payer_key,
+    });
+
     Ok(())
 }
 

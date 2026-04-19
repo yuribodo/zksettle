@@ -71,7 +71,7 @@ Exchange/stablecoin issuer prova cobertura total de saques sem revelar posiçõe
 | ID | Requisito | Prioridade |
 |---|---|---|
 | RF-01 | Gerar ZK proof (Groth16 BN254) localmente no browser via WASM em <10s | Crítico |
-| RF-02 | Anchor program: `register_issuer()`, `verify_proof()`, `check_attestation()` | Crítico |
+| RF-02 | Anchor program: `register_issuer()`, `update_issuer_root()`, `verify_proof()`, `check_attestation()` | Crítico |
 | RF-03 | Transfer Hook que bloqueia transferência SPL sem ComplianceAttestation válido | Crítico |
 | RF-04 | SDK TypeScript: `zksettle.prove()`, `zksettle.wrap()`, `zksettle.audit()` | Crítico |
 | RF-05 | Nullifier tracking via Light Protocol para prevenir replay attacks | Crítico |
@@ -150,7 +150,7 @@ Interface web para issuers e fintechs: live feed de proofs, transações bloquea
 | State compression | Light Protocol ZK Compression | Nullifiers 200× mais baratos |
 | SDK | TypeScript + @solana/web3.js | Stack do time, integração rápida |
 | Hash em circuits | Poseidon | ZK-friendly, 100× menos constraints que SHA-256 |
-| Frontend | Next.js + TypeScript | Deploy rápido, stack conhecida |
+| Frontend | Vite + React + TypeScript | SPA dashboard, sem necessidade de SSR, bundle menor e dev loop mais rápido (alinhado ao README) |
 
 ---
 

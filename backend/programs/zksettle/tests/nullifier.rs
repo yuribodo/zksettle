@@ -9,7 +9,7 @@ mod common;
 use std::fs;
 
 use anchor_lang::prelude::Pubkey;
-use anchor_lang::{system_program, InstructionData};
+use anchor_lang::{system_program, AccountDeserialize, InstructionData};
 use litesvm::LiteSVM;
 use solana_keypair::Keypair;
 use solana_message::{AccountMeta, Instruction, Message};
@@ -20,7 +20,7 @@ use common::{gen_fixture, repo_root};
 use zksettle::instruction::{
     RegisterIssuer as RegisterIssuerIx, VerifyProof as VerifyProofIx,
 };
-use zksettle::state::{ISSUER_SEED, NULLIFIER_SEED};
+use zksettle::state::{Attestation, ATTESTATION_SEED, ISSUER_SEED, NULLIFIER_SEED};
 
 // Anchor 1.0's `init` defers to `system_program::create_account`, which
 // rejects an existing PDA with `SystemError::AccountAlreadyInUse = 0`
@@ -46,6 +46,14 @@ fn issuer_pda(authority: &Pubkey) -> Pubkey {
 fn nullifier_pda(issuer: &Pubkey, nullifier_hash: &[u8; 32]) -> Pubkey {
     Pubkey::find_program_address(
         &[NULLIFIER_SEED, issuer.as_ref(), nullifier_hash.as_ref()],
+        &zksettle::ID,
+    )
+    .0
+}
+
+fn attestation_pda(issuer: &Pubkey, nullifier_hash: &[u8; 32]) -> Pubkey {
+    Pubkey::find_program_address(
+        &[ATTESTATION_SEED, issuer.as_ref(), nullifier_hash.as_ref()],
         &zksettle::ID,
     )
     .0
@@ -79,6 +87,7 @@ fn verify_ix(payer: &Keypair, data: Vec<u8>, nullifier_hash: [u8; 32]) -> Instru
             AccountMeta::new(payer.pubkey(), true),
             AccountMeta::new_readonly(issuer, false),
             AccountMeta::new(nullifier_pda(&issuer, &nullifier_hash), false),
+            AccountMeta::new(attestation_pda(&issuer, &nullifier_hash), false),
             AccountMeta::new_readonly(system_program::ID, false),
         ],
         data: VerifyProofIx {
@@ -99,19 +108,43 @@ fn expect_custom_code(res: litesvm::types::TransactionResult, want: u32) {
 
 #[test]
 #[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
-fn verify_proof_creates_nullifier_pda() {
+fn verify_proof_creates_nullifier_and_attestation_pdas() {
     let (mut svm, payer) = load_program();
     let fx = gen_fixture(0);
     register_issuer(&mut svm, &payer, fx.merkle_root);
 
-    send(&mut svm, &payer, verify_ix(&payer, fx.proof_and_witness, fx.nullifier))
-        .expect("verify should succeed");
+    let result = send(
+        &mut svm,
+        &payer,
+        verify_ix(&payer, fx.proof_and_witness, fx.nullifier),
+    )
+    .expect("verify should succeed");
 
-    let acct = svm
-        .get_account(&nullifier_pda(&issuer_pda(&payer.pubkey()), &fx.nullifier))
+    let issuer = issuer_pda(&payer.pubkey());
+
+    let nul_acct = svm
+        .get_account(&nullifier_pda(&issuer, &fx.nullifier))
         .expect("nullifier PDA missing");
-    assert_eq!(acct.data.len(), 8, "expected discriminator-only account");
-    assert_eq!(acct.owner, zksettle::ID);
+    assert_eq!(nul_acct.data.len(), 8, "expected discriminator-only account");
+    assert_eq!(nul_acct.owner, zksettle::ID);
+
+    let att_acct = svm
+        .get_account(&attestation_pda(&issuer, &fx.nullifier))
+        .expect("attestation PDA missing");
+    assert_eq!(att_acct.owner, zksettle::ID);
+    let attestation = Attestation::try_deserialize(&mut &att_acct.data[..])
+        .expect("attestation should deserialize");
+    assert_eq!(attestation.issuer, issuer);
+    assert_eq!(attestation.nullifier_hash, fx.nullifier);
+    assert_eq!(attestation.merkle_root, fx.merkle_root);
+    assert_eq!(attestation.payer, payer.pubkey());
+    assert!(attestation.slot > 0, "slot should be populated");
+
+    let logs = result.logs;
+    assert!(
+        logs.iter().any(|l| l.contains("Program data:")),
+        "expected ProofSettled event log, got {logs:?}",
+    );
 }
 
 #[test]
