@@ -19,6 +19,10 @@ Started: sáb 18 abr 2026 22:51:13 -03
 - `--font-sans` / `--font-mono` in `globals.css` cascade through `var(--font-geist-sans)` / `var(--font-jetbrains-mono)` — those are the CSS variables US-005's `next/font` registration will expose on `<body className>`. Keep the `ui-sans-serif` / `ui-monospace` fallbacks so the page stays readable between stories.
 - `--font-display` is hard-coded to Georgia (Design Spec D8). To upgrade to PP Editorial New later, change ONLY `--font-display` in `globals.css` — no other file touches that variable.
 - The global `prefers-reduced-motion` block in `globals.css` only neutralizes CSS animations + transitions + scroll-behavior. JS-driven motion (GSAP ScrollTrigger, motion/react, Three.js rAF loops) must ALSO short-circuit explicitly via `useReducedMotion()` from US-012 — the CSS rule is a safety net, not a replacement.
+- Tailwind v4 auto-generates utilities from every `@theme` token — so `--font-display` gives `font-display`, `--color-quill` gives `text-quill`/`bg-quill`, `--radius-3` gives `rounded-[var(--radius-3)]` (radii utilities require the bracket form since Tailwind doesn't auto-emit `rounded-3`). Prefer utilities over inline `var(...)` references in className.
+- Geist is registered via `geist/font/sans` (CSS variable `--font-geist-sans` is hard-coded, not configurable). Other fonts come from `next/font/google` with an explicit `variable:` option. Both patterns compose on `<html>`: `<html className={\`\${GeistSans.variable} \${otherFont.variable}\`}>`.
+- `metadata.metadataBase` must be set once in `src/app/layout.tsx` or Next warns on every build with relative OG image paths. Source from `process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"` so prod deployments get the correct origin without code changes.
+- Skip-to-content anchor pattern: first child of `<body>`, `className="sr-only focus:not-sr-only ..."`, `href="#main-content"`, paired with `<main id="main-content">` on every page. Do not move this into a component that's conditionally rendered; it must always be the first focusable element.
 
 ## 2026-04-18 - US-001 - Initialize Next.js 15 project with TypeScript strict
 - Scaffolded Next.js 15.5.15 App Router project in `frontend/` with TypeScript strict, Tailwind v4, src/ layout, and `@/*` alias.
@@ -102,4 +106,27 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - `--font-display` is hard-coded to `Georgia, "Times New Roman", serif` on purpose — the whole point of picking Georgia is zero FOUT and zero font-licensing risk. If/when PP Editorial New is licensed, swap only this one variable (Design Spec D8 / Risk R3).
   - The `prefers-reduced-motion` block applies to `*, *::before, *::after` and zeroes out animation/transition duration + scroll-behavior. This is a global safety net — per-component motion (GSAP, motion/react, Three.js) must STILL short-circuit explicitly because this CSS rule only covers CSS animations/transitions, not JS-driven rAF loops.
   - `::selection` is intentionally reversed (forest bg / canvas text). Keep this — it's the brand's signature text-highlight treatment and the acceptance criteria pins it.
+---
+
+## 2026-04-18 - US-005 - Root layout with fonts, metadata, and skip link
+- Registered Geist Sans via `geist/font/sans` (exposes `GeistSans.variable` → `--font-geist-sans`) and JetBrains Mono via `next/font/google` with `variable: "--font-jetbrains-mono"` and `display: "swap"`. Both variable classes attached to `<html>` so the CSS custom properties cascade everywhere.
+- Metadata: title default + template (`%s · ZKSettle`), description, openGraph (title/description/type=website/images: ["/og"]), twitter (summary_large_image + title/description/images). `metadataBase` defaults to `NEXT_PUBLIC_SITE_URL` or `http://localhost:3000` — silences Next's multiline warning about relative OG images.
+- `<html lang="en" suppressHydrationWarning>`; `<body className="font-sans antialiased">`; skip-to-content anchor is the first body child (`sr-only` until focus; visible with forest bg + canvas text + focus outline).
+- `src/app/page.tsx` rewritten to a Georgia display headline with inline `<em>` (forest italic) + Geist body copy + mono eyebrow so you can eyeball the font stack; `<main>` gets `id="main-content"` as the skip-link target.
+- Files changed:
+  - `frontend/src/app/layout.tsx` (fonts, metadata, skip link, font variable classes on <html>)
+  - `frontend/src/app/page.tsx` (display headline + em + mono eyebrow + id="main-content")
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (still `--passWithNoTests`)
+  - `pnpm build` ✅ (landing first-load JS still ~102 kB — next/font doesn't add client bundle)
+  - `pnpm dev` + `curl http://localhost:3000` → `<html lang="en" class="…geistsans…variable …jetbrains_mono…variable">`, `<body class="font-sans antialiased">` with skip link markup, `og:title`/`og:image`/`twitter:card` meta present, `og:image=http://localhost:3000/og` (metadataBase resolved).
+- **Learnings for future iterations:**
+  - The `geist` npm package exposes `GeistSans` / `GeistMono` with the CSS variable name hard-coded to `--font-geist-sans` / `--font-geist-mono`. You cannot rename these via the `variable` option the way `next/font/google` lets you — so globals.css must reference `--font-geist-sans` exactly (it does).
+  - Mixing `geist/font/sans` and `next/font/google` in the same `<html>` is fine: each exports its own `.variable` class. Compose them with a template literal: `<html className={\`\${GeistSans.variable} \${jetbrainsMono.variable}\`}>`.
+  - Tailwind v4 auto-generates utilities from `@theme` tokens, including `font-display` (from `--font-display`), `font-sans`, `font-mono`, `text-quill`, `text-muted`, `bg-forest`, `text-canvas`, etc. Prefer these utilities over hand-writing `font-[family-name:var(--font-display)]` — the former is shorter AND tree-shakable with prettier-plugin-tailwindcss sorting.
+  - `metadataBase` is REQUIRED when metadata.openGraph.images contains a relative path; otherwise Next emits a build-time warning and falls back to `http://localhost:3000`. Use `NEXT_PUBLIC_SITE_URL` or `VERCEL_URL` so prod gets the real origin. US-031 (OG route) will replace the `/og` placeholder with the actual image endpoint — don't remove the `metadataBase` line then.
+  - The skip-to-content anchor MUST target an element that actually receives focus. Using `tabIndex={-1}` on `<main id="main-content">` would let the link move focus even though `<main>` isn't natively focusable — for now the natural flow (skip link → first focusable child inside main) is fine because the landing hero has no interactive elements yet. Revisit once US-011 lands the nav + CTA buttons.
+  - `suppressHydrationWarning` on `<html>` silences class-name mismatches that arise when the server and client inject font variables at slightly different times. It's safe here because next/font is fully deterministic; don't pile it onto arbitrary elements — it hides real bugs.
 ---

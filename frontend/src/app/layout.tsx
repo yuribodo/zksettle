@@ -1,9 +1,38 @@
 import type { Metadata } from "next";
+import { GeistSans } from "geist/font/sans";
+import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+  display: "swap",
+});
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
 export const metadata: Metadata = {
-  title: "ZKSettle",
-  description: "Compliance-grade rails for stablecoin settlement.",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "ZKSettle — Compliance-grade rails for stablecoin settlement",
+    template: "%s · ZKSettle",
+  },
+  description:
+    "Prove compliance without exposing data. Sub-5s proofs, sub-cent verification, zero PII on-chain — built on Solana.",
+  openGraph: {
+    title: "ZKSettle — Compliance-grade rails for stablecoin settlement",
+    description:
+      "Prove compliance without exposing data. Sub-5s proofs, sub-cent verification, zero PII on-chain — built on Solana.",
+    type: "website",
+    images: ["/og"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ZKSettle — Compliance-grade rails for stablecoin settlement",
+    description:
+      "Prove compliance without exposing data. Sub-5s proofs, sub-cent verification, zero PII on-chain — built on Solana.",
+    images: ["/og"],
+  },
 };
 
 export default function RootLayout({
@@ -12,8 +41,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${GeistSans.variable} ${jetbrainsMono.variable}`}
+    >
+      <body className="font-sans antialiased">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-[var(--radius-3)] focus:bg-forest focus:px-4 focus:py-2 focus:font-mono focus:text-sm focus:text-canvas focus:outline-2 focus:outline-offset-2 focus:outline-forest"
+        >
+          Skip to content
+        </a>
+        {children}
+      </body>
     </html>
   );
 }

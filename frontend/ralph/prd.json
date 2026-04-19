@@ -86,8 +86,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Registered Geist Sans via `geist/font/sans` (variable --font-geist-sans) and JetBrains Mono via `next/font/google` (variable --font-jetbrains-mono). Attached both font.variable classes on <html> so the CSS vars cascade globally; <body className=\"font-sans antialiased\"> picks up the --font-sans token from globals.css. Metadata includes title.default + template, description, openGraph (title/description/type=website/images=/og), and twitter.card=summary_large_image. metadataBase resolves via NEXT_PUBLIC_SITE_URL (defaults to http://localhost:3000) so relative OG image paths render as absolute URLs and silence Next's warning. Skip-to-content anchor lives as the first body child (sr-only by default, visible on focus with forest bg + canvas text + 2px forest outline); page.tsx now exposes the focus target via id=\"main-content\" on <main>. Dev server verified: lang=\"en\" present, both font variable classes on <html>, og:/twitter: meta tags render correctly, skip link visible in markup. Build, typecheck, lint, test all pass."
     },
     {
       "id": "US-006",
