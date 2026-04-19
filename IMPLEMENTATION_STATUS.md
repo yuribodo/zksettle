@@ -111,6 +111,9 @@ ADR-006 / ADR-007 call for Light Protocol ZK Compression. Current implementation
 
 ### 3.1 On-chain (Anchor program)
 
+- **Merkle root staleness check** — `verify_proof` rejects with `RootStale` once `issuer.root_slot` lags the current slot by more than `MAX_ROOT_AGE_SLOTS` (~48h at 400ms/slot). See ADR-021. **DONE.**
+- **Zero-nullifier guard** — `verify_proof` rejects `nullifier_hash == [0u8; 32]` with `ZeroNullifier`, mirroring the `ZeroMerkleRoot` guard at issuer registration. **DONE.**
+- **Nullifier context binding (ADR-020)** — circuit still derives `nullifier = Poseidon2(private_key, context_hash)` with `context_hash` a private, undefined Field. Bind `(mint, epoch, recipient, amount)` as public inputs per ADR-020. **TODO.**
 - **Token-2022 Transfer Hook** (ADR-005, RF-03). No `transfer_hook` instruction, no `ExtraAccountMetaList` account, no mint configured with the hook. This is the Week 2 Friday checkpoint blocker.
 - **`check_attestation(wallet)`** instruction (PRD §7 Componente 2, RF-02). Attestation PDA exists; lookup-by-wallet / CPI contract does not.
 - **Light Protocol integration** (ADR-006). Both nullifier and attestation use vanilla PDAs.
@@ -183,11 +186,12 @@ None of the six crates promised by the README layout exist:
 
 ## 5. Critical path / blockers
 
-1. **Transfer Hook** — without it the entire atomicity story of ADR-005 collapses and no end-to-end demo is possible. Highest priority.
-2. **`zksettle-types` + `zksettle-crypto`** — every off-chain service plus the SDK need shared types and Poseidon-compatible Merkle/SMT utilities. Scaffold these before issuer-service to avoid rework.
-3. **Issuer service + SDK prove path** — together they unlock the first end-to-end proof → verify flow. Target before Week 3 Friday checkpoint.
-4. **Indexer consuming `ProofSettled`** — event is already emitted; needs Helius webhook subscriber + Arweave persister to close the RF-06 loop.
-5. **Circuit extension** — sanctions, jurisdiction, expiry. Each added public input forces a VK regen; budget for at least one full rebuild before Week 4.
+1. **ADR-002 trusted setup ceremony** — `circuits/README.md` notes the current SRS is gnark's in-memory default; ADR-002 mandates Hermez Powers of Tau for production. No MPC ceremony integration yet. Production-deploy gate.
+2. **Transfer Hook** — without it the entire atomicity story of ADR-005 collapses and no end-to-end demo is possible. Highest priority.
+3. **`zksettle-types` + `zksettle-crypto`** — every off-chain service plus the SDK need shared types and Poseidon-compatible Merkle/SMT utilities. Scaffold these before issuer-service to avoid rework.
+4. **Issuer service + SDK prove path** — together they unlock the first end-to-end proof → verify flow. Target before Week 3 Friday checkpoint.
+5. **Indexer consuming `ProofSettled`** — event is already emitted; needs Helius webhook subscriber + Arweave persister to close the RF-06 loop.
+6. **Circuit extension** — sanctions, jurisdiction, expiry. Each added public input forces a VK regen; budget for at least one full rebuild before Week 4.
 
 ---
 
@@ -223,6 +227,7 @@ For each divergence between the repository and `README.md` / `zksettle_prd.md` /
 | 6 | README §Technology stack + repo layout call the dashboard "Vite + React"; PRD §8 calls it "Next.js + TypeScript". No frontend code yet. | **Doc self-conflict** | Pick **Vite + React** (SPA dashboard, no SSR requirement, smaller bundle, faster dev loop). Update PRD §8 to match README before scaffolding. |
 | 7 | `check_attestation(wallet)` absent from `lib.rs`; promised by PRD RF-02 and README Components row. | **Docs** | Implement: iterate attestation PDAs for a wallet, or add reverse index. Needed for DeFi CPI consumers. |
 | 8 | Token-2022 Transfer Hook missing entirely; ADR-005 calls it non-bypassable core. | **Docs** | Implement `transfer_hook` + `ExtraAccountMetaList` in the Anchor program. Week 2 Friday checkpoint blocker. |
+| 9 | `circuits/README.md` documents the SRS as gnark's in-memory default; ADR-002 mandates Hermez Powers of Tau for production. | **Docs** | Open a ceremony ticket; gate mainnet deploy on MPC integration. Hackathon demo may ship without it, production may not. |
 
 ### Docs adjusted in this pass
 

@@ -16,4 +16,8 @@ pub enum ZkSettleError {
     NullifierMismatch,
     #[msg("Witness has fewer public inputs than required")]
     WitnessTooShort,
+    #[msg("Issuer merkle root is stale; re-publish before verifying")]
+    RootStale,
+    #[msg("Nullifier hash must be non-zero")]
+    ZeroNullifier,
 }
