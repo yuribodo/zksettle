@@ -68,6 +68,8 @@ Started: sáb 18 abr 2026 22:51:13 -03
 - motion `motion[as]` access lets a primitive accept a polymorphic `as` prop, but TypeScript narrowing gets thorny. Pragmatic: cast the result to `React.ComponentType<HTMLMotionProps<"div">>` — all motion HTML factories share the same props shape at runtime, so one cast lets the same component handle `as="div" | "p" | "li" | ...` without per-tag branches.
 - Bundle impact of FadeIn + StepDiagram: introducing `motion.div / motion.p / motion.li / motion.article / motion.section / motion.span` (FadeIn) plus `motion.circle / motion.rect / motion.path` (StepDiagram) pushed landing first-load from 166 kB → 206 kB (+40 kB). The motion proxy factory + whileInView pipeline is the heavier-than-useInView-alone cost. Still under the US-032 220 kB budget with 14 kB headroom — tight. Before adding another motion-heavy primitive in future stories, either (a) consolidate to reuse FadeIn instead of reaching for motion directly, or (b) audit whether a CSS-only entry-fade suffices for that one section.
 - Sticky editorial headlines: `md:sticky md:top-24 md:self-start` on a grid column pins the header while the sibling body scrolls past. Pair with `FadeIn` stagger on the body paragraphs for the classic "headline pins, body reveals" pattern. Split body strings at sentence boundaries via `body.split(/(?<=\.)\s+/).map(s => s.trim()).filter(Boolean)` — lookbehind keeps the period attached. Works for our punctuation-standard copy; for question marks or exclamation points, extend to `/(?<=[.!?])\s+/`.
+- Demo simulation constants live in `src/lib/proof-bytes.ts` (VALID_PROOF, NULLIFIER, EXPIRED_PROOF_ERROR, EXPIRED_BLOCK, DEVNET_TX_HASH, SOLSCAN_URL) and `src/lib/demo-script.ts` (DEMO_STEPS, EXPIRED_DEMO_STEPS, `DemoStep { label, durationMs, status, error? }`). ALL demo UI (US-019 proof console + any future demo widget) must import from these modules — never inline hex strings, durations, or error copy in JSX. Swap real proof bytes / real devnet tx hash in-place here; the rest of the tree picks them up automatically. Reuse the same pattern if we ever need a second demo flow (e.g. "show a revoked credential") — add a third readonly `*_DEMO_STEPS` export, don't parameterize with a function.
+- PRD vs plan divergence rule: the PRD acceptance criteria are the contract for `passes: true`; the implementation plan under `docs/superpowers/plans/` is guidance. When they disagree on shape or naming (US-018: PRD wants `DEMO_STEPS` constant, plan wants `buildDemoScript()` fn), follow the PRD. Future iterations will read what shipped and adapt their imports accordingly — do not try to satisfy both surfaces at once with alias exports, which just adds dead code.
 
 ## 2026-04-18 - US-001 - Initialize Next.js 15 project with TypeScript strict
 - Scaffolded Next.js 15.5.15 App Router project in `frontend/` with TypeScript strict, Tailwind v4, src/ layout, and `@/*` alias.
@@ -539,4 +541,30 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - motion whileInView is self-cleaning on unmount (React StrictMode + route navigation both handled by motion internals). No need for a separate cleanup hook — in contrast with GSAP ScrollTrigger which REQUIRES explicit `.kill()`. This is why US-017 pattern (simple entry fades) uses motion, while US-014/US-015 pin/scrub uses GSAP. Right tool per job.
   - "No stacked ScrollTriggers leak when navigating away and back" acceptance criterion: satisfied trivially because US-017 uses motion's whileInView, NOT GSAP ScrollTriggers. If a future story adds GSAP-driven fades, audit cleanup via `ScrollTrigger.getAll().length` after a route round-trip — should be zero.
   - Manual browser verification still pending for: 60 fps stagger smoothness during scroll, reduced-motion CDP override confirming immediate render, mobile viewport sanity check. agent-browser CLI not installed on this machine → US-033 smoke test covers.
+---
+
+## 2026-04-19 - US-018 - Deterministic proof-bytes + demo-script data
+- Authored `src/lib/proof-bytes.ts`: VALID_PROOF (0x + 512 hex chars = 256 bytes, matches the Benchmarks "256 bytes" claim), NULLIFIER (32 bytes), EXPIRED_BLOCK (287_901_433), EXPIRED_PROOF_ERROR (template literal embedding `EXPIRED_BLOCK.toLocaleString("en-US")` — keeps the `287,901,433` formatting locked to the spec text without repeating the string literal), DEVNET_TX_HASH (placeholder Solana signature with doc comment flagging swap-before-demo-gate), SOLSCAN_URL (derived `https://solscan.io/tx/${DEVNET_TX_HASH}?cluster=devnet`).
+- Authored `src/lib/demo-script.ts`: `DemoStep { label, durationMs, status: "ok" | "fail", error? }`, `DEMO_STEPS` (4 happy-path steps totaling exactly 4,710 ms = 320 + 540 + 1,180 + 2,670), `EXPIRED_DEMO_STEPS` (3 steps; step 3 status="fail" with error=EXPIRED_PROOF_ERROR — the terminal halts here per design spec §6 expired variant).
+- Authored `src/lib/demo-script.test.ts`: asserts VALID_PROOF hex length = 512 (= 256 bytes), NULLIFIER hex length = 64, EXPIRED_PROOF_ERROR text is verbatim "proof rejected · credential expired (block 287,901,433)", DEMO_STEPS total = 4710, and EXPIRED_DEMO_STEPS halts at step 3 with the canonical error.
+- Files added:
+  - `frontend/src/lib/proof-bytes.ts`
+  - `frontend/src/lib/demo-script.ts`
+  - `frontend/src/lib/demo-script.test.ts`
+- Files changed:
+  - `frontend/ralph/prd.json` (US-018 passes=true + notes)
+  - `frontend/ralph/progress.txt` (2 new Codebase Patterns + this entry)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (27 passed across 5 files — demo-script.test.ts adds 8 new tests)
+  - `pnpm build` ✅ (landing still 206 kB first-load; lib modules tree-shake until US-019 imports them)
+- **Learnings for future iterations:**
+  - When the PRD acceptance criteria and the implementation plan disagree on shape (PRD: `DEMO_STEPS` constant; plan: `buildDemoScript(kind)` function), the PRD is authoritative — it's the gate for `passes: true`. Don't ship both as aliases; future stories consuming this will read the shipped surface.
+  - Encode the expired-block error as a template literal that interpolates `EXPIRED_BLOCK.toLocaleString("en-US")`, not a hardcoded string. That way if the block number ever updates, the error text updates automatically and `en-US` grouping stays locked.
+  - `noUncheckedIndexedAccess` makes `DEMO_STEPS[0]` narrow to `DemoStep | undefined` inside tests — use the `!` non-null assertion (we know the array is non-empty) rather than restructuring. Matches the existing pattern in `prng.test.ts`.
+  - VALID_PROOF is 256 BYTES = 512 HEX CHARS + `0x` prefix. Tests MUST assert on `hex.length === 512` AND `hex.length / 2 === 256` — both assertions catch "off by factor of 2" mistakes at review time. If the real Groth16 bytes arrive in a different byte count (unlikely for BN254 Groth16; 256 bytes is the canonical size), update VALID_PROOF AND the test length in the same commit.
+  - The placeholder DEVNET_TX_HASH string comes from the design spec example (`5g8H4nP3eR...`) — it is NOT a real Solana signature. Before the demo gate (US-029 mobile QA / US-033 smoke test), a real pre-existing devnet tx signature MUST replace it so the Solscan honesty-footer link actually resolves.
+  - Module-level `readonly` arrays of plain objects (DEMO_STEPS) beat `as const` for this use case — the shape is expressed via the `DemoStep` interface + `readonly DemoStep[]`, which gives the same mutation protection with cleaner types than a deeply-inferred `as const` literal tuple.
+  - US-019 (proof console) will import `DEMO_STEPS` / `EXPIRED_DEMO_STEPS` and iterate with real `setTimeout(step.durationMs)` — DO NOT animate durations with a tweening library; the spec requires real wall-clock sleeps (design spec §6 "real timer, not animated"). The `aria-live="polite"` region will announce transitions between `label` lines; `error` on the failing step is surfaced separately in `--danger-text`.
 ---

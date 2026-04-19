@@ -317,8 +317,8 @@
         "Typecheck passes"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Authored `src/lib/proof-bytes.ts` with VALID_PROOF (0x + 512 hex chars = 256 bytes, matches the Benchmarks \"256 bytes\" claim), NULLIFIER (32 bytes), EXPIRED_BLOCK (287_901_433), EXPIRED_PROOF_ERROR (interpolated en-US formatted block number so the string matches the design spec verbatim), DEVNET_TX_HASH (placeholder signature — commented as swap-before-demo-gate), SOLSCAN_URL (derived). Authored `src/lib/demo-script.ts` with DEMO_STEPS (4 × {label, durationMs, status} summing to exactly 4710 ms: 320 + 540 + 1180 + 2670) and EXPIRED_DEMO_STEPS (3 steps, step 3 status=\"fail\" with error=EXPIRED_PROOF_ERROR). Added optional `error?: string` on DemoStep so US-019 can render the danger-text line without inventing a parallel outcome type. Authored `src/lib/demo-script.test.ts` asserting VALID_PROOF hex length = 512 (= 256 bytes), NULLIFIER hex length = 64, DEMO_STEPS total duration = 4710 exactly, and EXPIRED_DEMO_STEPS halts at step 3 with the canonical error. typecheck + lint + test (27 passed) + build all pass. Landing first-load stayed at 206 kB — these lib modules are tree-shaken until US-019 imports them."
     },
     {
       "id": "US-019",
