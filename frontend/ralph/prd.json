@@ -104,8 +104,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Authored src/components/icons/logo.tsx exporting Logo({variant, size=48, showWordmark=true, className}) and internal Seal(). SVG uses viewBox 48x48, circle ring r=22 stroke=1.25, centered Georgia serif <text>Z</text> fontSize 26, 2.5px settlement bar (x 10.5→37.5 at y=24) rendered after the Z so it cancels the glyph, and 4 registration ticks (each 1.25px, 3px long) at 12/3/6/9 crossing the ring. Variants map to Tailwind token classes: canvas-ink → text-ink/text-ink, surface-forest → text-forest/text-ink, forest-surface → text-surface/text-surface. Seal uses currentColor so the variant class on the <svg> wrapper drives stroke+fill. Wordmark renders ZKSettle in font-display (Georgia) at size*0.5 font-size, gap between seal and wordmark = size*0.4 per spec §3.1 lockup. Aria: wordmark visible → span has no role; showWordmark=false → role=img aria-label=ZKSettle; the seal SVG is always aria-hidden. Imported into src/app/page.tsx as a temporary nav header (size 32, canvas-ink); US-011 will relocate to nav.tsx. Build, typecheck, lint, test all pass; dev server renders circle + ZKSettle wordmark at /."
     },
     {
       "id": "US-007",

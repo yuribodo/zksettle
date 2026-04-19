@@ -23,6 +23,7 @@ Started: sáb 18 abr 2026 22:51:13 -03
 - Geist is registered via `geist/font/sans` (CSS variable `--font-geist-sans` is hard-coded, not configurable). Other fonts come from `next/font/google` with an explicit `variable:` option. Both patterns compose on `<html>`: `<html className={\`\${GeistSans.variable} \${otherFont.variable}\`}>`.
 - `metadata.metadataBase` must be set once in `src/app/layout.tsx` or Next warns on every build with relative OG image paths. Source from `process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"` so prod deployments get the correct origin without code changes.
 - Skip-to-content anchor pattern: first child of `<body>`, `className="sr-only focus:not-sr-only ..."`, `href="#main-content"`, paired with `<main id="main-content">` on every page. Do not move this into a component that's conditionally rendered; it must always be the first focusable element.
+- Custom SVG icons (The Seal, commitment glyph) live in `src/components/icons/`. Pattern: SVG uses `currentColor` for stroke/fill and an outer wrapper applies a text-color utility (`text-ink`, `text-forest`, `text-surface`) — this is how variant colors cascade without inline hex. Match Iconoir's 1.5px stroke convention; The Seal uses 1.25px ring + 2.5px settlement bar per Design Spec §3.1. Prefer `shapeRendering="geometricPrecision"` for curves; `aria-hidden="true"` on decorative SVGs.
 
 ## 2026-04-18 - US-001 - Initialize Next.js 15 project with TypeScript strict
 - Scaffolded Next.js 15.5.15 App Router project in `frontend/` with TypeScript strict, Tailwind v4, src/ layout, and `@/*` alias.
@@ -129,4 +130,28 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - `metadataBase` is REQUIRED when metadata.openGraph.images contains a relative path; otherwise Next emits a build-time warning and falls back to `http://localhost:3000`. Use `NEXT_PUBLIC_SITE_URL` or `VERCEL_URL` so prod gets the real origin. US-031 (OG route) will replace the `/og` placeholder with the actual image endpoint — don't remove the `metadataBase` line then.
   - The skip-to-content anchor MUST target an element that actually receives focus. Using `tabIndex={-1}` on `<main id="main-content">` would let the link move focus even though `<main>` isn't natively focusable — for now the natural flow (skip link → first focusable child inside main) is fine because the landing hero has no interactive elements yet. Revisit once US-011 lands the nav + CTA buttons.
   - `suppressHydrationWarning` on `<html>` silences class-name mismatches that arise when the server and client inject font variables at slightly different times. It's safe here because next/font is fully deterministic; don't pile it onto arbitrary elements — it hides real bugs.
+---
+
+## 2026-04-18 - US-006 - Build The Seal logo SVG component
+- Authored `src/components/icons/logo.tsx` exporting `Logo({variant, size=48, showWordmark=true, className})` plus an internal `Seal` primitive. SVG uses viewBox 48×48 with circle ring (cx=24, cy=24, r=22, stroke=1.25), centered Georgia `<text>Z</text>` at fontSize 26 with fontWeight 400 + textAnchor="middle" + dominantBaseline="central", a 2.5px horizontal settlement bar rendered AFTER the Z (so it cancels the glyph visually) spanning x=10.5→37.5 at y=24, and 4 registration ticks (stroke 1.25, 3px length) at 12/3/6/9 crossing the ring.
+- Variants map to token classes: `canvas-ink` → text-ink seal + text-ink wordmark; `surface-forest` → text-forest seal + text-ink wordmark; `forest-surface` → text-surface seal + text-surface wordmark. The seal SVG uses `currentColor` so the variant class on the wrapper drives both stroke and fill.
+- Wordmark renders `ZKSettle` in `font-display` (Georgia via the --font-display token) at fontSize = size × 0.5, letterSpacing = -1%, fontWeight 400, lineHeight 1. Seal-to-wordmark gap = size × 0.4 per Design Spec §3.1 lockup rule (flex `gap` inline style).
+- Accessibility: when wordmark is visible, the outer span has no role and the SVG is `aria-hidden="true"` (text does the labelling). When `showWordmark=false` (favicon / compact contexts), the wrapper sets `role="img"` + `aria-label="ZKSettle"`.
+- Imported into `src/app/page.tsx` as a temporary nav header (size 32, canvas-ink variant) above the hero — US-011 will relocate this into the dedicated `components/landing/nav.tsx`.
+- Files changed:
+  - `frontend/src/components/icons/logo.tsx` (new)
+  - `frontend/src/app/page.tsx` (wraps hero with a `<header>` rendering `<Logo size={32} />`)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (still --passWithNoTests)
+  - `pnpm build` ✅ (landing route still 120 B route-specific, 102 kB first-load JS — Logo is a static Server Component, no client bundle impact)
+  - `pnpm dev` + `curl http://localhost:3000` → `<svg viewBox="0 0 48 48">`, `<circle>`, Georgia Z `<text>`, and two "ZKSettle" occurrences (header logo + hero — wait, just one; the second was the default doc title). Confirmed seal + wordmark render.
+- **Learnings for future iterations:**
+  - When a wrapper's `color` class drives an SVG's stroke/fill, the SVG children MUST use `currentColor` explicitly. Tailwind's `text-*` utilities set `color`, and `currentColor` in SVG resolves to that color — so a single `text-forest` on the wrapper cascades to every `stroke="currentColor"` and `fill="currentColor"` inside. This is how we avoid repeating variant logic per SVG element.
+  - SVG `<text>` inherits the document font stack but fonts in `next/font` are scoped via CSS variables on `<html>`. Inside an SVG, the cleanest pattern is to declare `fontFamily="Georgia, 'Times New Roman', serif"` directly on the `<text>` element rather than relying on CSS inheritance — ensures correct glyph geometry in the SSR snapshot and in environments where the wrapping CSS hasn't loaded (favicon, OG image, static SVG files).
+  - The settlement bar must be rendered AFTER the Z in SVG document order so it paints on top and "cancels" the glyph. SVG z-index follows source order — reversing them produces a Z with the bar hidden behind it (looks like an un-cancelled Z with a disconnected bar).
+  - For a React `Logo` component with a wordmark, use an outer `<span>` (not `<div>`) with `display: inline-flex` so the logo can sit inline in headers, CTAs, and text without breaking the line. `align-middle` helps baseline-align the seal with adjacent text.
+  - The Seal SVG viewBox is 48×48 and strokes scale with `size` — at 16px the 1.25 stroke becomes ~0.42px, at 200px it becomes ~5.2px. That's the intended hairline→poster behavior; do NOT add `vector-effect="non-scaling-stroke"` or you'll get a chunky 1.25px ring even at 200px (wrong for hero placement).
+  - When a downstream story (e.g. US-011 nav) imports the Logo, pass `size={32}` for nav (matches the spec's 56px nav row with breathing room) and `size={200}` for hero placements. Variant choice: `surface-forest` for surfaces (cards, nav on surface), `forest-surface` for inverted panels (closing CTA, OG image), default `canvas-ink` everywhere else.
 ---
