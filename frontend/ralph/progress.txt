@@ -623,3 +623,27 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - The ink color (#1A1917) appears in hex in both uppercase (Shiki default) AND lowercase (our theme `fg` field) depending on where it's emitted. Shiki applies `style="color:#1A1917"` via the tokenColor matches, but the outer `<pre>` gets our literal `#1a1917` from the theme's `fg` / `editor.foreground`. Both render identically — no bug — but if you ever grep the SSR output for colors, account for both cases.
   - Reduced-motion has no impact on CodeBlock: Shiki emits static HTML with no animation/transition, so there's nothing to short-circuit. FadeIn around the Tabs still short-circuits to a plain render under `prefers-reduced-motion: reduce` per the existing FadeIn contract.
 ---
+
+## 2026-04-19 - US-021 - Mock data layer for dashboard
+- Authored `src/lib/mock-data.ts` exporting typed interfaces (Issuer, Transaction, AuditEvent, BillingDay, Invoice, TeamMember, Policy, ApiKey) and deterministic fixtures: ISSUERS (6 entries Persona/Sumsub/Onfido/Jumio/Veriff/MockKYC), INITIAL_TRANSACTIONS (100 rows), AUDIT_EVENTS (260 rows spanning 30 days, sorted newest-first), BILLING_USAGE (30 days with weekend dip), INVOICES (3), TEAM (4), POLICIES (3), API_KEYS (3).
+- All arrays frozen via `readonly` on the export type; no `any`, no `as const` hack — declared interfaces drive the shape.
+- Deterministic builders: each fixture uses `createPrng(seed)` from `./prng` with a fixed seed constant (42 for issuers, 7 for transactions, 99 for audit, 11 for billing). Same seed on every SSR and client render.
+- `generateLiveEvent(seed, index)` XORs seed with `index * 0x9e3779b1` (golden-ratio hash) so adjacent indices produce uncorrelated transactions while `(seed, index)` remains globally reproducible.
+- Vitest coverage: 9 assertions across fixture presence, shape, span, and generateLiveEvent determinism/monotonicity. All 36 suite tests green.
+- Files changed:
+  - `frontend/src/lib/mock-data.ts` (new)
+  - `frontend/src/lib/mock-data.test.ts` (new)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (36/36)
+  - `pnpm build` ✅ (zero client bundle impact — pure data module)
+- **Learnings for future iterations:**
+  - Dashboard mock data MUST import from `@/lib/mock-data`; never hand-write mocks in page/component files. Adding a new fixture = new export + new test case asserting shape/length; the downstream UI just consumes.
+  - Jurisdiction + TransactionStatus are string literal unions, not enums. Tailwind classes in status pills (US-023) can be keyed off the union via `Record<TransactionStatus, string>` exhaustively — TypeScript yells if a case is missed.
+  - `STATUSES` weights verified 4:1 vs blocked vs pending so random picks produce realistic ratios (stat card copy claims ~1.2% rejection — the weighting backs that claim).
+  - `generateLiveEvent` uses `index * 0x9e3779b1` XOR with the seed as a mixing step so consecutive events don't share an auto-correlation. If you call `createPrng(seed + index)` instead, tx N and tx N+1 start from neighboring states and produce visually similar hex prefixes (ugly in the live feed).
+  - Issuer #5 (Veriff) is intentionally `stale` and #6 (MockKYC) `test` so the status-pill matrix in US-025 renders all three variants without extra seeding. Don't flip these back to `active` without updating the Counterparties page expectations.
+  - AUDIT_EVENTS are sorted newest-first at build time so paginated views (US-026) can `slice(page*n, (page+1)*n)` without re-sorting. Do not mutate the array — it's `readonly`.
+  - `buildTransactionFrom(prng, index, nowMs)` is the canonical builder. Reuse it inside AUDIT_EVENTS + generateLiveEvent so the column shapes stay in lock-step even when new fields get added later.
+---
