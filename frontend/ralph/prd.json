@@ -50,8 +50,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Installed runtime deps: geist 1.7.0, iconoir-react 7.11.0, motion 12.38.0 (motion v11 deprecated; v12 is the current line and exposes the same React API), three 0.184.0, gsap 3.15.0, shiki 4.0.2, clsx 2.1.1, tailwind-merge 3.5.0, class-variance-authority 0.7.1. Dev: @types/three 0.184.0. public/fonts/.gitkeep created. Build, typecheck, lint, test all pass; landing first-load JS still 102 kB (deps tree-shake until imported)."
     },
     {
       "id": "US-004",

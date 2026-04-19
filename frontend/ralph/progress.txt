@@ -13,6 +13,8 @@ Started: sáb 18 abr 2026 22:51:13 -03
 - `next lint` is deprecated in Next 15 — the `lint` script calls `eslint .` directly instead.
 - Vitest exits 1 when no test files match; keep `--passWithNoTests` on the `test` script until at least one test exists so CI stays green between stories.
 - `@vitest/ui` must match the `vitest` major version exactly (pin `@vitest/ui@^2` while on vitest 2).
+- `motion` is the modern package name (was `framer-motion`). The PRD calls for "motion v11" but npm currently ships v12 as the latest line — v11 is deprecated. Use `motion@^12`; the React import surface (`motion`, `useScroll`, `useInView`, etc.) is identical.
+- `three`'s `@types/three` minor version must match the installed `three` minor (e.g. both 0.184.x). Pin them in lockstep; out-of-sync majors break Three's typed scene/object APIs.
 
 ## 2026-04-18 - US-001 - Initialize Next.js 15 project with TypeScript strict
 - Scaffolded Next.js 15.5.15 App Router project in `frontend/` with TypeScript strict, Tailwind v4, src/ layout, and `@/*` alias.
@@ -56,4 +58,27 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - Installing `@vitest/ui` via `^2` is required; the latest tag (4.x) conflicts with vitest@2's peer range.
   - Do NOT set `environment: "jsdom"` as the default — it's opt-in per-test file via `// @vitest-environment jsdom`. Default stays `node` so Node-only helpers (format/prng) run fast.
   - Always include `--passWithNoTests` in the `test` script while the suite has zero tests; remove it only once real tests land (US-008 / US-012).
+---
+
+## 2026-04-18 - US-003 - Install runtime dependencies (fonts, Iconoir, motion, GSAP, Three, Shiki)
+- Installed runtime deps (production): geist 1.7.0, iconoir-react 7.11.0, motion 12.38.0, three 0.184.0, gsap 3.15.0, shiki 4.0.2, clsx 2.1.1, tailwind-merge 3.5.0, class-variance-authority 0.7.1.
+- Installed dev deps: @types/three 0.184.0.
+- Files added:
+  - `frontend/public/fonts/.gitkeep` (placeholder so Berkeley Mono / Geist self-hosted fallback files have a parking spot for US-005).
+- Files modified:
+  - `frontend/package.json` (dependencies + devDependencies sections grew; lockfile updated).
+- Verification:
+  - `pnpm ls geist iconoir-react motion three @types/three gsap shiki clsx tailwind-merge class-variance-authority` ✅ all listed at the versions above.
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (still no test files; --passWithNoTests covers it)
+  - `pnpm build` ✅ (landing route still 102 kB first-load — none of the new deps are imported yet, so they tree-shake out of the bundle).
+- **Learnings for future iterations:**
+  - The PRD spec says "motion v11" but the npm `motion` package is on v12 (v11 is in maintenance/deprecated). The React API surface (`motion`, `useScroll`, `useInView`, `useReducedMotion`, etc.) is unchanged, so v12 is the safe default.
+  - `geist` is the official package and exposes both `geist/font/sans` and `geist/font/mono`. Berkeley Mono is the design system display mono — there's no public npm for it, hence `public/fonts/.gitkeep` to host the .woff2 once licensed (Berkeley Mono is paid; for development a JetBrains Mono fallback via next/font is fine — see US-005).
+  - `iconoir-react` 7.11.0 ships ESM-first; tree-shaking works only with named imports (`import { Check } from "iconoir-react"`). Do not `import * as Icons` or you'll bloat the bundle. US-032 will flip the `experimental.optimizePackageImports` switch in next.config.ts.
+  - `tailwind-merge` 3.x is the current major; works with Tailwind v4 token output. Pair with `clsx` inside `cn()` — that's the standard shadcn pattern and what US-008 will codify.
+  - `shiki` 4.x dropped the deprecated `getHighlighter` in favor of `createHighlighter`. The Shiki SSR work in US-020 should use `createHighlighter` and import only the languages/themes it needs (not the full bundle).
+  - `class-variance-authority` 0.7.x is required for shadcn-style `cva()` variant maps in US-009 primitives.
+  - Even though `three` ships its own bundled `examples/jsm/` modules, prefer named imports from the root (`import { Scene, PerspectiveCamera, Mesh } from "three"`) for tree-shaking; only reach into `three/examples/jsm/...` for one-off helpers (see US-013 plans).
 ---

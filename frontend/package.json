@@ -17,15 +17,25 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "geist": "^1.7.0",
+    "gsap": "^3.15.0",
+    "iconoir-react": "^7.11.0",
+    "motion": "^12.38.0",
     "next": "15.5.15",
     "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "react-dom": "19.0.0",
+    "shiki": "^4.0.2",
+    "tailwind-merge": "^3.5.0",
+    "three": "^0.184.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
+    "@types/three": "^0.184.0",
     "@vitest/ui": "^2.1.9",
     "eslint": "^9",
     "eslint-config-next": "^15",
