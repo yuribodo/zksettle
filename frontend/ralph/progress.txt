@@ -704,3 +704,27 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - Table cells use border-spacing by default (border-b on row). For a seamless look, `border-collapse` is set on `<table>` in the outer wrapper; otherwise last row's border-b double-draws against the container's bottom border. `last:border-b-0` on the row clears that artifact.
   - Tailwind v4 `size-*` utilities work on iconoir-react icons since they set `width` + `height` on the outlet `<svg>`; `size-3`, `size-3.5`, `size-5` cover the common contexts. Prefer these over `h-N w-N` for parity with the primitive API.
 ---
+
+## 2026-04-19 - US-024 - /dashboard/transactions live feed
+- `src/components/dashboard/transactions-live-feed.tsx` ('use client') — handles filter state, interval ticker, and row trim. Initial state = INITIAL_TRANSACTIONS (100 rows). Interval is a `setTimeout`-chain so each delay is independently sampled from [3_000, 8_000]ms via a deterministic `createPrng(seed)` — NOT a fixed `setInterval`. Each tick: increment `indexRef`, call `generateLiveEvent(seed, indexRef.current)`, prepend to rows, trim to 100. `timeoutId` is nulled in the cleanup function so route navigation never leaks a pending tick.
+- Stat cards unchanged from the `/ui` sample (1,847 verified / 23 blocked / 4.7s avg / $0.00091). Copy is the spec's canonical strings; revisit if the pitch deck demands a different hero number.
+- Filter bar: segmented control (All | Verified | Blocked) using `role="tablist"` + `aria-selected` on each segment. Active segment = `bg-canvas text-ink shadow-sm` inside a surface container. Right-aligned ghost "Last 24 hours" button (date range placeholder — visual only per spec). Mono muted counter "N rows" in the far right so users see the trim cap move.
+- Page becomes `async` with `searchParams: Promise<{ seed?: string }>` per Next 15 App Router. `parseSeed` coerces the URL param to an integer; fallback 1337. Route flips from static (○) to dynamic (ƒ) — expected cost of server-reading the seed per request.
+- Files changed:
+  - `frontend/src/components/dashboard/transactions-live-feed.tsx` (new)
+  - `frontend/src/app/dashboard/transactions/page.tsx` (replaces placeholder)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (36/36)
+  - `pnpm build` ✅ (route `/dashboard/transactions` 117 kB first-load — under the 120 kB budget)
+- **Learnings for future iterations:**
+  - Next 15 App Router `searchParams` is ASYNC. Always type as `Promise<{...}>` and `await` it inside the page. The static type error for forgetting the `await` is cryptic ("Property X does not exist on type 'Promise<...>'"); keep a template page at hand.
+  - A `setTimeout`-chain (self-rescheduling) beats `setInterval` for variable-cadence tickers: each interval is freshly sampled from a deterministic PRNG, cleanup is a single `clearTimeout(timeoutId)` call (no array of pending fires), and setTimeout chains never build up backlog when the tab is backgrounded. Reach for this pattern whenever cadence is variable.
+  - For deterministic live feeds, the seed MUST flow through `(seed, index)` — NOT through a global mutable PRNG — otherwise SSR/client mismatch or React StrictMode double-invoke leaks across renders. `generateLiveEvent(seed, indexRef.current)` is the only callsite; never call createPrng(seed) once and share it between effects.
+  - URL-driven configuration pattern: `/dashboard/transactions?seed=N` → parse in server page, pass as prop. Do NOT reach for `useSearchParams()` in the client component — that would require a Suspense boundary and prevent static hints. Server-side parseSeed + prop is simpler AND gives the client a stable initial value for React StrictMode idempotency.
+  - The 100-row cap is implemented via `slice(0, MAX_ROWS)` on each prepend. This is O(n) per tick but n=100, so it's fine — don't reach for a circular buffer. Readability wins at this size.
+  - Filter + live feed interaction: filter state is UI-local (React state), rows state is the full buffer. `visibleRows` is computed via `useMemo([filter, rows])`. NEVER filter at the setState boundary — you'd lose data when toggling filters.
+  - Segmented filter control pattern: `role="tablist"` + `role="tab"` + `aria-selected` on each button, `role="tabpanel"` on the table container is technically ideal but the table is part of the same visual unit so omitting it here is acceptable. Revisit if the filter adds keyboard navigation (Arrow Left/Right) — the current mouse-only interaction is fine because the tablist is only three items.
+  - `issuerNameById` Map is module-level so each row render doesn't rebuild it. Pattern: whenever you need `O(1)` lookups over a small `readonly` array (ISSUERS has 6 entries), build the Map once at module scope. Not worth it for arrays under ~5 items; essential for anything bigger.
+---
