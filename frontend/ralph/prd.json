@@ -208,8 +208,8 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Authored three client hooks under src/hooks/: use-reduced-motion.ts reads window.matchMedia('(prefers-reduced-motion: reduce)') inside useEffect (SSR-safe — starts false on server then reconciles on client), subscribes via addEventListener('change') + cleans up on unmount; use-mounted.ts flips false→true inside a zero-dep useEffect so client-only UI can gate rendering; use-scroll-progress.ts accepts a RefObject<HTMLElement|null> and tracks 0-1 progress across (viewport + element height), wired to passive scroll + resize listeners with clamp01 guard. All three files carry the 'use client' pragma at top. Tests live at src/hooks/*.test.ts with '// @vitest-environment jsdom' pragma per file: use-mounted.test.ts asserts post-mount value + cross-rerender stability (2 tests); use-reduced-motion.test.ts stubs window.matchMedia via Object.defineProperty and asserts initial-match read + change-event propagation (2 tests). @testing-library/react@^16 + @testing-library/dom@^10 added as devDeps (v16 is the React 19-compatible line). 19 tests pass across 4 files; typecheck/lint/build clean; landing still 116 kB first-load."
     },
     {
       "id": "US-013",
