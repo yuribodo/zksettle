@@ -54,73 +54,156 @@ This spec freezes design, copy, IA, stack, and scope before writing the implemen
 | D5 | Stack: Next.js 15 App Router · Tailwind v4 · shadcn/ui (heavy custom) · GSAP · Three.js vanilla · motion v11 · Shiki · pnpm | Modern + ship-fast + bundle-controllable |
 | D6 | Visual metaphor: "The Veil" hero (particles → commitment glyph) + "Two Realities" pedagogical split | Carries ZK concept visually; novel in Solana ecosystem |
 | D7 | IA-1 fused (problem-led 10-section sequence with hero CTA jumping to demo) | Pitch-friendly narrative; demo accessible from hero |
-| D8 | Typography: PP Editorial New (display) · Geist (body) · Berkeley Mono (mono/code/proof bytes) | Display serif = regulatory authority; sans = modern; mono = cryptographic precision |
-| D9 | Color: bone canvas (`#FAFAF7`) + ink text + Forest accent (`#0C3D2E`) ≤ 8% of pixels + Clay (`#8B2E1F`) for blocked states ≤ 2% | Restraint = Awwwards discipline; forest carries compliance/regulatory authority without crypto cliché |
-| D10 | Dashboard scope B: 4 read-only navigable pages with mock data, no auth, no real fetch | Sweet spot between mock placeholder and functional product |
+| D8 | Typography: Georgia 400 (display, system) · Geist (body) · Berkeley Mono (mono/code/proof bytes). Path to upgrade display to PP Editorial New via single CSS variable. | Display serif = regulatory authority; Georgia ships zero font-licensing risk and zero FOUT for v1 |
+| D9 | Color: bone canvas (`#FAFAF7`) + 5-step text greys (Ink/Quill/Stone/Muted/Ghost) + Forest accent (`#0C3D2E`) ≤ 8% + Warning/Danger/Info semantic states ≤ 2% combined | Restraint = Awwwards discipline; forest carries compliance/regulatory authority without crypto cliché |
+| D10 | Dashboard chrome follows the design system's 8-route IA across 3 groups (Overview/Controls/Account); 4 routes Tier A built fully, 4 routes Tier B scaffolded as empty states | Honors design-system canon while keeping build effort near the original 4-page estimate |
+| D11 | Adopt the team's published design system (claude.ai/design/p/428580d1) as the source of truth: The Seal logo, Iconoir v7 iconography, all token names, voice DO/DON'T | Avoids re-inventing decisions already made; keeps frontend coherent with team-approved system |
 
 ---
 
 ## 3. Identity & design system
 
-### 3.1 Wordmark
+### 3.1 Logo — "The Seal"
 
-- `ZKSettle` set in PP Editorial New Light, tracking -1%.
-- The `Z` glyph is partially overlaid by a forest bar covering its lower-left half — a redaction motif that visually signs "zero-knowledge."
-- No icon mark. Wordmark is the logo.
-- Available as SVG in `src/components/icons/logo.tsx`.
+The brand mark is **The Seal**: a circular hairline forest seal struck through by a horizontal settlement bar that cancels a serif `Z`. Built like an engraver's plate, with registration ticks at 12, 3, 6, and 9 o'clock.
+
+- **Construction:** thin forest ring (1.25px stroke at default), with a serif `Z` centered, and a forest settlement bar (2.5px) horizontal across its midpoint. Registration ticks at the four cardinal points sit on the ring.
+- **Hairline + bold strokes deliberately:** reads at 16px (favicon) and carves correctly at 200px (hero placement).
+- **Three usage variants** (all maintain ≤8% forest discipline):
+  - **Canvas · Ink** — default: canvas bg, ink seal + ink wordmark
+  - **Surface · Forest** — secondary: surface bg, forest seal + ink wordmark
+  - **Forest · Surface** — inverted: forest bg, surface-color seal + surface wordmark (closing CTA panel, OG image)
+- **Wordmark** sits to the right of the seal: `ZKSettle` in display serif (Georgia until brand fonts uploaded; see §3.4), regular weight, tracking -1%.
+- **Lockup spacing:** seal-to-wordmark gap = seal diameter × 0.4.
+- **Asset location:** `src/components/icons/logo.tsx` (React component, props for variant + size).
+- **Files:** `public/favicon.svg` (seal only) · `public/og.png` (lockup, Forest · Surface variant).
 
 ### 3.2 Brand voice
 
-- **Confident, specific, opinionated.** No "we provide solutions." Direct claims with numbers.
+**Institutional. Specific. Anti-crypto-bro.** Built for treasuries, not traders.
+
 - Headlines are sentences with a period. Periods make claims.
-- Body voice mirrors `zksettle_pitch.md` 60-second + 3-minute versions, tightened.
 - Numbers are facts: `<5s`, `<$0.001`, `0`, `256 bytes`, `$9T`, `$650B`. Never rounded vaguely.
+- Italic forest "em" on numeric or named primitives within display copy (e.g. *181ms*, *Groth16*, *settlement*).
+
+**Do**
+
+- "Settle in 181ms. Audit for life."
+- "Every payment ships with its proof attached."
+- "Built for treasuries, not traders."
+- "Compliance-grade rails for stablecoin settlement."
+
+**Don't**
+
+- "Revolutionary on-chain infrastructure 🚀"
+- "Disrupting the future of money, wagmi."
+- "Web3-native, blockchain-powered payments."
+- "The only crypto platform you'll ever need."
+
+No emoji in product UI. No "Web3" / "wagmi" / "to the moon" / "revolutionary" / "disrupting." If a sentence could appear unchanged on a generic crypto landing, rewrite it.
 
 ### 3.3 Color tokens (CSS custom properties)
+
+Backgrounds & borders — warm whites, never pure `#FFF`:
 
 ```
 --canvas         #FAFAF7    page background
 --surface        #F5F3EE    cards, sections
 --surface-deep   #EFEDE8    nested cards, code blocks
---border-subtle  #E8E5DF
---border         #C8C4BC
+--border-subtle  #E8E5DF    hairlines inside cards
+--border         #C8C4BC    section dividers, table separators
+```
 
---ink            #1A1815    body text
---ink-muted      #6B6760    secondary text, captions
---ink-dim        #9E9A91    tertiary, axis labels, placeholders
+Text — five grey levels, named by editorial weight:
 
---forest         #0C3D2E    primary CTA, eyebrow, verified ✓ (≤ 8% of pixels)
+```
+--ink            #1A1917    body text (highest contrast)
+--quill          #4A4640    strong secondary, table headers
+--stone          #6B6762    secondary text, captions
+--muted          #8A8880    tertiary, axis labels
+--ghost          #B4B0A8    placeholders, disabled
+```
+
+Forest accent — the ≤ 8% pixel rule applies to *every* page:
+
+```
+--forest         #0C3D2E    CTA, verified, eyebrow, link
 --forest-hover   #0F4D38    primary button hover
 --emerald        #1A6B4A    success dot, verified hash
 --mint           #E8F2EE    success bg, active nav state
-
---clay           #8B2E1F    blocked, expired, revoked (≤ 2%)
---clay-bg        #F5E8E5    rejected row bg
 ```
+
+Semantic — for cards, inline alerts, and toast states (≤ 2% combined):
+
+```
+--warning-bg     #FBF4E8    consent expiring, stale issuer
+--warning-text   #7A5C1E
+--danger-bg      #FAF0EF    proof failed, blocked tx
+--danger-text    #BC2A24
+--info-bg        #EEF4FC    webhook info, neutral notice
+--info-text      #2563A8
+```
+
+Semantic states always carry an Iconoir glyph next to their text — never a colored dot alone.
 
 ### 3.4 Typography scale
 
+**Display:** Georgia 400 (system serif). The design system explicitly chose Georgia over a licensed serif for two reasons: zero font-licensing risk, zero font-loading FOUT on the hero. If the team licenses **PP Editorial New** later, swap by replacing the `--font-display` CSS variable — no other changes needed.
+
+**Body & UI:** Geist (regular + medium). Self-hosted via `next/font`.
+
+**Mono:** Berkeley Mono (preferred) or **JetBrains Mono** as free fallback. Mono is *obligatory* for any financial datum: hashes, proof bytes, amounts, slot numbers, CU costs, addresses.
+
 | Token | Font | Size | Line | Tracking | Use |
 |---|---|---|---|---|---|
-| display-xl | PP Editorial New Light | 96–128px (clamp) | 0.95 | -2% | Hero |
-| display-l | PP Editorial New Regular | 64–80px | 1.0 | -1.5% | Section heads |
-| display-m | PP Editorial New Regular | 40–48px | 1.05 | -1% | Card heads |
+| display-xl | Georgia 400 | clamp(56px, 7vw, 128px) | 0.95 | -3.5% | Hero |
+| display-l | Georgia 400 | clamp(40px, 5vw, 72px) | 1.03 | -3.5% | Section heads |
+| display-m | Georgia 400 | 32–48px | 1.05 | -2% | Card heads |
 | body-l | Geist Regular | 22px | 1.45 | normal | Editorial paragraph |
 | body | Geist Regular | 16px | 1.55 | normal | UI |
-| body-s | Geist Regular | 14px | 1.5 | normal | Captions |
-| eyebrow | Berkeley Mono | 12px UPPER | 1.2 | +8% | Section eyebrow, color forest |
-| mono | Berkeley Mono Regular | 14px | 1.5 | normal | Proof bytes, hashes, code |
+| body-s | Geist Regular | 14px | 1.5 | normal | Captions, table cells |
+| eyebrow | Berkeley Mono Medium | 12px UPPER | 1.2 | +8% | Section eyebrow, sits above a 20px forest rule, color forest |
+| mono | Berkeley Mono Regular | 14px | 1.5 | normal | Proof bytes, hashes, code, financial data |
 | mono-l | Berkeley Mono Regular | 18–22px | 1.4 | normal | Big number sub-labels |
 
-### 3.5 Spacing & layout
+Display "em" — italic in `--forest` — is the brand's emphasis primitive. Use sparingly: one *em* per headline maximum.
 
-- Base unit 4px. Use multiples (4, 8, 12, 16, 24, 32, 48, 64, 96, 128, 160).
+### 3.5 Spacing, radii & elevation
+
+**Spacing scale** (base 4 · 12 steps): `4 · 8 · 12 · 16 · 24 · 32 · 48 · 64 · 96 · 128 · 160 · 200`.
+
+**Radii:** `2 · 3 · 6 · 10 · full`.
+- `2` — input borders, status pills
+- `3` — buttons
+- `6` — cards
+- `10` — modals, large surfaces
+- `full` — only avatars
+
+**Elevation: borders do the work, not shadows.** Stack uses `--border-subtle` and `--border` to separate content. Drop shadows allowed only for: (a) modal scrim, (b) sticky nav `0 1px 0 var(--border-subtle)` on scroll. Otherwise prohibited.
+
+**Layout grid**
 - Editorial column max-width 720px (paragraphs).
 - Wide content max-width 1200px.
 - Section vertical rhythm 160px desktop / 96px mobile.
 - Outer page gutter 32px desktop / 20px mobile.
 
-### 3.6 Motion philosophy
+### 3.6 Iconography
+
+**Library:** [Iconoir](https://iconoir.com) v7 via `iconoir-react` — MIT-licensed hairline set, 1.5px stroke on a 24px grid. Editorial feel, slightly eccentric geometry. Pairs naturally with Georgia display.
+
+- Color inherits from `currentColor` so semantic tokens drive icon color.
+- Sizes: `14px` inline · `20px` UI default · `24px` section accents · `32px` empty-states.
+- Status pills always carry an Iconoir glyph next to text — never a colored dot alone. (Forest dots ARE allowed in the Live Feed sidebar marker, see §5.)
+- Custom icons (the wordmark seal, the §1 commitment glyph): bespoke SVGs in `src/components/icons/` matching Iconoir's 1.5px stroke convention so they read as part of the same family.
+
+**Anti-patterns (never use):**
+
+- Other icon libraries: Lucide, Heroicons, Phosphor, Feather, Material Symbols
+- Crypto clichés: padlocks, shields, 3D coins, hexagon grids, connected nodes, "blockchain cubes"
+- Emoji in product UI
+- Filled icons (only stroked variants)
+
+### 3.7 Motion philosophy
 
 - Default easing `cubic-bezier(0.32, 0.72, 0, 1)` (Apple-style).
 - Durations: micro 200ms · standard 480ms · scroll-locked 800ms+.
@@ -157,8 +240,8 @@ The 10 sections in render order.
 - **Eyebrow:** `WITH ZK · WITHOUT ZK`
 - **Headline:** Same transaction. Two realities.
 - **Layout:** Pinned scroll, two-column split.
-  - **Left ("Without ZK")** card on `surface`: rows reading `Recipient: Maria Silva` · `Tax ID: 123.456.789-00` · `Country: BR` · `Amount: $5,200 USDC`. Below: clay badge `VIOLATES GDPR · LGPD · MiCA`.
-  - **Right ("With ZK")** card on `surface`: same field labels, but values rendered as redacted blocks `▓▓▓▓▓▓▓`. Below the fields: `Proof: 0xa3f8...c91b ✓` in mono forest. Below: forest badge `COMPLIANT · VERIFIED`.
+  - **Left ("Without ZK")** card on `surface`: rows reading `Recipient: Maria Silva` · `Tax ID: 123.456.789-00` · `Country: BR` · `Amount: $5,200 USDC`. Below: Danger pill (Iconoir `Warning triangle` + label `VIOLATES GDPR · LGPD · MiCA`, `--danger-bg` / `--danger-text`).
+  - **Right ("With ZK")** card on `surface`: same field labels, but values rendered as redacted blocks `▓▓▓▓▓▓▓`. Below the fields: `Proof: 0xa3f8...c91b` in mono forest, with an Iconoir `Check` glyph. Below: Forest pill (Iconoir `Check` + label `COMPLIANT · VERIFIED`, `--mint` bg, `--forest` text).
 - **Caption beneath both:** Both prove the user is verified. Only one can stand in court.
 - **Motion:** Section pins. As scroll progresses, the left card's PII characters dissolve top-down into redacted blocks (text-mask reveal), morphing into the right state. Pin releases when both states are fully visible side-by-side.
 - **Mobile fallback:** stacked, no pin. Cards animate in sequentially on scroll.
@@ -206,8 +289,8 @@ The 10 sections in render order.
   - Steps appear sequentially over real 4.71s wall-clock (sleeps are real, not animated).
   - Hex bytes loaded from `src/lib/proof-bytes.ts` — a pre-generated valid Groth16 proof (delivered by Mario from Noir+Barretenberg Week 2).
 - **After proof generation:** button morphs to `Submit to devnet →`. Click → 1.5s pause → terminal appends `Transaction confirmed · 5g8H...nP3e · View on Solscan ↗`. The Solscan link points to a real pre-existing devnet transaction; the tx hash is coordinated with the backend team and stored as a constant in `src/lib/demo-script.ts`.
-- **Toggle** below form: `Try with expired credential`. Repeats the flow but [3/4] fails with clay error `proof rejected · credential expired (block 287,901,433)`.
-- **Honesty footer (mono ink-dim, small):** `Simulation. Click "View on Solscan" to verify the hash is real on-chain.`
+- **Toggle** below form: `Try with expired credential`. Repeats the flow but [3/4] fails in `--danger-text` `proof rejected · credential expired (block 287,901,433)`.
+- **Honesty footer (mono `--muted`, small):** `Simulation. Click "View on Solscan" to verify the hash is real on-chain.`
 
 ### §7 Use cases · Beyond travel rule
 
@@ -244,7 +327,7 @@ The 10 sections in render order.
   - **Regulation** — GENIUS Act signed 2025. MiCA Travel Rule live Q3 2026. Federal compliance obligation, no opt-out.
   - **Stack** — Solana shipped `alt_bn128` syscalls. Verification dropped from millions of CUs to under 200,000. ZK became economically viable.
   - **Volume** — $650B in stablecoins on Solana in February 2026. Growing 14% MoM. Forty-plus fintechs identified, zero with native ZK compliance.
-- **Footnote (ink-dim mono small):** `Sources: Solana Foundation · Visa Onchain Analytics · ZKSettle research`
+- **Footnote (`--muted` mono small):** `Sources: Solana Foundation · Visa Onchain Analytics · ZKSettle research`
 
 ### §10 Closing CTA + Footer
 
@@ -252,7 +335,7 @@ The 10 sections in render order.
   - Headline (canvas color on forest bg): Compliance is no longer a six-month moat.
   - Sub: It's an SDK. Integrate in an afternoon. Pay per proof.
   - CTAs: `Start integrating →` (canvas-on-forest inverted) · `View on GitHub` (ghost canvas-outlined)
-- **Footer (canvas bg, ink-muted text):**
+- **Footer (canvas bg, `--stone` text):**
   - Wordmark · `Built for Colosseum Frontier 2026.`
   - Links row: `Docs · GitHub · X · Spec · Privacy`
   - Bottom mono line: `SOL devnet · v0.1.0 · MIT`
@@ -264,60 +347,97 @@ The 10 sections in render order.
 ### 5.1 Sitemap
 
 ```
-/dashboard               → redirect to /dashboard/feed
-/dashboard/feed          live feed (default)
-/dashboard/issuers       issuers table
-/dashboard/audit         audit log + export (mocked)
-/dashboard/settings      api keys + webhooks + billing
+/dashboard                     → redirect to /dashboard/transactions
+OVERVIEW
+  /dashboard/transactions      live feed of settlement events (default)
+  /dashboard/attestations      verified compliance attestations
+  /dashboard/counterparties    registered issuers + their roots
+CONTROLS
+  /dashboard/policies          per-mint compliance policies (mock)
+  /dashboard/api-keys          api key management (mock)
+  /dashboard/audit-log         exportable audit history
+ACCOUNT
+  /dashboard/team              team members (mock)
+  /dashboard/billing           tier + usage
 ```
 
 ### 5.2 Chrome (all pages)
 
 - **Sidebar fixed** (240px, surface bg, border-right):
-  - Top: mini wordmark + workspace switcher (`Acme Stablecoin ▾` mock, no functionality).
-  - Nav items in Berkeley Mono 13px UPPER tracking +8%: `Live feed · Issuers · Audit · Settings`. Active state: forest text + mint bg + 2px forest border-left.
+  - Top: mini wordmark (Seal · Surface variant) + workspace switcher (`Acme Stablecoin ▾` mock).
+  - Three section groups, each headed by an eyebrow label (Berkeley Mono Medium 11px UPPER tracking +10%, color `--muted`):
+    - **OVERVIEW** — Transactions · Attestations · Counterparties
+    - **CONTROLS** — Policies · API keys · Audit log
+    - **ACCOUNT** — Team · Billing
+  - Nav items: Geist Medium 14px, `--quill` text, with Iconoir 20px glyph at left (`Activity · Check · User · Page · Key · Clock · Group · Receipt`).
+  - Active state: `--surface-deep` row bg + 2px forest vertical rule on left edge (no fill swap, no mint bg). Active text becomes `--ink`.
   - Bottom: env switcher (`Devnet ▾`) + build tag mono `v0.1.0`.
-- **Top bar** (56px, canvas bg, border-bottom):
-  - Page title in PP Editorial 24px left.
-  - Right: search hint `⌘K` (visual only) · notif bell with forest dot when events exist · avatar mock circle.
+- **Top bar** (56px, canvas bg, hairline border-bottom only on scroll):
+  - Page title in display-m (Georgia 32px) left, with a 1-line `--stone` editorial subtitle below (e.g. on Transactions: "Live feed of settlement events. Every row carries a proof; every proof is replayable six months from now.").
+  - Right: search hint `⌘K` (visual only) · Iconoir notif bell with forest dot when events exist · avatar mock circle.
 - **Main content:** max-width 1280px, padding 32px.
 
-### 5.3 `/dashboard/feed` — Live feed
+### 5.3 Page priority — what gets fully built vs scaffolded
 
-- **Header strip:** 4 stat cards in grid on `surface` with `border-subtle`:
+To stay within the "dashboard simple" scope decision (D10) while honoring the design system's 8-route IA, pages split into two tiers:
+
+- **Tier A — fully built (4):** `transactions`, `counterparties`, `audit-log`, `billing`. These carry the most narrative weight in a pitch demo.
+- **Tier B — scaffolded (4):** `attestations`, `policies`, `api-keys`, `team`. Same chrome, page header with subtitle, and a centered empty state: a 64px Iconoir glyph + display-m headline + one-line `--stone` body + `Available in private beta` ghost button. Routes navigate; content is intentionally minimal.
+
+This keeps total dashboard work close to the original 4-page estimate (~3 days fully built + ~0.5 day for 4 scaffolded empties = ~3.5 days).
+
+### 5.4 `/dashboard/transactions` (Tier A · default)
+
+- **Page subtitle:** "Live feed of settlement events. Every row carries a proof; every proof is replayable six months from now."
+- **Header strip:** 4 stat cards on `surface` with `border-subtle`:
   - `1,847` proofs verified (last 24h) · sub-mono `+12% vs yesterday`
   - `23` blocked · sub-mono `1.2% rejection rate`
   - `4.7s` avg proving time · sub `p95 6.2s`
   - `$0.00091` avg verify cost · sub `Devnet`
 - **Filter bar:** `All · Verified · Blocked` toggles + date range picker.
-- **Table:** columns `Time · Wallet · Issuer · Status · Amount · Jurisdiction · Tx`.
-  - Status `●` dot color-coded (emerald verified · clay blocked).
-  - Hover row: `surface` bg + reveal `View proof bytes ▾` action.
-- **Pseudo-realtime:** `setInterval` pushes a new event to the top every 3–8s (random within range, deterministic by seed). New row fades in. Cap at 100 rows in DOM.
+- **Transaction row component (no dot, side rule instead):**
+  - Each row has a 2px vertical rule on the left edge: `--emerald` for verified, `--danger-text` for blocked, `--muted` for pending.
+  - Columns: `Time · Wallet · Issuer · Status pill · Amount · Jurisdiction · Tx`.
+  - Status pill carries an Iconoir glyph (`Check` for verified, `Xmark` for blocked) — never a colored dot in the cell.
+  - Hover row: `--surface-deep` bg + reveal `View proof bytes ▾` action.
+- **Pseudo-realtime:** `setInterval` pushes a new event to the top every 3–8s (deterministic by seed). New row fades in. Cap at 100 rows in DOM.
 
-### 5.4 `/dashboard/issuers`
+### 5.5 `/dashboard/counterparties` (Tier A)
 
-- Table columns: `Name · Pubkey · Merkle root · Users · Last update · Status`.
+- **Page subtitle:** "Issuers that have published a Merkle root your policies trust."
+- Table columns: `Name · Pubkey · Merkle root · Users · Last update · Status pill`.
 - 6 mock entries (Persona, Sumsub, Onfido, Jumio, Veriff, MockKYC).
-- Status badges: `● Active` (forest), `⚠ Stale (>24h)` (clay), `◌ Test mode` (ink-muted).
-- CTA top right: `Register issuer →` (forest button) opens a non-functional modal showing form fields with a `Coming soon · request access` footer.
+- Status pills (Iconoir glyph + label, no dot): `● Active` is rendered as `Check + Active` forest pill; `Stale (>24h)` as `Warning triangle + Stale` warning pill; `Test mode` as `Sparks + Test` muted pill.
+- CTA top right: `Register issuer →` (forest button) opens a modal scaffold with `Available in private beta` footer.
 
-### 5.5 `/dashboard/audit`
+### 5.6 `/dashboard/audit-log` (Tier A)
 
-- Filter bar: date range, issuer dropdown, status (verified/blocked/all), jurisdiction.
-- Table columns: `Time · Wallet · Issuer · Status · Amount · Jurisdiction · Proof hash · Block · Slot · CU consumed · Tx`.
+- **Page subtitle:** "Every attestation, exportable on request."
+- Filter bar: date range, issuer dropdown, status, jurisdiction.
+- Table columns: `Time · Wallet · Issuer · Status pill · Amount · Jurisdiction · Proof hash · Block · Slot · CU consumed · Tx`.
 - Export bar top right: `Export CSV · Export JSON · Webhook digest` (ghost buttons; on click → toast `Available in private beta · request access ↗`).
 - Pagination Berkeley Mono `← 1 2 3 ... 47 →`.
 - Footer line: `Showing 50 of 23,481 attestations · Last 30 days`.
 
-### 5.6 `/dashboard/settings`
+### 5.7 `/dashboard/billing` (Tier A)
 
-Three cards stacked:
-- **API keys**: `pk_live_••••••8e2f` with `Reveal` (toggles to fake key) and `Rotate` (toast).
-- **Webhooks**: URL input pre-filled with `https://api.acme.example/zksettle/events` + status dot · event subscription checkboxes (`proof.verified · proof.blocked · issuer.updated`).
-- **Billing**: tier `Startup · 50,000 proofs/mo · $0.05/proof` + `Used this month: 18,432 (37%)` with forest progress bar.
+- **Page subtitle:** "Pay for what you prove."
+- Three cards stacked:
+  - **Current tier**: `Startup · 50,000 proofs/mo · $0.05/proof` + `Used this month: 18,432 (37%)` with forest progress bar.
+  - **Usage chart**: 30-day line chart of daily proofs (Berkeley Mono axis labels in `--muted`, line in `--forest`, no fill, hairline `--border-subtle` grid).
+  - **Invoices**: small table of last 3 invoices (mock) with `Download PDF` ghost buttons that toast `Available in private beta`.
 
-### 5.7 Mock data layer
+### 5.8 Tier B scaffolded pages
+
+For each of `attestations`, `policies`, `api-keys`, `team`:
+- Same chrome (sidebar, topbar with page title + 1-line subtitle).
+- Centered empty state in main content:
+  - 64px Iconoir glyph (`Check` · `Page` · `Key` · `Group` respectively) in `--ghost`.
+  - display-m headline (e.g. `Attestation explorer · coming soon`).
+  - One-line `--stone` body (e.g. `Filter, search, and inspect every ComplianceAttestation. Available to private-beta participants.`).
+  - Ghost button: `Request access ↗`.
+
+### 5.9 Mock data layer
 
 - All mock data in `src/lib/mock-data.ts` as typed JSON arrays.
 - Live feed events generated from a seeded PRNG so the same scroll yields the same sequence (URL `?seed=N` overrides).
@@ -340,7 +460,7 @@ Three cards stacked:
 | Component motion | motion (ex-Framer) | 11.x |
 | WebGL | Three.js vanilla | latest |
 | Code highlight | Shiki | latest |
-| Icons | lucide-react | latest |
+| Icons | [Iconoir](https://iconoir.com) (`iconoir-react`) | latest |
 | Package manager | pnpm | 9.x |
 
 ### 6.2 Folder structure
@@ -354,11 +474,15 @@ frontend/
 │   │   ├── globals.css             tailwind v4 + tokens + font-face
 │   │   └── dashboard/
 │   │       ├── layout.tsx          chrome: sidebar + topbar
-│   │       ├── page.tsx            redirect → /dashboard/feed
-│   │       ├── feed/page.tsx
-│   │       ├── issuers/page.tsx
-│   │       ├── audit/page.tsx
-│   │       └── settings/page.tsx
+│   │       ├── page.tsx            redirect → /dashboard/transactions
+│   │       ├── transactions/page.tsx     Tier A · default
+│   │       ├── attestations/page.tsx     Tier B · scaffold
+│   │       ├── counterparties/page.tsx   Tier A
+│   │       ├── policies/page.tsx         Tier B · scaffold
+│   │       ├── api-keys/page.tsx         Tier B · scaffold
+│   │       ├── audit-log/page.tsx        Tier A
+│   │       ├── team/page.tsx             Tier B · scaffold
+│   │       └── billing/page.tsx          Tier A
 │   ├── components/
 │   │   ├── landing/
 │   │   │   ├── nav.tsx
@@ -380,11 +504,13 @@ frontend/
 │   │   │   ├── sidebar.tsx
 │   │   │   ├── top-bar.tsx
 │   │   │   ├── stat-card.tsx
-│   │   │   ├── live-feed-table.tsx
-│   │   │   ├── issuers-table.tsx
+│   │   │   ├── status-pill.tsx           Iconoir glyph + label, no dot
+│   │   │   ├── transaction-row.tsx       2px side rule, no dot
+│   │   │   ├── transactions-table.tsx
+│   │   │   ├── counterparties-table.tsx
 │   │   │   ├── audit-table.tsx
-│   │   │   ├── status-dot.tsx
-│   │   │   └── settings-cards.tsx
+│   │   │   ├── billing-cards.tsx
+│   │   │   └── tier-b-scaffold.tsx       shared empty-state component
 │   │   ├── ui/                            shadcn customized
 │   │   │   ├── button.tsx
 │   │   │   ├── input.tsx
@@ -416,11 +542,10 @@ frontend/
 │       └── use-cases.ts
 ├── public/
 │   ├── fonts/
-│   │   ├── pp-editorial-new-light.woff2
-│   │   ├── pp-editorial-new-regular.woff2
 │   │   ├── geist-regular.woff2
 │   │   ├── geist-medium.woff2
-│   │   └── berkeley-mono-regular.woff2
+│   │   └── berkeley-mono-regular.woff2     (or jetbrains-mono-regular.woff2 fallback)
+│   │   # Display: Georgia (system) — no file. Optional PP Editorial drop-in later.
 │   ├── og.png                             1200×630 OG image
 │   └── favicon.svg
 ├── next.config.ts
@@ -470,7 +595,7 @@ frontend/
 |---|---|---|---|
 | R1 | Veil canvas drops below 60fps on integrated graphics | High | Adaptive particle count (12k desktop / 4k tablet / SVG static mobile). FPS monitor; auto-downgrade if <50fps for 2s. |
 | R2 | Three.js + GSAP + Shiki overshoot 220KB target | Medium | Tree-shake Three.js to `core / BufferGeometry / ShaderMaterial`. Shiki SSR-only (no client JS, HTML pre-rendered). Code-split `/dashboard` from landing chunks. |
-| R3 | PP Editorial New license absent | High | Confirm license Week 1. Fallbacks: GT Sectra Trial (eval only), or **Migra (free)**, or Editorial New trial with explicit commit note. |
+| R3 | Display font swap (Georgia → PP Editorial New) needed late in cycle | Low | Display is set via `--font-display` CSS variable. To upgrade: drop the .woff2 files in `public/fonts/`, register via `next/font`, change one CSS variable. No layout changes required because Georgia metrics were used as the design baseline. |
 | R4 | Simulated demo perceived as fake | Medium | Real wall-clock timer, real proof bytes, real Solscan link. Honesty footer below the demo. Honesty > deception. |
 | R5 | Backend can't deliver proof bytes by Week 2 | Medium | Generation is standalone via `barretenberg` CLI. Mario produces 2 byte pairs (valid + expired, matching the demo's two flows) Week 2 independently. |
 | R6 | Two Realities pin breaks on iOS Safari | Medium | GSAP MatchMedia: viewport <768px swaps pin for stacked horizontal slide. Test on real iOS device. |
@@ -481,7 +606,7 @@ frontend/
 
 ## 8. Checkpoints (aligned with PRD §12)
 
-- **Week 1 (apr 11–17) — Foundation visual.** Repo init, fonts in production with confirmed license, Tailwind v4 tokens published in `globals.css`, hero static (no WebGL), wordmark SVG. **Demo gate:** open `/`, see correct hero in PP Editorial + forest CTA.
+- **Week 1 (apr 11–17) — Foundation visual.** Repo init, Geist + Berkeley Mono self-hosted, Tailwind v4 tokens published in `globals.css`, hero static (no WebGL yet), Seal logo SVG component, Iconoir installed. **Demo gate:** open `/`, see correct hero in Georgia display + forest CTA + Seal logo in nav.
 - **Week 2 (apr 18–24) — WebGL hero + Two Realities.** Veil canvas at 60fps desktop. Two Realities split scroll-locked desktop. Mobile fallbacks running. **Demo gate:** scroll full landing without jank on M1 laptop.
 - **Week 3 (apr 25–may 1) — Demo + remaining sections.** Proof console terminal animated. `proof-bytes.ts` with real bytes (Mario delivers Week 2). Use cases, developers, momentum, closing CTA. **Demo gate:** end-to-end landing flow runs, demo simulation completes.
 - **Week 4 (may 2–8) — Dashboard + polish.** All 4 dashboard pages with mock data. Sidebar + topbar functional. Live feed pseudo-realtime. Polish: micro-interactions, focus states, reduced-motion paths. Cross-browser test (Chrome, Safari, Firefox; iOS+Android). **Demo gate:** Lighthouse run hits all targets.
@@ -521,3 +646,4 @@ frontend/
 - [`zksettle_prd.md`](../../../zksettle_prd.md) — product requirements, stack rationale
 - [`zksettle_pitch.md`](../../../zksettle_pitch.md) — voice, positioning, copy tone
 - [`zksettle_adr.md`](../../../zksettle_adr.md) — architecture decisions backing the demo bytes
+- **Design system (canonical):** `https://claude.ai/design/p/428580d1-b5d6-429a-bea0-0ba1069a5d96` — 27 cards across Type, Colors, Spacing, Components, Brand. Source of truth for all decisions in §3 and component patterns in §4–§5. Treat divergence between this spec and the design system as a bug in this spec.
