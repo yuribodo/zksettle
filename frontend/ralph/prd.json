@@ -135,8 +135,8 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Authored src/lib/cn.ts (clsx + tailwind-merge composition — the canonical shadcn pattern), src/lib/format.ts (truncateWallet uses … ellipsis between head/tail; fmtAmount leans on Intl.NumberFormat en-US with 2 fraction digits + space-joined currency label default USDC; fmtCompact uses Intl compact notation with 1 fraction digit), and src/lib/prng.ts (mulberry32 — `state >>>= 0` seeding, Math.imul bit-mixing, normalized by 2^32). Prng interface exports Prng type for downstream imports. Tests: format.test.ts covers 3 functions × 3 assertions (9 total); prng.test.ts covers range validity, determinism across two instances of same seed, different seeds produce different values, range() bounds, pick() determinism + empty-array throw. All 15 tests pass. Typecheck, lint, build all clean; landing still 102 kB first-load."
     },
     {
       "id": "US-009",

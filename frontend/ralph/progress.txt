@@ -25,6 +25,8 @@ Started: sáb 18 abr 2026 22:51:13 -03
 - `metadata.metadataBase` must be set once in `src/app/layout.tsx` or Next warns on every build with relative OG image paths. Source from `process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"` so prod deployments get the correct origin without code changes.
 - Skip-to-content anchor pattern: first child of `<body>`, `className="sr-only focus:not-sr-only ..."`, `href="#main-content"`, paired with `<main id="main-content">` on every page. Do not move this into a component that's conditionally rendered; it must always be the first focusable element.
 - Custom SVG icons (The Seal, commitment glyph) live in `src/components/icons/`. Pattern: SVG uses `currentColor` for stroke/fill and an outer wrapper applies a text-color utility (`text-ink`, `text-forest`, `text-surface`) — this is how variant colors cascade without inline hex. Match Iconoir's 1.5px stroke convention; The Seal uses 1.25px ring + 2.5px settlement bar per Design Spec §3.1. Prefer `shapeRendering="geometricPrecision"` for curves; `aria-hidden="true"` on decorative SVGs.
+- Shared utilities live in `src/lib/`. `cn()` = clsx + tailwind-merge (shadcn canonical); `truncateWallet`/`fmtAmount`/`fmtCompact` in `format.ts` use `Intl.NumberFormat` en-US (not custom math) — any future currency/compact tweaks go there. Deterministic randomness via `createPrng(seed)` (mulberry32) in `prng.ts` with `next`/`range`/`pick` methods — use this wherever you'd reach for `Math.random()` in demos, live feeds, or mock data so output stays reproducible across SSR/client/tests. PRNG state is `>>>= 0` coerced on each step; `pick` throws on empty array (don't swallow — surface the bug).
+- Vitest co-locates tests: `src/**/<name>.test.ts`. `format.test.ts` + `prng.test.ts` are the first real tests in the repo; the `--passWithNoTests` flag on the `test` script is still harmless but no longer load-bearing. For PRNG determinism tests, instantiate two prngs with the same seed and `expect(sequenceA).toEqual(sequenceB)` — testing the internal state directly is brittle.
 
 ## 2026-04-18 - US-001 - Initialize Next.js 15 project with TypeScript strict
 - Scaffolded Next.js 15.5.15 App Router project in `frontend/` with TypeScript strict, Tailwind v4, src/ layout, and `@/*` alias.
@@ -180,4 +182,32 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - Copy strings with apostrophes/quotes (e.g. `"It's an SDK."`, the `// Click "Generate proof"` terminal prompt) must use paired quote types to keep the file ESLint-clean. Use double quotes for the outer string + single/escaped quotes inside, or vice versa. eslint-config-next + typescript-eslint won't object; prettier preserves the choice.
   - The SDK code block string joins an array on `\n` rather than a template literal with real newlines — this sidesteps indentation ambiguity (template literals pick up the leading spaces of the file's indentation), keeps prettier happy, and reads identically in source and runtime.
   - Place copy constants in `src/content/`, NOT `src/lib/`. `lib/` is for code utilities (format, prng, gsap, shiki helpers); `content/` is for data/strings. This separation lets downstream consumers grep for copy changes in one folder.
+---
+
+## 2026-04-19 - US-008 - Utility lib — cn, format, seeded PRNG
+- Authored the three shared lib modules that later UI + data stories will depend on:
+  - `src/lib/cn.ts` — `cn(...inputs: ClassValue[])` composes `clsx` + `twMerge` (the canonical shadcn utility). Single-function module, named export.
+  - `src/lib/format.ts` — `truncateWallet(address, head=4, tail=4)` inserts `…` (U+2026) between head/tail and returns the raw address when it's shorter than head+tail; `fmtAmount(value, currency="USDC")` uses `Intl.NumberFormat("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2})` + space-joined currency label; `fmtCompact(n)` uses Intl compact notation with `maximumFractionDigits: 1`.
+  - `src/lib/prng.ts` — `createPrng(seed: number): Prng` returns `{ next, range, pick }`. Algorithm is mulberry32 (state coerced with `>>>= 0`, Math.imul bit-mix, divided by 2^32). `range(min,max)` returns `min + next() * (max - min)` (inclusive min, exclusive max). `pick<T>(array)` throws when array is empty (surfaces the bug rather than returning undefined).
+- Tests:
+  - `src/lib/format.test.ts` — 3 describe blocks × 3 assertions each (9 tests): truncateWallet ellipsis default / custom head-tail / shorter-than-total passthrough; fmtAmount default USDC / rounding / custom currency; fmtCompact thousands→K / larger → K / small-passthrough.
+  - `src/lib/prng.test.ts` — 6 tests: range [0,1) over 100 iterations, determinism across two same-seed instances, different seeds diverge, range(min,max) bounds over 50 iterations, pick() determinism + in-array, pick() throws on empty array.
+- Files changed:
+  - `frontend/src/lib/cn.ts` (new)
+  - `frontend/src/lib/format.ts` (new)
+  - `frontend/src/lib/format.test.ts` (new)
+  - `frontend/src/lib/prng.ts` (new)
+  - `frontend/src/lib/prng.test.ts` (new)
+- Verification:
+  - `pnpm test` ✅ (15 tests passing across 2 files)
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm build` ✅ (landing still 102 kB first-load — lib utilities tree-shake until imported by sections/dashboard)
+- **Learnings for future iterations:**
+  - `tsconfig.json` has `noUncheckedIndexedAccess: true`, so `array[index]` types as `T | undefined`. In `prng.pick` the bounds are checked first (throw on empty), so a `!` non-null assertion is acceptable and communicates the invariant. Avoid silent `?? fallbackValue` patterns when you can prove safety — prefer an explicit guard or assertion.
+  - `Intl.NumberFormat` with locale `"en-US"` is the right default for financial demos (comma thousands, dot decimal). If the design spec ever adds locale-aware currency formatting, extend these helpers with a `locale` param — DON'T fork them into `fmtAmountEu` etc.
+  - `fmtCompact` with `maximumFractionDigits: 1` rounds 23481 → "23.5K" (not "23K" or "23,481"). Be aware of that rounding when writing display copy; if the design spec ever pins an exact display string (e.g. "23,481 events"), use `Intl.NumberFormat` directly instead of `fmtCompact`.
+  - mulberry32 is the right choice for demo PRNG: tiny (~6 lines), no dependency, deterministic across Node/browsers, and high-quality enough for shuffles + pseudo-realtime tickers. Don't reach for `seedrandom` (adds 7kB) or crypto-hash-based PRNGs (overkill + slower). The state is a 32-bit unsigned int coerced with `>>>= 0`; seeding with a double works because the shift coerces.
+  - `Math.imul(a, b)` exists specifically for 32-bit signed integer multiplication (wraps on overflow). Native multiply would lose bits. Keep `Math.imul` — don't "simplify" to `a * b`.
+  - vitest co-locates tests next to source via `src/**/*.{test,spec}.{ts,tsx}`. Both files here are `node` environment (default), so no `// @vitest-environment jsdom` pragma. When US-012 writes hook tests, it'll need that pragma per file.
 ---
