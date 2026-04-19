@@ -15,6 +15,10 @@ Started: sáb 18 abr 2026 22:51:13 -03
 - `@vitest/ui` must match the `vitest` major version exactly (pin `@vitest/ui@^2` while on vitest 2).
 - `motion` is the modern package name (was `framer-motion`). The PRD calls for "motion v11" but npm currently ships v12 as the latest line — v11 is deprecated. Use `motion@^12`; the React import surface (`motion`, `useScroll`, `useInView`, etc.) is identical.
 - `three`'s `@types/three` minor version must match the installed `three` minor (e.g. both 0.184.x). Pin them in lockstep; out-of-sync majors break Three's typed scene/object APIs.
+- Tailwind v4 `@theme` tokens MUST use category prefixes: `--color-*`, `--font-*`, `--radius-*`, `--ease-*`. Reference via utility classes (`bg-forest`, `text-ink`, `font-display`) or `var(--color-forest)` — NEVER `var(--forest)` bare; that resolves undefined. The Design Spec uses short names for readability; translate to prefixed names when writing CSS.
+- `--font-sans` / `--font-mono` in `globals.css` cascade through `var(--font-geist-sans)` / `var(--font-jetbrains-mono)` — those are the CSS variables US-005's `next/font` registration will expose on `<body className>`. Keep the `ui-sans-serif` / `ui-monospace` fallbacks so the page stays readable between stories.
+- `--font-display` is hard-coded to Georgia (Design Spec D8). To upgrade to PP Editorial New later, change ONLY `--font-display` in `globals.css` — no other file touches that variable.
+- The global `prefers-reduced-motion` block in `globals.css` only neutralizes CSS animations + transitions + scroll-behavior. JS-driven motion (GSAP ScrollTrigger, motion/react, Three.js rAF loops) must ALSO short-circuit explicitly via `useReducedMotion()` from US-012 — the CSS rule is a safety net, not a replacement.
 
 ## 2026-04-18 - US-001 - Initialize Next.js 15 project with TypeScript strict
 - Scaffolded Next.js 15.5.15 App Router project in `frontend/` with TypeScript strict, Tailwind v4, src/ layout, and `@/*` alias.
@@ -81,4 +85,21 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - `shiki` 4.x dropped the deprecated `getHighlighter` in favor of `createHighlighter`. The Shiki SSR work in US-020 should use `createHighlighter` and import only the languages/themes it needs (not the full bundle).
   - `class-variance-authority` 0.7.x is required for shadcn-style `cva()` variant maps in US-009 primitives.
   - Even though `three` ships its own bundled `examples/jsm/` modules, prefer named imports from the root (`import { Scene, PerspectiveCamera, Mesh } from "three"`) for tree-shaking; only reach into `three/examples/jsm/...` for one-off helpers (see US-013 plans).
+---
+
+## 2026-04-18 - US-004 - Author design tokens in globals.css
+- Replaced placeholder `src/app/globals.css` with a Tailwind v4 `@theme` block defining the full ZKSettle token system — 20 color tokens, 3 font tokens, 4 radii, brand easing — plus global body, em, ::selection, and prefers-reduced-motion rules per Design Spec §3.
+- Files changed:
+  - `frontend/src/app/globals.css` — imports tailwindcss; declares all `--color-*`, `--font-*`, `--radius-*`, `--ease-*` tokens inside `@theme`; html/body apply canvas bg + ink + font-sans + antialiased; em rule forest italic inherit-weight; ::selection forest/canvas; prefers-reduced-motion kills animations + transitions + scroll-behavior.
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (still `--passWithNoTests`)
+  - `pnpm build` ✅ (landing first-load JS unchanged at 102 kB; CSS utilities now available for future components).
+- **Learnings for future iterations:**
+  - Tailwind v4's `@theme` directive requires category prefixes on token names: `--color-<name>`, `--font-<name>`, `--radius-<name>`, `--ease-<name>`. The Design Spec uses short names like `--canvas` and `--forest`, but inside `@theme` they MUST be `--color-canvas` / `--color-forest` — Tailwind derives utilities (`bg-canvas`, `text-forest`) from that prefix. Downstream components should prefer utility classes or `var(--color-forest)`; don't hand-write `var(--forest)` or it will resolve to undefined.
+  - `--font-sans` / `--font-mono` intentionally reference `var(--font-geist-sans)` and `var(--font-jetbrains-mono)` — those are the names US-005 will register via `next/font`. Until then, the chain falls back to `ui-sans-serif` / `ui-monospace`, so the page still renders.
+  - `--font-display` is hard-coded to `Georgia, "Times New Roman", serif` on purpose — the whole point of picking Georgia is zero FOUT and zero font-licensing risk. If/when PP Editorial New is licensed, swap only this one variable (Design Spec D8 / Risk R3).
+  - The `prefers-reduced-motion` block applies to `*, *::before, *::after` and zeroes out animation/transition duration + scroll-behavior. This is a global safety net — per-component motion (GSAP, motion/react, Three.js) must STILL short-circuit explicitly because this CSS rule only covers CSS animations/transitions, not JS-driven rAF loops.
+  - `::selection` is intentionally reversed (forest bg / canvas text). Keep this — it's the brand's signature text-highlight treatment and the acceptance criteria pins it.
 ---

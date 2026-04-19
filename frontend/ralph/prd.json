@@ -68,8 +68,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Authored full @theme block in src/app/globals.css using Tailwind v4 naming (--color-*, --font-*, --radius-*, --ease-*). All 20 color tokens present (canvas/surface/surface-deep/border-subtle/border, ink/quill/stone/muted/ghost, forest/forest-hover/emerald/mint, warning|danger|info bg/text). Font tokens use next/font CSS variable fallbacks (--font-geist-sans, --font-jetbrains-mono) that US-005 will register, cascading to Georgia / system-ui / ui-monospace. Radii 2/3/6/10 + --ease-brand cubic-bezier(0.32,0.72,0,1). html/body apply canvas bg + ink + font-sans + antialiased smoothing. em rule forest italic inherit-weight. ::selection forest/canvas. prefers-reduced-motion disables animations + transitions + scroll-behavior. Build, typecheck, lint, test all pass."
     },
     {
       "id": "US-005",

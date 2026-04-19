@@ -1,1 +1,69 @@
 @import "tailwindcss";
+
+@theme {
+  --color-canvas: #fafaf7;
+  --color-surface: #f5f3ee;
+  --color-surface-deep: #efede8;
+  --color-border-subtle: #e8e5df;
+  --color-border: #c8c4bc;
+
+  --color-ink: #1a1917;
+  --color-quill: #4a4640;
+  --color-stone: #6b6762;
+  --color-muted: #8a8880;
+  --color-ghost: #b4b0a8;
+
+  --color-forest: #0c3d2e;
+  --color-forest-hover: #0f4d38;
+  --color-emerald: #1a6b4a;
+  --color-mint: #e8f2ee;
+
+  --color-warning-bg: #fbf4e8;
+  --color-warning-text: #7a5c1e;
+  --color-danger-bg: #faf0ef;
+  --color-danger-text: #bc2a24;
+  --color-info-bg: #eef4fc;
+  --color-info-text: #2563a8;
+
+  --font-display: Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), "Berkeley Mono", "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-2: 2px;
+  --radius-3: 3px;
+  --radius-6: 6px;
+  --radius-10: 10px;
+
+  --ease-brand: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+html,
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+em {
+  font-style: italic;
+  color: var(--color-forest);
+  font-weight: inherit;
+}
+
+::selection {
+  background-color: var(--color-forest);
+  color: var(--color-canvas);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
