@@ -33,6 +33,9 @@ export const metadata: Metadata = {
       "Prove compliance without exposing data. Sub-5s proofs, sub-cent verification, zero PII on-chain — built on Solana.",
     images: ["/og"],
   },
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+  },
 };
 
 export default function RootLayout({

@@ -552,8 +552,8 @@
         "Verify in browser using dev-browser skill (navigate to /og)"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "2026-04-19: OG route + SVG favicon + twitter/icons metadata."
     },
     {
       "id": "US-032",

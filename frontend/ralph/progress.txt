@@ -868,3 +868,24 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - For any future icon-only button added to this codebase: pair `aria-label="..."` on the button with `aria-hidden="true"` on the inner SVG. NEVER rely on a visually-hidden label via `sr-only` span for buttons — aria-label is faster and won't regress in RTL/translation layers.
   - `aria-atomic="true"` on the demo sr-only status region is critical: without it, some SRs (NVDA) only announce the changed characters, not the full phrase. For multi-sentence announcements keep it on.
 ---
+
+## 2026-04-19 - US-031 - OG image route + favicon + SEO metadata
+- `src/app/og/route.tsx` — Next 15 `ImageResponse` at `runtime: "edge"`, 1200×630, forest bg `#0C3D2E`, canvas text `#FAFAF7`. Content: mono eyebrow ("ZKSettle · Compliance Infrastructure"), Seal glyph (120px circle with Z + crosshair bar), display-96 hero line "Settle in 181ms. Audit for life.", 28px sans subline, bottom-row mono `zksettle.com` + `Colosseum Frontier 2026`. Exports `alt`, `contentType`, `size` per Next 15 metadata route conventions.
+- `public/favicon.svg` — Seal-only variant. Forest `#0C3D2E` strokes + fill on transparent bg. Same 48×48 viewBox + geometry as the React `<Logo>` primitive (1.25 ring, 26px Georgia Z, 2.5 settlement bar, 4 ticks).
+- `layout.tsx` metadata.icons.icon registers `/favicon.svg` as image/svg+xml. metadataBase + openGraph.images (`/og`) + twitter.card (`summary_large_image`) were already wired in US-005 — no changes there.
+- Files changed:
+  - `frontend/src/app/og/route.tsx` (new)
+  - `frontend/public/favicon.svg` (new)
+  - `frontend/src/app/layout.tsx` (icons.icon)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm build` ✅ (`/og` route appears in build output at 124 B + 102 kB first-load; it's a dynamic edge route so size is mostly first-load JS carry-over)
+- **Learnings for future iterations:**
+  - Next 15 `ImageResponse` uses inline-CSS flex positioning with Yoga layout — NOT full CSS. Stick to `display: flex|grid`, `position: absolute|relative`, `padding`, `margin`, `background`, `border`, `color`, fontFamily, fontSize. `::before`/`::after` and CSS variables DON'T work. Dotted borders don't render cleanly. Keep the design flat and boxy.
+  - Only ONE `display: block|flex|grid` per element; any other value throws at runtime. If you forget this, `pnpm build` will fail with a Yoga error pointing at the bad style.
+  - `runtime: "edge"` is fine for OG images — it keeps cold-start tiny. If we need to import heavy modules later (e.g. a custom font file), we'd switch to `nodejs` runtime and load the font via `fetch()` + `fonts` option on `ImageResponse`.
+  - Favicon SVG: use fully-qualified hex colors (not CSS variables) because the favicon is loaded by the browser OUTSIDE the Next.js CSS context. `var(--color-forest)` resolves to empty in the SVG context — the Seal would render invisible.
+  - Prefer `favicon.svg` + `icons.icon: [{ url, type: "image/svg+xml" }]` over a 32×32 PNG. SVG scales perfectly on retina / dark-mode browser chrome without a family of 16/32/64/180 sizes. Only generate a PNG fallback if an audited browser (Safari 14, old Firefox) fails to render the SVG — none of our target browsers do.
+  - ImageResponse's `size` export must be a plain object literal — destructuring `{ ...size }` into `new ImageResponse(...)` arg is fine but spreading a const is the canonical form in Next docs.
+---
