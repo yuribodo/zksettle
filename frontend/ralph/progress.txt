@@ -680,3 +680,27 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - The `PlaceholderPage` component is temporary scaffolding: US-024/025/026/027 delete it for Tier A, US-028 replaces it with `<TierBScaffold>` for Tier B. Don't build features on top of it.
   - Top bar `scrolled` threshold is 4px (not 8px like landing nav) because the dashboard's max-width content sits tighter to the top; a 4px trigger feels snappier and matches Stripe/Linear chrome.
 ---
+
+## 2026-04-19 - US-023 - StatusPill + StatCard + TransactionRow primitives
+- `src/components/dashboard/status-pill.tsx` — five kinds: verified (Check/mint-forest), blocked (Xmark/danger), warning (WarningTriangle/warning-bg), info (InfoCircle/info-bg, used for pending), test (Sparks/surface-deep-muted). Every variant renders Iconoir glyph + label; NEVER a bare colored dot. `label` prop overrides the default label so transaction rows can render "Pending" via the `info` kind without repainting the pill's color contract.
+- `src/components/dashboard/stat-card.tsx` — mono eyebrow label (10px uppercase tracking 0.1em muted) + display-m fluid number + mono stone sub. Borderless on the outside except for the rounded-6 `border-subtle` container on `bg-surface`. `value` and `sub` accept ReactNode so callers can compose strings or split mono/numeric segments.
+- `src/components/dashboard/transaction-row.tsx` — both the `<TransactionRow>` (single tbody tr) and the full `<TransactionTable>` wrapper (which renders thead + tbody, takes `issuerName: (id) => string` resolver). Row columns: Time · Wallet · Issuer · Status · Amount · Juris · Tx. 2px vertical side rule on the first cell via absolute `inset-y-2 left-0` span colored by status (emerald/danger-text/muted via `Record<Transaction['status'], string>`). Hover reveals "View proof bytes ▾" (opacity 0→100 on `group-hover:`/`focus-visible:`) so the row stays calm at rest.
+- `/ui` gained three new sections (StatusPill, StatCard, TransactionTable) showing all five pill variants, a 2x2 stat grid mirroring the US-024 header, and a 5-row table using mock data. Route stays RSC — only Tabs/Slider/Input/Select remain client components.
+- Files changed:
+  - `frontend/src/components/dashboard/{status-pill,stat-card,transaction-row}.tsx` (new)
+  - `frontend/src/app/ui/page.tsx` (three new sections at the bottom, shared `DEMO_TXS` slice + `issuerName` resolver at the top)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (36/36)
+  - `pnpm build` ✅ (dashboard routes still 104 kB; /ui grew from 1.4 kB → 2.26 kB — all server rendered, no client bundle growth)
+- **Learnings for future iterations:**
+  - StatusPill's `kind` is the public contract — callers map their domain states to it via their own Record lookup (see `PILL_BY_STATUS` inside `transaction-row.tsx`). Don't add domain-specific kinds like `pending-review` or `rejected-sanction` — add them in the caller layer using existing kinds + a custom `label`.
+  - `kind="info"` is the canonical "pending/neutral" pill — forest/emerald is reserved for verified states. If a future need demands a 6th kind (e.g., `draft` on policies), add it here with a unique bg/text pair; don't overload `test` or `info`.
+  - StatCard's `value` uses a fluid `clamp(28px,3vw,44px)` display font — ALWAYS preserve this ramp so dashboard stat cards track the same type scale as the landing Numbers section (spec §3.4 display-m). If a stat card overflow is cramped, increase container padding, not font size.
+  - TransactionTable takes an `issuerName` resolver function (not the Issuer[] array). Reason: the table doesn't need `.find()` per-row in every subscriber; the caller that already holds the issuer lookup memoizes once and passes a thin function. Pattern scales to audit-log pages where the issuer list is filtered.
+  - Row hover + focus pattern for table actions: `opacity-0 group-hover:opacity-100 focus-visible:opacity-100`. Keep the button mounted (not conditionally rendered) so Tab still reaches it for keyboard users. Don't add `pointer-events-none` to the opacity-0 state — the button must capture focus.
+  - Time formatting in rows uses `Intl.DateTimeFormat("en-US", { hour, minute, second, hour12: false })` — not relative times ("3m ago") because the transactions table is a live feed and relative times would need a tick to stay accurate. Leave relative-time formatting to audit-log filters (US-026) where the column is "received 3m ago".
+  - Table cells use border-spacing by default (border-b on row). For a seamless look, `border-collapse` is set on `<table>` in the outer wrapper; otherwise last row's border-b double-draws against the container's bottom border. `last:border-b-0` on the row clears that artifact.
+  - Tailwind v4 `size-*` utilities work on iconoir-react icons since they set `width` + `height` on the outlet `<svg>`; `size-3`, `size-3.5`, `size-5` cover the common contexts. Prefer these over `h-N w-N` for parity with the primitive API.
+---

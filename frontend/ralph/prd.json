@@ -407,8 +407,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 23,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "2026-04-19: primitives shown on /ui."
     },
     {
       "id": "US-024",

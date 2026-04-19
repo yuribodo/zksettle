@@ -5,6 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { StatCard } from "@/components/dashboard/stat-card";
+import { StatusPill } from "@/components/dashboard/status-pill";
+import { TransactionTable } from "@/components/dashboard/transaction-row";
+import { INITIAL_TRANSACTIONS, ISSUERS } from "@/lib/mock-data";
+
+const DEMO_TXS = INITIAL_TRANSACTIONS.slice(0, 5);
+const issuerName = (id: string) =>
+  ISSUERS.find((issuer) => issuer.id === id)?.name ?? "Unknown";
 
 export const metadata = {
   title: "UI primitives",
@@ -165,6 +173,35 @@ export default function UIPage() {
               </p>
             </TabsContent>
           </Tabs>
+        </Section>
+
+        <Section title="StatusPill">
+          <Row label="verified · blocked · warning · info · test">
+            <StatusPill kind="verified" />
+            <StatusPill kind="blocked" />
+            <StatusPill kind="warning" label="Stale (>24h)" />
+            <StatusPill kind="info" label="Pending" />
+            <StatusPill kind="test" />
+          </Row>
+        </Section>
+
+        <Section title="StatCard">
+          <div className="grid w-full grid-cols-1 gap-4 md:grid-cols-2">
+            <StatCard
+              label="Proofs verified (24h)"
+              value="1,847"
+              sub="+12% vs yesterday"
+            />
+            <StatCard label="Blocked" value="23" sub="1.2% rejection rate" />
+            <StatCard label="Avg proving time" value="4.7s" sub="p95 6.2s" />
+            <StatCard label="Avg verify cost" value="$0.00091" sub="Devnet" />
+          </div>
+        </Section>
+
+        <Section title="TransactionTable">
+          <div className="w-full overflow-x-auto">
+            <TransactionTable transactions={DEMO_TXS} issuerName={issuerName} />
+          </div>
         </Section>
       </div>
     </main>
