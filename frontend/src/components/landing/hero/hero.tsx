@@ -5,6 +5,8 @@ import { DisplayHeading } from "@/components/ui/display-heading";
 import { COPY } from "@/content/copy";
 import { cn } from "@/lib/cn";
 
+import { VeilCanvasLazy } from "./veil-canvas-lazy";
+
 export function Hero() {
   const { eyebrow, headline, sub, ctas } = COPY.hero;
 
@@ -14,7 +16,8 @@ export function Hero() {
       aria-labelledby="hero-heading"
       className="relative isolate overflow-hidden bg-canvas"
     >
-      <div className="mx-auto flex min-h-[calc(100vh-56px)] w-full max-w-6xl flex-col justify-center gap-10 px-5 py-24 md:px-8 md:py-40">
+      <VeilCanvasLazy className="pointer-events-none absolute inset-0 -z-10" />
+      <div className="relative mx-auto flex min-h-[calc(100vh-56px)] w-full max-w-6xl flex-col justify-center gap-10 px-5 py-24 md:px-8 md:py-40">
         <p className="font-mono text-xs leading-none uppercase tracking-[0.08em] text-forest">
           {eyebrow}
         </p>
