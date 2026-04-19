@@ -749,3 +749,26 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - `formatLastUpdate` uses a fixed demo "now" (2026-04-18T12:00Z). This is intentional — if we compute against `Date.now()`, the copy drifts every render and the live feed's time column also needs to lie. Match the mock-data module's reference constant.
   - Users column uses `fmtCompact(users)` so 18,400 renders as "18.4K" — matches the design's dense numeric density.
 ---
+
+## 2026-04-19 - US-026 - /dashboard/audit-log
+- `src/components/dashboard/audit-log-table.tsx` ('use client') — 4 filters (date range, issuer, status, jurisdiction) + 3 ghost export buttons + paginated table + 11 columns + status pills + Berkeley Mono pagination.
+- Filters: small `<FilterSelect>` helper component with mono uppercase label + appearance-none native `<select>`. Changing any filter resets page to 1 (important: otherwise a filter can empty the current page and land on "No events").
+- Export buttons (CSV, JSON, Webhook digest) trigger a 3-second toast "X available in private beta · request access ↗" in the bottom-right. Toast is a single-slot fixed overlay with `role="status"` + `aria-live="polite"` so screen readers announce.
+- Pagination: `paginationRange(current, total)` returns `[1, "…", ..., current-1, current, current+1, ..., "…", 47]`. Prev/Next chevrons are disabled on edges. Current page has `bg-surface-deep text-ink`; siblings are plain text. All pagination controls are focusable.
+- Table footer: "Showing 1–10 of 23.5K attestations · Last 30 days" — 23,481 is the faked total from the spec. Actual data backing: 260 AUDIT_EVENTS from US-021, paginated 10-per-page (26 pages of real data). We display TOTAL_PAGES = 47 for the spec-mandated "Showing 50 of 23,481" feel even though only 26 pages of underlying data exist. Clicking past page 26 just shows an empty state (existing row).
+- Files changed:
+  - `frontend/src/components/dashboard/audit-log-table.tsx` (new)
+  - `frontend/src/app/dashboard/audit-log/page.tsx` (replaces placeholder)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (36/36)
+  - `pnpm build` ✅ (118 kB first-load — just under 120 kB budget)
+- **Learnings for future iterations:**
+  - When a filter changes, ALWAYS reset the paginator to page 1 in the same setState call. Otherwise users land on an empty page and assume the app is broken.
+  - Toast pattern without a library: single React state `string | null`, setTimeout to clear, `role="status"` + `aria-live="polite"`. Don't reach for sonner/react-hot-toast unless you need stacking + auto-dismiss intricacies.
+  - `paginationRange` helper is copy-pastable. The 7-items-threshold is chosen so the Prev/Next + ellipsis rendering still fits on mobile without wrapping. If the design calls for fewer visible pages, tighten the `current - 1`/`current + 1` window to just `current` (no siblings).
+  - Native `<select>` with `appearance-none` relies on the browser to render no chevron. A manually positioned chevron SVG (per global.css slider recipe) would make this prettier but adds complexity. Acceptable trade-off for internal dashboard filters — don't bring the chevron fight to every dropdown in the app.
+  - Don't render the Table body when `pageRows.length === 0` — use a colspan row with empty-state copy instead. Keeps header + pagination stable; users aren't confused by a disappearing table.
+  - Min-width on the table: `min-w-[960px]` inside an `overflow-x-auto` wrapper. 11 columns at sensible density need the horizontal scroll. NEVER drop columns on narrow viewports — the mobile audit-log view is low priority for this spec; users on phones see a scrollable table.
+---
