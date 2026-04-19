@@ -1,4 +1,5 @@
 import { SectionHeader, Section } from "@/components/landing/section";
+import { BenchmarkNumber } from "@/components/landing/benchmark-number";
 import { DisplayHeading } from "@/components/ui/display-heading";
 import { COPY } from "@/content/copy";
 
@@ -20,7 +21,7 @@ export function NumbersSection() {
             </dt>
             <dd>
               <DisplayHeading level="xl" as="p" className="text-ink">
-                {item.number}
+                <BenchmarkNumber label={item.label} fallback={item.number} />
               </DisplayHeading>
               <p className="mt-3 font-mono text-sm text-stone">{item.sub}</p>
             </dd>

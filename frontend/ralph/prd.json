@@ -282,8 +282,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "CountUp primitive in src/components/motion/count-up.tsx uses motion v12 useInView (once, amount: 0.5) + rAF with ease-out-expo. BenchmarkNumber client wrapper in src/components/landing/benchmark-number.tsx holds the per-label configs (can't pass function props from server component). teaseTo values: 9.99→<5s, 0.01→<$0.001, 99→0, 0→256 bytes. Reduced-motion renders target instantly. SSR shows canonical target (mounted gate) to avoid hydration flash. Landing first-load 163→166 kB."
     },
     {
       "id": "US-017",
