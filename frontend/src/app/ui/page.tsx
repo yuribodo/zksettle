@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DisplayHeading } from "@/components/ui/display-heading";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
@@ -51,6 +52,29 @@ export default function UIPage() {
       </header>
 
       <div className="flex flex-col gap-14">
+        <Section title="DisplayHeading">
+          <Row label="display-xl · h1 default · clamp(56–128px) / 0.95 / -3.5%">
+            <DisplayHeading level="xl">
+              Settle <em>everywhere</em>.
+            </DisplayHeading>
+          </Row>
+          <Row label="display-l · h2 default · clamp(40–72px) / 1.03 / -3.5%">
+            <DisplayHeading level="l">
+              Prove <em>anywhere</em>.
+            </DisplayHeading>
+          </Row>
+          <Row label="display-m · h3 default · clamp(32–48px) / 1.05 / -2%">
+            <DisplayHeading level="m">
+              Audited in <em>real time</em>.
+            </DisplayHeading>
+          </Row>
+          <Row label="Polymorphic · as='p'">
+            <DisplayHeading level="m" as="p">
+              The <em>shared</em> language.
+            </DisplayHeading>
+          </Row>
+        </Section>
+
         <Section title="Button">
           <Row label="Variants">
             <Button variant="primary">Primary</Button>

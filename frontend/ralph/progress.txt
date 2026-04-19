@@ -30,6 +30,8 @@ Started: sáb 18 abr 2026 22:51:13 -03
 - All UI primitives live in `src/components/ui/` and use `cva()` + `VariantProps<typeof variantsFn>` for multi-variant components (Button, Badge). Single-shape primitives (Input, Select, Slider) compose `cn()` directly. Every primitive uses `forwardRef` + explicit `displayName`, and interactive elements expose `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest` (never plain `focus:` — that flashes on mouse clicks). Radii per Design Spec §3.5: buttons/selects/inputs/sliders = `rounded-[var(--radius-3)]` for buttons and `rounded-[var(--radius-2)]` for inputs/status pills/badges. Tabs is a `"use client"` compound component (Tabs / TabsList / TabsTrigger / TabsContent) with `useId()`-scoped ARIA ids and full Arrow/Home/End keyboard nav — import it from server components without needing "use client" in the caller.
 - Native `<input type="range">` styling requires vendor-prefixed pseudo-elements in `globals.css` under a `.zks-slider` opt-in class (webkit + moz track AND thumb). Tailwind v4 can't express `::-moz-range-thumb` cleanly, so keep range styles centralized there. Native `<select>` needs `appearance-none` + a manually positioned chevron SVG with `pointer-events-none` — otherwise the OS caret ignores tokens.
 - Demo routes use top-level App Router paths (`/ui` for primitives). Reserve `/demo` for the US-015 Interactive Demo; if you add more sandbox pages later, nest them under `/ui/<topic>` instead of taking new top-level routes.
+- Display typography lives in `src/components/ui/display-heading.tsx` (`DisplayHeading level="xl|l|m" as?`). Default tag mapping xl→h1, l→h2, m→h3 — override `as` to preserve a11y heading rank when nesting inside an existing section. NEVER manually class up a `<h1 className="font-display text-[clamp(...)]">` in landing/dashboard sections; always go through DisplayHeading so the type tokens stay synced with Design Spec §3.4. Inline `<em>` inside is the canonical brand-emphasis treatment (forest italic via the global `em {}` rule in globals.css) — do not add `text-forest italic` manually; do not use `<em>` for non-emphasis italics (use `<i>` or a span if you ever need that).
+- Tailwind v4 fluid typography pattern: `text-[clamp(MIN,VW,MAX)]` for size, `leading-[N]` for line-height, `tracking-[Nem]` for letter-spacing. Letter-spacing percentages from the Design Spec MUST be translated to em (`-3.5%` → `tracking-[-0.035em]`) because CSS `letter-spacing` does not accept `%` and `tracking-[-3.5%]` silently no-ops. Same translation rule applies anywhere else in the codebase that copies type-stack values out of the spec.
 
 ## 2026-04-18 - US-001 - Initialize Next.js 15 project with TypeScript strict
 - Scaffolded Next.js 15.5.15 App Router project in `frontend/` with TypeScript strict, Tailwind v4, src/ layout, and `@/*` alias.
@@ -251,4 +253,31 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - Badges are label-only (no `tabIndex={0}`). The "focus state on every primitive" acceptance criterion just pins the visual style; it doesn't mandate tab-focusability on non-interactive tokens.
   - The demo route lives at `/ui` (not `/demo` — that route is reserved for US-015 Interactive Demo). If you add another sandbox later, use a parallel name like `/ui/typography` or move this one to `/ui/primitives` to free the top path for a future overview.
   - When the dev server is already running on port 3000, starting another `next dev` would fail silently — check with `pgrep -fa "next dev"` before invoking.
+---
+
+## 2026-04-19 - US-010 - DisplayHeading helper with forest em support
+- Authored `src/components/ui/display-heading.tsx` exporting `DisplayHeading({ level, as, children, className, ...rest })`. Three levels via cva: xl/l/m mapped to clamp-based fluid type per Design Spec §3.4. Default tag mapping: xl → h1, l → h2, m → h3; `as` prop overrides for polymorphic use (`h1|h2|h3|h4|p|span|div`).
+- Sizes:
+  - xl → `text-[clamp(56px,7vw,128px)] leading-[0.95] tracking-[-0.035em]`
+  - l  → `text-[clamp(40px,5vw,72px)] leading-[1.03] tracking-[-0.035em]`
+  - m  → `text-[clamp(32px,4vw,48px)] leading-[1.05] tracking-[-0.02em]`
+- Base classes apply `font-display font-normal text-ink`. Forest italic on `<em>` flows from the global `em { font-style: italic; color: var(--color-forest); font-weight: inherit; }` rule already declared in `globals.css` (US-004) — no per-component override needed.
+- Demo: added a `DisplayHeading` Section to `src/app/ui/page.tsx` rendering all three levels, each with an inline `<em>` to prove the forest-em cascade, plus a polymorphic `as="p"` example.
+- Files changed:
+  - `frontend/src/components/ui/display-heading.tsx` (new)
+  - `frontend/src/app/ui/page.tsx` (DisplayHeading demo section added at top of primitives list)
+  - `frontend/ralph/prd.json` (US-010 passes=true)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (15 tests still passing)
+  - `pnpm build` ✅ — `/ui` route grew to 9.71 kB / 112 kB first-load (component is tree-shakable, near zero runtime cost).
+  - `pnpm dev` + `curl http://localhost:3000/ui` → confirmed rendered DOM has `<h1 class="…clamp(56px,7vw,128px) leading-[0.95] tracking-[-0.035em]">…<em>everywhere</em>…</h1>`, `<h2 …clamp(40px,5vw,72px)…<em>anywhere</em></h2>`, `<h3 …clamp(32px,4vw,48px)…<em>real time</em></h3>`, and `<p …clamp(32px,4vw,48px)…<em>shared</em></p>`. Agent-browser CLI is still not installed on this machine, so a visual screenshot was not captured — manual browser verification at http://localhost:3000/ui still recommended (the inline `<em>` color should be `--color-forest` #0c3d2e).
+- **Learnings for future iterations:**
+  - Tailwind v4 supports arbitrary fluid type via the `text-[clamp(MIN,VW,MAX)]` bracket form. There is no native `text-display-xl` utility — clamp lives inside the bracket. Pair with `leading-[N]` and `tracking-[Nem]` brackets for the rest of the type-stack tokens. Translate Design Spec percentages to em (e.g., -3.5% → -0.035em) since CSS `letter-spacing` does not accept percentages directly — `tracking-[-3.5%]` would silently no-op.
+  - Default level mapping (xl→h1, l→h2, m→h3) keeps the most common landing copy semantically correct without callers having to think about heading order. Use `as` to override when nesting (e.g., a display-xl in the middle of a section that already has an h1) to preserve heading-rank a11y.
+  - Polymorphism via `as` + cast to `ElementType` is sufficient for our use cases; don't reach for the `as` polymorphic-component generic gymnastics (`PolymorphicRef<As>`, `PolymorphicComponentPropsWithRef`) unless callers complain. The current API trades one cast for a much smaller, easier-to-read type surface.
+  - The em styling is a global cascade rule. Resist the urge to add a `<em className="text-forest italic">` per usage — that violates DRY AND breaks the design-spec contract that any inline `<em>` is the brand emphasis treatment everywhere on the site. If a one-off non-emphasis italic is ever needed, use `<i>` or an explicit utility class on a span.
+  - `display-m`'s spec said "32-48px" without an explicit vw breakpoint; interpreted as `clamp(32px,4vw,48px)` to maintain the same fluid pattern as xl/l. If the design team wants display-m to be non-fluid, swap to `text-3xl md:text-5xl` later — the cva structure makes the change one-liner.
+  - The demo Row label format ("display-xl · h1 default · clamp(56–128px) / 0.95 / -3.5%") doubles as inline documentation — future devs eyeballing /ui can map the rendered glyph back to the spec immediately. Keep this convention if you add more typography demos.
 ---
