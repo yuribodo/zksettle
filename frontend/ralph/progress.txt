@@ -3,6 +3,7 @@ Started: sáb 18 abr 2026 22:51:13 -03
 ---
 
 ## Codebase Patterns
+- Landing copy lives in `src/content/copy.ts` (COPY: LandingCopy) and `src/content/use-cases.ts` (USE_CASES: readonly UseCase[]). All section components (US-011 onwards) MUST consume strings from these modules — never inline copy in JSX. Every leaf is typed via explicit interfaces; no `as const` needed, and `readonly` modifiers prevent accidental mutation during motion work.
 - Next.js 15 must be pinned to a patched 15.x (e.g. 15.5.15 via backport tag). 15.1.6 is flagged for CVE-2025-66478 — do not use.
 - A parent `pnpm-lock.yaml` lives at `/home/mario/pnpm-lock.yaml` which Next detects as a rival workspace root. Set `outputFileTracingRoot: path.join(__dirname)` in `next.config.ts` to silence the warning.
 - Repo's root `.gitignore` already excludes `node_modules/`. Frontend-specific ignores go in `frontend/.gitignore`.
@@ -154,4 +155,29 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - For a React `Logo` component with a wordmark, use an outer `<span>` (not `<div>`) with `display: inline-flex` so the logo can sit inline in headers, CTAs, and text without breaking the line. `align-middle` helps baseline-align the seal with adjacent text.
   - The Seal SVG viewBox is 48×48 and strokes scale with `size` — at 16px the 1.25 stroke becomes ~0.42px, at 200px it becomes ~5.2px. That's the intended hairline→poster behavior; do NOT add `vector-effect="non-scaling-stroke"` or you'll get a chunky 1.25px ring even at 200px (wrong for hero placement).
   - When a downstream story (e.g. US-011 nav) imports the Logo, pass `size={32}` for nav (matches the spec's 56px nav row with breathing room) and `size={200}` for hero placements. Variant choice: `surface-forest` for surfaces (cards, nav on surface), `forest-surface` for inverted panels (closing CTA, OG image), default `canvas-ink` everywhere else.
+---
+
+## 2026-04-19 - US-007 - Landing copy single source of truth
+- Authored `src/content/copy.ts` — exports typed `COPY: LandingCopy` with 11 section entries (hero, paradox, twoRealities, howItWorks, numbers, demo, useCases, developers, momentum, closingCta, footer). Every section has its own `readonly` interface (HeroCopy, ParadoxCopy, TwoRealitiesCopy, TwoRealitiesRow/Side, HowItWorksCopy/Step, NumbersCopy/NumberTuple, DemoCopy/DemoFormField, UseCasesCopy, DevelopersCopy, MomentumCopy/Column, ClosingCtaCopy, FooterCopy). All strings lifted verbatim from Design Spec §4.
+- Authored `src/content/use-cases.ts` — exports `USE_CASES: readonly UseCase[]` of 5 items (Travel rule, Proof of solvency, ZK credit score, AML by behavior, Proof of reserves). `UseCase` interface = {name, tagline, footnote}. `COPY.useCases.items` re-exposes USE_CASES so both imports resolve to the same array.
+- Numbers block exposes `{label, number, sub}` tuples for each of <5s, <$0.001, 0, 256 bytes. Labels are human-readable ("Proving time", "Verify cost", "PII leaked", "Proof size") — US-016 CountUp will use `number` as the end-state string and derive numeric targets locally.
+- TwoRealities rows carry BOTH `value` and `redacted` fields ("Maria Silva" / "▓▓▓▓▓▓▓") so the US-015 dissolve animation can interpolate between states without re-deriving redactions.
+- Demo form field definitions include defaults (recipient "5g8H4nP3eR...", amount 100-10000 default 1200, jurisdiction US from ["US","EU","UK","BR"]), CTA labels (generate/submit/expired toggle), honestyFooter, and expiredError strings — US-019 will consume these directly.
+- Developers.code stores the 3-line SDK snippet as a multi-line string (joined from a 5-element array for source clarity). Shiki (US-020) consumes it via COPY.developers.code.
+- Files changed:
+  - `frontend/src/content/copy.ts` (new)
+  - `frontend/src/content/use-cases.ts` (new)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (still --passWithNoTests)
+  - `pnpm build` ✅ (landing still 102 kB first-load JS; content modules tree-shake out until imported by US-011 sections)
+- **Learnings for future iterations:**
+  - `readonly` + explicit interface beats `as const` for copy modules: IDE autocomplete still narrows to literal types when exported from a `readonly` interface, and downstream consumers can destructure `const { hero } = COPY` without TS complaining about mutability mismatches that `as const` sometimes triggers through index signatures.
+  - `src/content/use-cases.ts` is imported by `src/content/copy.ts` via the `@/content/use-cases` alias — keep the alias pattern consistent across content files. Do NOT reverse the dependency (copy → use-cases is fine; use-cases must stay leaf because the UseCase interface is referenced by COPY's UseCasesCopy).
+  - The spec text uses the character `·` (middle dot U+00B7) as a separator (e.g. "GENIUS Act · MiCA Q3"). Preserve it verbatim in copy strings — it's a brand typography signal (Design Spec §3.4). Don't swap for `|` or `-`.
+  - "AML by behavior" intentionally has `footnote: ""` — the spec line omits the third bullet. An empty string (not `null` / `undefined` / omitted key) keeps the UseCase interface homogeneous and lets components render `{footnote && <span>…</span>}` uniformly without optional-chaining the shape.
+  - Copy strings with apostrophes/quotes (e.g. `"It's an SDK."`, the `// Click "Generate proof"` terminal prompt) must use paired quote types to keep the file ESLint-clean. Use double quotes for the outer string + single/escaped quotes inside, or vice versa. eslint-config-next + typescript-eslint won't object; prettier preserves the choice.
+  - The SDK code block string joins an array on `\n` rather than a template literal with real newlines — this sidesteps indentation ambiguity (template literals pick up the leading spaces of the file's indentation), keeps prettier happy, and reads identically in source and runtime.
+  - Place copy constants in `src/content/`, NOT `src/lib/`. `lib/` is for code utilities (format, prng, gsap, shiki helpers); `content/` is for data/strings. This separation lets downstream consumers grep for copy changes in one folder.
 ---

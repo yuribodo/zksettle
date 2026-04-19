@@ -119,8 +119,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Authored src/content/copy.ts exporting COPY: LandingCopy with 11 section entries (hero, paradox, twoRealities, howItWorks, numbers, demo, useCases, developers, momentum, closingCta, footer) — all strings lifted verbatim from Design Spec §4. Every shape declared as a readonly interface (HeroCopy, ParadoxCopy, TwoRealitiesCopy with TwoRealitiesRow/TwoRealitiesSide, HowItWorksCopy/HowItWorksStep, NumbersCopy/NumberTuple, DemoCopy/DemoFormField, UseCasesCopy, DevelopersCopy, MomentumCopy/MomentumColumn, ClosingCtaCopy, FooterCopy). Zero `any` — IDE inferred types for every leaf. Numbers.items is `readonly NumberTuple[]` of {label, number, sub}: <5s/\"Proving time\", <$0.001/\"Verify cost\", 0/\"PII leaked\", 256 bytes/\"Proof size\". TwoRealities rows include both plain + redacted values so US-015 can animate the dissolve without re-deriving ▓ strings. Demo form exposes field defaults (recipient 5g8H4nP3eR..., amount min 100/max 10000/default 1200, jurisdiction US default from options [US/EU/UK/BR]), generate/submit/expired toggle labels, honestyFooter + expiredError strings. Developers.code stores the 3-line SDK example as a multi-line string (joined from array for source clarity); Shiki will consume it in US-020. src/content/use-cases.ts exports USE_CASES: readonly UseCase[] of 5 items matching Design Spec §4 §7 lines exactly (AML by behavior has footnote: \"\" since spec line omits the third bullet). COPY.useCases.items re-exports USE_CASES so downstream section components can destructure from one import. Build, typecheck, lint, test all pass; bundle unchanged at 102 kB."
     },
     {
       "id": "US-008",
