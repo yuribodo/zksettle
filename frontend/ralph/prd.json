@@ -478,8 +478,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 27,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "2026-04-19: Billing \u2014 tier + SVG chart + invoices."
     },
     {
       "id": "US-028",
