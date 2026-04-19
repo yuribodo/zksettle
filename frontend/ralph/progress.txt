@@ -797,3 +797,24 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - `fmtAmount(value, "USD")` reuses the existing USDC formatter by swapping the currency — don't fork it into a new helper. Anywhere you need an amount in a specific currency, pass the second arg.
   - Toast pattern repeated from audit-log — consider lifting to a shared `useToast()` hook if a third surface needs it. Not yet.
 ---
+
+## 2026-04-19 - US-028 - TierBScaffold + 4 Tier B routes
+- `src/components/dashboard/tier-b-scaffold.tsx` (RSC) — centered empty state card (min-h 360px, rounded-6 surface with border-subtle). 64px ghost-colored Iconoir glyph → display-m headline → stone body → ghost "Request access ↗" button. All tier-B pages share this silhouette.
+- 4 routes replaced PlaceholderPage with TierBScaffold: Attestations (Check), Policies (Page), API keys (Key), Team (Group). Icon + title + body passed per-route matching Design Spec §5.8 and the PRD acceptance bullets.
+- Deleted `placeholder-page.tsx` since all 8 dashboard routes now have real content (4 Tier A, 4 Tier B). No scaffolding left behind.
+- Files changed:
+  - `frontend/src/components/dashboard/tier-b-scaffold.tsx` (new RSC)
+  - `frontend/src/components/dashboard/placeholder-page.tsx` (deleted)
+  - `frontend/src/app/dashboard/{attestations,policies,api-keys,team}/page.tsx` (TierBScaffold)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (36/36)
+  - `pnpm build` ✅ (tier-B routes 104 kB, tier-A routes 114-118 kB — all under the 120 kB dashboard budget)
+- **Learnings for future iterations:**
+  - Every dashboard page starts with the same two elements in the same order: `<PageHeader title subtitle />` then its content. Tier A pages compose a feature component next; Tier B pages compose a `<TierBScaffold>`. Copy-paste the 4-import page shell from any Tier B route when adding a new coming-soon page.
+  - `TierBScaffold` intentionally has no `children` prop — the empty state IS the content. If a future page needs a hybrid (some existing functionality + "full feature coming soon"), render `<SomeHero />` + `<TierBScaffold>` as siblings instead of complicating the scaffold API.
+  - DisplayHeading accepts `className` via `HTMLAttributes<HTMLElement>` spread. When the heading element itself needs id-based aria-labelledby, wrap the children in `<span id>` rather than giving DisplayHeading an `id` prop — keeps the API narrow.
+  - Iconoir `strokeWidth={1.5}` matches the system-wide hairline. The 64px (`size-16`) Tier B icon uses `text-ghost` (`#B4B0A8`) so it reads as an absence, not a button. Don't promote it to forest or ink — defeats the empty-state intent.
+  - "Request access ↗" is intentionally a non-functional button in this demo. Don't wire it to a form until the backend has an actual waitlist endpoint — a broken submit would read worse than a decorative CTA.
+---

@@ -496,8 +496,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 28,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "2026-04-19: TierBScaffold + 4 pages (attestations, policies, api-keys, team)."
     },
     {
       "id": "US-029",
