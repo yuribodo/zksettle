@@ -407,6 +407,25 @@ Circuit recebe `mint`, `epoch`, `recipient`, `amount` como public inputs. Hook v
 
 ---
 
+## ADR-021 · Janela de frescor da Merkle root do issuer
+
+**Status:** Decidido (implementado)
+
+### Contexto
+`Issuer.root_slot` é gravado em `register_issuer` e `update_issuer_root` mas até então não era consultado por `verify_proof`. Uma root antiga (issuer offline, chave comprometida sem rotação, ou qualquer janela onde a árvore off-chain diverge da root on-chain) permanecia válida indefinidamente, alargando a janela de ataque para provas obsoletas.
+
+### Decisão
+`verify_proof` rejeita com `ZkSettleError::RootStale` quando
+`current_slot - issuer.root_slot > MAX_ROOT_AGE_SLOTS`,
+com `MAX_ROOT_AGE_SLOTS = 432_000` (~48h a 400ms/slot). O issuer é forçado a republicar a root via `update_issuer_root` em cadência de no máximo 48h; falha em republicar pausa verificações sem exigir upgrade on-chain.
+
+### Consequências
+- Issuer service precisa de job de rotação de root com SLA < 48h.
+- Zero impacto em testes existentes — o fixture roda imediatamente após `register_issuer`.
+- Ajustável: configuração futura pode expor `MAX_ROOT_AGE_SLOTS` por issuer caso diferentes verticais peçam janelas distintas.
+
+---
+
 ## Resumo das propostas
 
 | ADR | Feature | Prioridade |
@@ -423,3 +442,4 @@ Circuit recebe `mint`, `epoch`, `recipient`, `amount` como public inputs. Hook v
 | ADR-018 | W3C VC + BBS+ | Alta (pitch) |
 | ADR-019 | cNFT attestation | Média (UC-03/04) |
 | ADR-020 | Nullifier context explícito | Crítica (security) |
+| ADR-021 | Janela de frescor da Merkle root | Decidido (security) |

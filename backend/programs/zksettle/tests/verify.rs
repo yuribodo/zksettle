@@ -26,14 +26,14 @@ use solana_message::{AccountMeta, Instruction, Message};
 use solana_signer::Signer;
 use solana_transaction::{InstructionError, Transaction, TransactionError};
 
-use common::{gen_fixture, repo_root};
+use common::{gen_fixture, repo_root, ANCHOR_ERROR_CODE_OFFSET};
+use solana_clock::Clock;
 use zksettle::error::ZkSettleError;
 use zksettle::instruction::{
     RegisterIssuer as RegisterIssuerIx, VerifyProof as VerifyProofIx,
 };
+use zksettle::instructions::verify_proof::MAX_ROOT_AGE_SLOTS;
 use zksettle::state::{ATTESTATION_SEED, ISSUER_SEED, NULLIFIER_SEED};
-
-const ANCHOR_ERROR_CODE_OFFSET: u32 = 6000;
 
 fn load_program() -> (LiteSVM, Keypair) {
     let so_path = repo_root().join("backend/target/deploy/zksettle.so");
@@ -125,6 +125,27 @@ fn valid_proof_passes() {
     let cu = result.compute_units_consumed;
     println!("compute units consumed: {cu}");
     assert!(cu < 200_000, "CU budget exceeded: {cu}");
+}
+
+#[test]
+#[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
+fn stale_root_rejected() {
+    let fx = gen_fixture(0);
+    let (mut svm, payer) = load_program();
+    register_issuer(&mut svm, &payer, fx.merkle_root);
+
+    let mut clock = svm.get_sysvar::<Clock>();
+    clock.slot = clock.slot.saturating_add(MAX_ROOT_AGE_SLOTS + 1);
+    svm.set_sysvar::<Clock>(&clock);
+
+    let failure = submit(&mut svm, &payer, fx.proof_and_witness, fx.nullifier)
+        .expect_err("stale root must be rejected");
+
+    let expected = ANCHOR_ERROR_CODE_OFFSET + ZkSettleError::RootStale as u32;
+    match failure.err {
+        TransactionError::InstructionError(_, InstructionError::Custom(code)) if code == expected => {}
+        other => panic!("expected Custom({expected}), got {other:?}"),
+    }
 }
 
 #[test]

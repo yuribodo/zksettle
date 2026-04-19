@@ -12,6 +12,10 @@ use crate::state::{
 // `nr_pubinputs` 32-byte field elements.
 const GNARK_WITNESS_HEADER_LEN: usize = 12;
 
+/// Maximum age (in slots) of an issuer's merkle root before `verify_proof`
+/// rejects it. ~48h at 400ms/slot on Solana mainnet-beta.
+pub const MAX_ROOT_AGE_SLOTS: u64 = 432_000;
+
 pub(crate) const fn expected_witness_len(nr_inputs: usize) -> usize {
     GNARK_WITNESS_HEADER_LEN + nr_inputs * 32
 }
@@ -64,6 +68,8 @@ pub struct VerifyProof<'info> {
     #[account(
         seeds = [ISSUER_SEED, issuer.authority.as_ref()],
         bump = issuer.bump,
+        constraint = Clock::get()?.slot.saturating_sub(issuer.root_slot) <= MAX_ROOT_AGE_SLOTS
+            @ ZkSettleError::RootStale,
     )]
     pub issuer: Account<'info, Issuer>,
 
@@ -73,6 +79,7 @@ pub struct VerifyProof<'info> {
         space = 8 + Nullifier::LEN,
         seeds = [NULLIFIER_SEED, issuer.key().as_ref(), nullifier_hash.as_ref()],
         bump,
+        constraint = nullifier_hash != [0u8; 32] @ ZkSettleError::ZeroNullifier,
     )]
     pub nullifier: Account<'info, Nullifier>,
 

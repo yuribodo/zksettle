@@ -20,6 +20,8 @@ use std::{
     sync::Mutex,
 };
 
+pub const ANCHOR_ERROR_CODE_OFFSET: u32 = 6000;
+
 static PROOF_GEN_LOCK: Mutex<()> = Mutex::new(());
 
 pub fn repo_root() -> PathBuf {

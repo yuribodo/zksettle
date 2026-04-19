@@ -16,7 +16,8 @@ use solana_message::{AccountMeta, Instruction, Message};
 use solana_signer::Signer;
 use solana_transaction::{InstructionError, Transaction, TransactionError};
 
-use common::{gen_fixture, repo_root};
+use common::{gen_fixture, repo_root, ANCHOR_ERROR_CODE_OFFSET};
+use zksettle::error::ZkSettleError;
 use zksettle::instruction::{
     RegisterIssuer as RegisterIssuerIx, VerifyProof as VerifyProofIx,
 };
@@ -197,6 +198,21 @@ fn verify_proof_allows_fresh_nullifier() {
         verify_ix(&payer, second.proof_and_witness, second.nullifier),
     )
     .expect("second submit with fresh nullifier should succeed");
+}
+
+#[test]
+#[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
+fn verify_proof_rejects_zero_nullifier() {
+    let (mut svm, payer) = load_program();
+    let fx = gen_fixture(0);
+    register_issuer(&mut svm, &payer, fx.merkle_root);
+
+    let res = send(
+        &mut svm,
+        &payer,
+        verify_ix(&payer, fx.proof_and_witness, [0u8; 32]),
+    );
+    expect_custom_code(res, ANCHOR_ERROR_CODE_OFFSET + ZkSettleError::ZeroNullifier as u32);
 }
 
 #[test]
