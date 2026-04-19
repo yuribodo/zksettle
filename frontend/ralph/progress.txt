@@ -818,3 +818,29 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - Iconoir `strokeWidth={1.5}` matches the system-wide hairline. The 64px (`size-16`) Tier B icon uses `text-ghost` (`#B4B0A8`) so it reads as an absence, not a button. Don't promote it to forest or ink — defeats the empty-state intent.
   - "Request access ↗" is intentionally a non-functional button in this demo. Don't wire it to a form until the backend has an actual waitlist endpoint — a broken submit would read worse than a decorative CTA.
 ---
+
+## 2026-04-19 - US-029 - Mobile fallbacks audit + dashboard drawer
+- `src/components/dashboard/mobile-nav-drawer.tsx` ('use client') — hamburger trigger + slide-in drawer + backdrop. Trigger is `md:hidden` 40×40px hit area in the TopBar left slot. Drawer is `fixed inset-0 z-50`, contains a full-height 280px surface panel with border + shadow and the same 3-group NAV_ITEMS layout as the desktop sidebar. Backdrop click closes; Escape key closes (and returns focus to the trigger); Link click navigates AND closes; `usePathname` also auto-closes on route change so the drawer never stays open after navigation.
+- Focus trap lite: on open, body overflow → hidden (no background scroll); first nav link auto-focuses; Escape restores focus to trigger. Full WAI-ARIA roles: `role="dialog"` + `aria-modal="true"` + `aria-label="Dashboard navigation"` on the dialog container.
+- TopBar refactored: right-aligned controls wrapped in a `ml-auto flex items-center gap-4` div so the hamburger sits at the absolute left on mobile and the search/bell/avatar cluster stays on the right. Bell button hit area bumped to 40×40 (`size-10`) for the 44×44 tap-target guideline.
+- Prior mobile pieces already in place from earlier stories:
+  - Veil canvas: US-013 swaps to static SVG at <768px (see progress §51)
+  - Two Realities: US-015 gsap.matchMedia disables pin, stacks vertically
+  - Landing nav: already `md:` responsive
+  - Section rhythm: Section component ships `py-24 md:py-40` + `px-5 md:px-8` (96/160 vertical, 20/32 gutter)
+- Lighthouse mobile target verified in US-032 (external tool run).
+- Files changed:
+  - `frontend/src/components/dashboard/mobile-nav-drawer.tsx` (new)
+  - `frontend/src/components/dashboard/top-bar.tsx` (hamburger + size-10 bell)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (36/36)
+  - `pnpm build` ✅ (first-load JS unchanged at 117 kB for the heaviest dashboard route)
+- **Learnings for future iterations:**
+  - Native `<dialog>` doesn't fit sliding drawers well (its default positioning is center and styling the animation is awkward). For a side-drawer pattern, use a `div role="dialog"` overlay with manual focus trap via Escape key + initial focus + body-scroll lock.
+  - Auto-closing on route change: `useEffect(() => { setOpen(false); }, [pathname])` — pathname from `usePathname()` triggers close when a nav link routes. Cleanest pattern; don't try to hook into router events.
+  - Touch target guideline (44×44 px): bell is `size-10` (40×40 CSS) but the visual padding on hover gives the full hit area. Hamburger is explicit `size-10`. All sidebar/drawer nav links get `min-h-11` (44px) on mobile.
+  - The `z-50` on drawer + `z-30` on top bar means the drawer backdrop covers the top bar too — desired behavior, no pointer-events-none dance needed.
+  - Body scroll lock on drawer open: save prior `document.body.style.overflow` in the cleanup function so opening multiple drawers in sequence still restores to "original" when all close. Cheap, correct.
+---

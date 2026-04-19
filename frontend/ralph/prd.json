@@ -515,8 +515,8 @@
         "Verify in browser using dev-browser skill (emulate iPhone 15 viewport)"
       ],
       "priority": 29,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "2026-04-19: Mobile hamburger drawer added. Landing mobile already handled in prior stories (Veil static fallback, Two Realities stacked, 96/20 rhythm)."
     },
     {
       "id": "US-030",
