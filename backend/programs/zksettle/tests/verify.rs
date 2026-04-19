@@ -31,7 +31,7 @@ use zksettle::error::ZkSettleError;
 use zksettle::instruction::{
     RegisterIssuer as RegisterIssuerIx, VerifyProof as VerifyProofIx,
 };
-use zksettle::state::{ISSUER_SEED, NULLIFIER_SEED};
+use zksettle::state::{ATTESTATION_SEED, ISSUER_SEED, NULLIFIER_SEED};
 
 const ANCHOR_ERROR_CODE_OFFSET: u32 = 6000;
 
@@ -54,6 +54,14 @@ fn issuer_pda(authority: &Pubkey) -> Pubkey {
 fn nullifier_pda(issuer: &Pubkey, nullifier_hash: &[u8; 32]) -> Pubkey {
     Pubkey::find_program_address(
         &[NULLIFIER_SEED, issuer.as_ref(), nullifier_hash.as_ref()],
+        &zksettle::ID,
+    )
+    .0
+}
+
+fn attestation_pda(issuer: &Pubkey, nullifier_hash: &[u8; 32]) -> Pubkey {
+    Pubkey::find_program_address(
+        &[ATTESTATION_SEED, issuer.as_ref(), nullifier_hash.as_ref()],
         &zksettle::ID,
     )
     .0
@@ -92,6 +100,7 @@ fn submit(
             AccountMeta::new(payer.pubkey(), true),
             AccountMeta::new_readonly(issuer, false),
             AccountMeta::new(nullifier_pda(&issuer, &nullifier_hash), false),
+            AccountMeta::new(attestation_pda(&issuer, &nullifier_hash), false),
             AccountMeta::new_readonly(system_program::ID, false),
         ],
         data: VerifyProofIx {

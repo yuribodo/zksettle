@@ -120,8 +120,8 @@ sequenceDiagram
 |---|---|---|
 | **ZK Compliance Circuit** | Proves Merkle membership, sanctions exclusion, jurisdiction check, expiry, and nullifier — all in one Groth16 proof | `circuits/` (Noir) |
 
-> ⚠️ **Thin-slice placeholder:** `circuits/src/main.nr` currently implements `x*x == y` only. The verifier key baked into `backend/programs/zksettle/src/generated_vk.rs` is bound to that placeholder circuit, so any proof generated against the real compliance circuit will fail verification until the circuit is replaced and `generated_vk.rs` is regenerated via `build.rs`.
-| **Anchor program** | On-chain verifier. Exposes `register_issuer()`, `verify_proof()`, `check_attestation()` | `backend/programs/zksettle/` (Rust) |
+> ℹ️ **Thin-slice in progress:** `circuits/src/main.nr` currently proves Merkle membership + nullifier only; sanctions, jurisdiction and expiry gates are still pending. The verifier key in `backend/programs/zksettle/src/generated_vk.rs` is regenerated from `default.vk` by `build.rs`, so any circuit change requires refreshing the VK before on-chain proofs will verify.
+| **Anchor program** | On-chain verifier. Exposes `register_issuer()`, `update_issuer_root()`, `verify_proof()`, `check_attestation()` | `backend/programs/zksettle/` (Rust) |
 | **Transfer Hook** | Atomic compliance gate for SPL transfers | `backend/programs/zksettle/` |
 | **Issuer service** | Credential issuance, Merkle tree maintenance, root publication | `backend/crates/issuer-service/` (Rust) |
 | **Indexer** | Consumes Helius webhooks, persists audit trail to Arweave | `backend/crates/indexer/` (Rust) |
@@ -201,6 +201,8 @@ zksettle/
 ├── circuits/                     # Noir ZK circuits (Nargo toolchain)
 │   ├── src/
 │   └── Nargo.toml
+├── scripts/
+│   └── fixture-noir/             # Test-vector generator (Nargo crate)
 ├── sdk/                          # TypeScript SDK (@zksettle/sdk)
 │   ├── src/
 │   └── package.json
