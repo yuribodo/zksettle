@@ -728,3 +728,24 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - Segmented filter control pattern: `role="tablist"` + `role="tab"` + `aria-selected` on each button, `role="tabpanel"` on the table container is technically ideal but the table is part of the same visual unit so omitting it here is acceptable. Revisit if the filter adds keyboard navigation (Arrow Left/Right) — the current mouse-only interaction is fine because the tablist is only three items.
   - `issuerNameById` Map is module-level so each row render doesn't rebuild it. Pattern: whenever you need `O(1)` lookups over a small `readonly` array (ISSUERS has 6 entries), build the Map once at module scope. Not worth it for arrays under ~5 items; essential for anything bigger.
 ---
+
+## 2026-04-19 - US-025 - /dashboard/counterparties
+- `src/app/dashboard/counterparties/page.tsx` (RSC) — renders PageHeader with `<RegisterIssuerModal />` as the actions slot, then a surface-bg table with columns Name · Pubkey · Merkle root · Users · Last update · Status. All pubkeys/roots rendered in Berkeley Mono via `truncateWallet()` from `@/lib/format`.
+- `src/components/dashboard/register-issuer-modal.tsx` ('use client') — native HTML `<dialog>` opened via `showModal()` for focus trap + backdrop free. Clicking the backdrop (target === dialogRef.current) closes; explicit Close button also closes. Body mocks three scaffold fields (Display name, Issuer pubkey, Merkle root) with placeholder copy. Footer: "Available in private beta" + Close button.
+- Status-to-pill mapping: `active → verified/Active`, `stale → warning/Stale (>24h)`, `test → test/Test mode`. MockKYC (test) and Veriff (stale) are intentionally seeded in US-021 so all three variants render by default.
+- `formatLastUpdate()` computes "Nh ago" or "Nd ago" relative to the fixed 2026-04-18T12:00:00Z demo reference (same constant used by the mock-data builders). Keeps the copy stable across SSR/client.
+- Files changed:
+  - `frontend/src/app/dashboard/counterparties/page.tsx` (replaces placeholder)
+  - `frontend/src/components/dashboard/register-issuer-modal.tsx` (new)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (36/36)
+  - `pnpm build` ✅ (/dashboard/counterparties 114 kB first-load — under budget)
+- **Learnings for future iterations:**
+  - Native `<dialog>` + `showModal()` is the modern focus-trap-for-free option. Pattern: `const dialogRef = useRef<HTMLDialogElement>(null)`; in open() call `dialog.showModal()`; in close() call `dialog.close()`. Attach a `close` listener to sync your external open state. Backdrop click closes via `event.target === dialogRef.current` (dialog's own backdrop fires the click on the dialog itself, not a child). Saves us a Radix dependency + ~20 kB bundle.
+  - `backdrop:bg-*` Tailwind variant targets the `::backdrop` pseudo-element of a native dialog — cleaner than manually rendering a `.backdrop` div.
+  - Dialog content is mounted conditionally (`{isOpen ? ... : null}`) so focus management and form reset behave predictably when closed. Don't always-render the body — keyboard focus can get trapped in hidden inputs otherwise.
+  - `formatLastUpdate` uses a fixed demo "now" (2026-04-18T12:00Z). This is intentional — if we compute against `Date.now()`, the copy drifts every render and the live feed's time column also needs to lie. Match the mock-data module's reference constant.
+  - Users column uses `fmtCompact(users)` so 18,400 renders as "18.4K" — matches the design's dense numeric density.
+---

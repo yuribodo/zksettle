@@ -443,8 +443,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 25,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "2026-04-19: Counterparties page with 6 issuers, native <dialog> modal scaffold."
     },
     {
       "id": "US-026",
