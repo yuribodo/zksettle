@@ -2,5 +2,8 @@
 name = "zksettle_slice"
 type = "bin"
 authors = [""]
+# nargo refuses pre-release compiler_version requirements, so we leave the
+# requirement open. The toolchain is pinned via README.md to nargo
+# 1.0.0-beta.18 (Sunspot's supported version).
 
 [dependencies]

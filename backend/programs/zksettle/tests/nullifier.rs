@@ -4,7 +4,9 @@
 //! `anchor build`. Run with `cargo test -- --ignored` from
 //! `backend/programs/zksettle/`.
 
-use std::{fs, path::PathBuf, process::Command};
+mod common;
+
+use std::fs;
 
 use anchor_lang::prelude::Pubkey;
 use anchor_lang::{system_program, InstructionData};
@@ -14,56 +16,17 @@ use solana_message::{AccountMeta, Instruction, Message};
 use solana_signer::Signer;
 use solana_transaction::{InstructionError, Transaction, TransactionError};
 
+use common::{gen_fixture, repo_root};
 use zksettle::instruction::{
     RegisterIssuer as RegisterIssuerIx, VerifyProof as VerifyProofIx,
 };
 use zksettle::state::{ISSUER_SEED, NULLIFIER_SEED};
 
-// Anchor's `init` on an already-initialized account reports
-// `ErrorCode::AccountDiscriminatorAlreadySet = 3000`.
-const ACCOUNT_DISCRIMINATOR_ALREADY_SET: u32 = 3000;
-// `AccountNotInitialized = 3012`.
+// Anchor 1.0's `init` defers to `system_program::create_account`, which
+// rejects an existing PDA with `SystemError::AccountAlreadyInUse = 0`
+// before Anchor ever gets a chance to compare discriminators.
+const ACCOUNT_ALREADY_IN_USE: u32 = 0;
 const ACCOUNT_NOT_INITIALIZED: u32 = 3012;
-
-fn repo_root() -> PathBuf {
-    let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    p.pop();
-    p.pop();
-    p.pop();
-    p
-}
-
-fn circuits_dir() -> PathBuf {
-    repo_root().join("circuits")
-}
-
-fn gen_proof_and_witness() -> Vec<u8> {
-    let circuits = circuits_dir();
-
-    let status = Command::new("nargo")
-        .arg("execute")
-        .current_dir(&circuits)
-        .status()
-        .expect("failed to invoke nargo");
-    assert!(status.success(), "nargo execute failed");
-
-    let status = Command::new("sunspot")
-        .args([
-            "prove",
-            "target/zksettle_slice.json",
-            "target/zksettle_slice.gz",
-            "target/zksettle_slice.ccs",
-            "target/zksettle_slice.pk",
-        ])
-        .current_dir(&circuits)
-        .status()
-        .expect("failed to invoke sunspot");
-    assert!(status.success(), "sunspot prove failed");
-
-    let proof = fs::read(circuits.join("target/zksettle_slice.proof")).unwrap();
-    let pw = fs::read(circuits.join("target/zksettle_slice.pw")).unwrap();
-    [proof, pw].concat()
-}
 
 fn load_program() -> (LiteSVM, Keypair) {
     let so_path = repo_root().join("backend/target/deploy/zksettle.so");
@@ -138,15 +101,14 @@ fn expect_custom_code(res: litesvm::types::TransactionResult, want: u32) {
 #[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
 fn verify_proof_creates_nullifier_pda() {
     let (mut svm, payer) = load_program();
-    register_issuer(&mut svm, &payer, [1u8; 32]);
+    let fx = gen_fixture(0);
+    register_issuer(&mut svm, &payer, fx.merkle_root);
 
-    let data = gen_proof_and_witness();
-    let nullifier_hash = [7u8; 32];
-    send(&mut svm, &payer, verify_ix(&payer, data, nullifier_hash))
+    send(&mut svm, &payer, verify_ix(&payer, fx.proof_and_witness, fx.nullifier))
         .expect("verify should succeed");
 
     let acct = svm
-        .get_account(&nullifier_pda(&issuer_pda(&payer.pubkey()), &nullifier_hash))
+        .get_account(&nullifier_pda(&issuer_pda(&payer.pubkey()), &fx.nullifier))
         .expect("nullifier PDA missing");
     assert_eq!(acct.data.len(), 8, "expected discriminator-only account");
     assert_eq!(acct.owner, zksettle::ID);
@@ -156,41 +118,50 @@ fn verify_proof_creates_nullifier_pda() {
 #[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
 fn verify_proof_rejects_replay() {
     let (mut svm, payer) = load_program();
-    register_issuer(&mut svm, &payer, [1u8; 32]);
+    let first = gen_fixture(0);
+    register_issuer(&mut svm, &payer, first.merkle_root);
 
-    let nullifier_hash = [7u8; 32];
     send(
         &mut svm,
         &payer,
-        verify_ix(&payer, gen_proof_and_witness(), nullifier_hash),
+        verify_ix(&payer, first.proof_and_witness, first.nullifier),
     )
     .expect("first submit should succeed");
 
+    // Same context_hash -> same nullifier. The nullifier PDA already exists
+    // from the first submit, so `init` fails in the system_program CPI.
+    let replay = gen_fixture(0);
     let res = send(
         &mut svm,
         &payer,
-        verify_ix(&payer, gen_proof_and_witness(), nullifier_hash),
+        verify_ix(&payer, replay.proof_and_witness, replay.nullifier),
     );
-    expect_custom_code(res, ACCOUNT_DISCRIMINATOR_ALREADY_SET);
+    expect_custom_code(res, ACCOUNT_ALREADY_IN_USE);
 }
 
 #[test]
 #[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
 fn verify_proof_allows_fresh_nullifier() {
     let (mut svm, payer) = load_program();
-    register_issuer(&mut svm, &payer, [1u8; 32]);
+    let first = gen_fixture(0);
+    register_issuer(&mut svm, &payer, first.merkle_root);
 
     send(
         &mut svm,
         &payer,
-        verify_ix(&payer, gen_proof_and_witness(), [7u8; 32]),
+        verify_ix(&payer, first.proof_and_witness, first.nullifier),
     )
     .expect("first submit should succeed");
 
+    let second = gen_fixture(1);
+    assert_ne!(
+        first.nullifier, second.nullifier,
+        "distinct context_hash must yield distinct nullifiers"
+    );
     send(
         &mut svm,
         &payer,
-        verify_ix(&payer, gen_proof_and_witness(), [8u8; 32]),
+        verify_ix(&payer, second.proof_and_witness, second.nullifier),
     )
     .expect("second submit with fresh nullifier should succeed");
 }
@@ -200,11 +171,12 @@ fn verify_proof_allows_fresh_nullifier() {
 fn verify_proof_requires_issuer_pda() {
     let (mut svm, payer) = load_program();
     // Intentionally skip register_issuer so the PDA does not exist.
+    let fx = gen_fixture(0);
 
     let res = send(
         &mut svm,
         &payer,
-        verify_ix(&payer, gen_proof_and_witness(), [7u8; 32]),
+        verify_ix(&payer, fx.proof_and_witness, fx.nullifier),
     );
     expect_custom_code(res, ACCOUNT_NOT_INITIALIZED);
 }

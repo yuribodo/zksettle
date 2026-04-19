@@ -1,5 +1,3 @@
-merkle_root = "0x0408f1aa9155d9f7405d652b9c5dd4cd69602fff5fba80e1d6bd0a36c3add6d1"
-nullifier   = "0x1e7981f857394b926eee0742ad9104aa612ffe6873522a4eccaab935b2ff3c96"
 wallet = "1"
 path = [
     "0",
