@@ -35,8 +35,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "eslint 9.39.4 + eslint-config-next 15.5.15 (consumed via FlatCompat from @eslint/eslintrc) + typescript-eslint 8.58.2 + prettier 3.8.3 + prettier-plugin-tailwindcss 0.7.2 + vitest 2.1.9 + @vitest/ui 2.1.9 + jsdom 29.0.2. Switched lint script from deprecated `next lint` to `eslint .`; added `--passWithNoTests` to the test script so vitest exits 0 on empty runs. Build still succeeds."
     },
     {
       "id": "US-003",

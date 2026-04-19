@@ -12,8 +12,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "lint": "next lint",
-    "test": "vitest run",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -26,8 +26,16 @@
     "@types/node": "^22.10.5",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
+    "@vitest/ui": "^2.1.9",
+    "eslint": "^9",
+    "eslint-config-next": "^15",
+    "jsdom": "^29.0.2",
     "postcss": "^8.5.1",
+    "prettier": "^3.8.3",
+    "prettier-plugin-tailwindcss": "^0.7.2",
     "tailwindcss": "^4.0.0",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8",
+    "vitest": "^2"
   }
 }

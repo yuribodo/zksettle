@@ -7,8 +7,12 @@ Started: sáb 18 abr 2026 22:51:13 -03
 - A parent `pnpm-lock.yaml` lives at `/home/mario/pnpm-lock.yaml` which Next detects as a rival workspace root. Set `outputFileTracingRoot: path.join(__dirname)` in `next.config.ts` to silence the warning.
 - Repo's root `.gitignore` already excludes `node_modules/`. Frontend-specific ignores go in `frontend/.gitignore`.
 - pnpm globally installed is 10.32.1 and corepack is NOT available. The `packageManager: pnpm@9.12.0` field is informational only — install works under pnpm 10 because `managePackageManagerVersions` defaults to false in pnpm 9+.
-- The `ralph/` directory inside `frontend/` is excluded from tsconfig.json `exclude`; keep it out of all tsc/next build globs so ralph scripts don't pollute type-checking.
+- The `ralph/` directory inside `frontend/` is excluded from tsconfig.json `exclude`; keep it out of all tsc/next build globs so ralph scripts don't pollute type-checking. Also add `ralph/**` to the `ignores` block of `eslint.config.mjs`.
 - Exact dep versions shipped in US-001 for reference: next 15.5.15, react/react-dom 19.0.0, typescript 5.9.x, tailwindcss + @tailwindcss/postcss 4.x, @types/node 22.x, @types/react 19.x.
+- ESLint 9 uses flat config. `eslint-config-next` is still legacy extends-style, so compose it via `FlatCompat` from `@eslint/eslintrc`. Template: `compat.extends("next/core-web-vitals", "next/typescript")`.
+- `next lint` is deprecated in Next 15 — the `lint` script calls `eslint .` directly instead.
+- Vitest exits 1 when no test files match; keep `--passWithNoTests` on the `test` script until at least one test exists so CI stays green between stories.
+- `@vitest/ui` must match the `vitest` major version exactly (pin `@vitest/ui@^2` while on vitest 2).
 
 ## 2026-04-18 - US-001 - Initialize Next.js 15 project with TypeScript strict
 - Scaffolded Next.js 15.5.15 App Router project in `frontend/` with TypeScript strict, Tailwind v4, src/ layout, and `@/*` alias.
@@ -31,4 +35,25 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - Keep `tsconfig.json` `exclude` list including `ralph` so agent scripts never land in `tsc`.
   - The landing page UI (hero text, Georgia display font, forest tokens, etc.) has NOT been built yet — US-001 intentionally left `src/app/page.tsx` as a minimal placeholder. US-004/US-005/US-011 will replace this content.
   - Lint and test scripts exist but will only run once US-002 installs eslint-config-next, typescript-eslint, vitest, etc.
+---
+
+## 2026-04-18 - US-002 - Install ESLint flat config + Prettier + Vitest
+- Installed dev deps: eslint@9.39.4, eslint-config-next@15.5.15, typescript-eslint@8.58.2, prettier@3.8.3, prettier-plugin-tailwindcss@0.7.2, vitest@2.1.9, @vitest/ui@2.1.9, jsdom@29.0.2.
+- Files added:
+  - `frontend/eslint.config.mjs` — flat config: js.recommended + tseslint.configs.recommended + `compat.extends("next/core-web-vitals", "next/typescript")`; ignores .next, node_modules, out, ralph, next-env.d.ts, tsconfig.tsbuildinfo.
+  - `frontend/.prettierrc` — semi: true, singleQuote: false, trailingComma: all, printWidth: 100, plugins: ["prettier-plugin-tailwindcss"].
+  - `frontend/vitest.config.ts` — node environment, `@` alias → `./src`, include `src/**/*.{test,spec}.{ts,tsx}`.
+- Files modified:
+  - `frontend/package.json` — `lint: "eslint ."` (replaces deprecated `next lint`); `test: "vitest run --passWithNoTests"` so empty runs exit 0.
+- Verification:
+  - `pnpm lint` ✅ (no issues)
+  - `pnpm test` ✅ (exits 0, "No test files found")
+  - `pnpm typecheck` ✅
+  - `pnpm build` ✅ (landing still 102 kB first-load JS)
+- **Learnings for future iterations:**
+  - `eslint-config-next@15.5.15` is still legacy extends-style — it must be loaded through `FlatCompat` from `@eslint/eslintrc` (already a transitive dep of eslint 9, no extra install needed).
+  - `typescript-eslint` (the meta-package) exposes both `tseslint.config()` helper and `tseslint.configs.recommended` array — prefer these over importing `@typescript-eslint/eslint-plugin` + `@typescript-eslint/parser` directly.
+  - Installing `@vitest/ui` via `^2` is required; the latest tag (4.x) conflicts with vitest@2's peer range.
+  - Do NOT set `environment: "jsdom"` as the default — it's opt-in per-test file via `// @vitest-environment jsdom`. Default stays `node` so Node-only helpers (format/prng) run fast.
+  - Always include `--passWithNoTests` in the `test` script while the suite has zero tests; remove it only once real tests land (US-008 / US-012).
 ---
