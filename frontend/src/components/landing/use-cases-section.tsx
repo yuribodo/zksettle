@@ -1,4 +1,5 @@
 import { SectionHeader, Section } from "@/components/landing/section";
+import { FadeIn } from "@/components/motion/fade-in";
 import { COPY } from "@/content/copy";
 import { USE_CASES, type UseCase } from "@/content/use-cases";
 
@@ -16,13 +17,13 @@ export function UseCasesSection() {
       />
       <div className="mt-16 flex flex-col gap-6 md:mt-20">
         <div className="grid gap-6 md:grid-cols-3">
-          {firstRow.map((item) => (
-            <UseCaseCard key={item.name} item={item} />
+          {firstRow.map((item, i) => (
+            <UseCaseCard key={item.name} item={item} delay={i * 0.08} />
           ))}
         </div>
         <div className="grid gap-6 md:grid-cols-3">
-          {secondRow.map((item) => (
-            <UseCaseCard key={item.name} item={item} />
+          {secondRow.map((item, i) => (
+            <UseCaseCard key={item.name} item={item} delay={(i + 3) * 0.08} />
           ))}
           <div aria-hidden className="hidden md:block" />
         </div>
@@ -31,9 +32,14 @@ export function UseCasesSection() {
   );
 }
 
-function UseCaseCard({ item }: { item: UseCase }) {
+function UseCaseCard({ item, delay }: { item: UseCase; delay: number }) {
   return (
-    <article className="flex flex-col gap-3 rounded-[var(--radius-6)] border border-border-subtle bg-canvas p-6 md:p-7">
+    <FadeIn
+      as="article"
+      delay={delay}
+      amount={0.3}
+      className="flex flex-col gap-3 rounded-[var(--radius-6)] border border-border-subtle bg-canvas p-6 md:p-7"
+    >
       <h3 className="font-display text-2xl text-ink">{item.name}</h3>
       <p className="max-w-[32ch] text-base leading-relaxed text-quill">{item.tagline}</p>
       {item.footnote ? (
@@ -41,6 +47,6 @@ function UseCaseCard({ item }: { item: UseCase }) {
           {item.footnote}
         </p>
       ) : null}
-    </article>
+    </FadeIn>
   );
 }

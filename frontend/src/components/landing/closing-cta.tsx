@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { FadeIn } from "@/components/motion/fade-in";
 import { buttonVariants } from "@/components/ui/button";
 import { DisplayHeading } from "@/components/ui/display-heading";
 import { COPY } from "@/content/copy";
@@ -15,15 +16,19 @@ export function ClosingCta() {
       className="bg-forest text-canvas"
     >
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-5 py-24 md:px-8 md:py-40">
-        <DisplayHeading
-          id="closing-cta-heading"
-          level="l"
-          className="max-w-[22ch] text-canvas"
-        >
-          {headline}
-        </DisplayHeading>
-        <p className="max-w-[55ch] text-lg leading-relaxed text-canvas/80 md:text-xl">{sub}</p>
-        <div className="flex flex-wrap items-center gap-4">
+        <FadeIn delay={0} amount={0.3}>
+          <DisplayHeading
+            id="closing-cta-heading"
+            level="l"
+            className="max-w-[22ch] text-canvas"
+          >
+            {headline}
+          </DisplayHeading>
+        </FadeIn>
+        <FadeIn as="p" delay={0.1} amount={0.3} className="max-w-[55ch] text-lg leading-relaxed text-canvas/80 md:text-xl">
+          {sub}
+        </FadeIn>
+        <FadeIn delay={0.2} amount={0.3} className="flex flex-wrap items-center gap-4">
           <Link
             href={ctas.primary.href}
             className={cn(
@@ -41,7 +46,7 @@ export function ClosingCta() {
           >
             {ctas.secondary.label}
           </Link>
-        </div>
+        </FadeIn>
       </div>
     </section>
   );
