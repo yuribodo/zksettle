@@ -3,12 +3,25 @@ import Link from "next/link";
 import { SectionHeader, Section } from "@/components/landing/section";
 import { FadeIn } from "@/components/motion/fade-in";
 import { buttonVariants } from "@/components/ui/button";
+import { CodeBlock } from "@/components/ui/code-block";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { COPY } from "@/content/copy";
 import { cn } from "@/lib/cn";
 
-export function DevelopersSection() {
-  const { eyebrow, headline, code, install, version, githubLabel, license, tabs } =
-    COPY.developers;
+const TAB_VALUES = ["typescript", "rust", "anchor"] as const;
+
+export async function DevelopersSection() {
+  const {
+    eyebrow,
+    headline,
+    code,
+    tabs,
+    tabComingSoon,
+    install,
+    version,
+    githubLabel,
+    license,
+  } = COPY.developers;
 
   return (
     <Section id="developers" aria-labelledby="developers-heading">
@@ -19,31 +32,32 @@ export function DevelopersSection() {
       />
       <div className="mt-16 grid gap-8 md:mt-20 md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] md:gap-12">
         <FadeIn delay={0} amount={0.25} className="flex flex-col gap-4">
-          <div
-            role="tablist"
-            aria-label="SDK languages"
-            className="flex gap-1 border-b border-border-subtle"
-          >
-            {tabs.map((tab, i) => (
-              <span
-                key={tab}
-                role="tab"
-                aria-selected={i === 0}
-                className={cn(
-                  "px-3 py-2 font-mono text-xs uppercase tracking-[0.08em]",
-                  i === 0 ? "border-b-2 border-forest text-ink" : "text-muted",
-                )}
-              >
-                {tab}
-              </span>
-            ))}
-          </div>
-          <pre
-            aria-label="Code sample"
-            className="overflow-x-auto rounded-[var(--radius-6)] border border-border-subtle bg-surface-deep p-6 font-mono text-sm leading-relaxed text-ink"
-          >
-            <code>{code}</code>
-          </pre>
+          <Tabs defaultValue="typescript" aria-label="SDK language">
+            <TabsList aria-label="SDK languages">
+              {tabs.map((tab, i) => {
+                const value = TAB_VALUES[i];
+                if (!value) return null;
+                return (
+                  <TabsTrigger
+                    key={value}
+                    value={value}
+                    className="font-mono text-xs uppercase tracking-[0.08em]"
+                  >
+                    {tab}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+            <TabsContent value="typescript">
+              <CodeBlock code={code} lang="typescript" ariaLabel="TypeScript SDK example" />
+            </TabsContent>
+            <TabsContent value="rust">
+              <ComingSoonPanel label={tabComingSoon} />
+            </TabsContent>
+            <TabsContent value="anchor">
+              <ComingSoonPanel label={tabComingSoon} />
+            </TabsContent>
+          </Tabs>
         </FadeIn>
         <FadeIn
           as="article"
@@ -70,5 +84,16 @@ export function DevelopersSection() {
         </FadeIn>
       </div>
     </Section>
+  );
+}
+
+function ComingSoonPanel({ label }: { label: string }) {
+  return (
+    <div
+      role="note"
+      className="flex min-h-[168px] items-center justify-center rounded-[var(--radius-6)] border border-border-subtle bg-surface-deep p-6 font-mono text-sm text-muted"
+    >
+      {label}
+    </div>
   );
 }
