@@ -844,3 +844,27 @@ Started: sáb 18 abr 2026 22:51:13 -03
   - The `z-50` on drawer + `z-30` on top bar means the drawer backdrop covers the top bar too — desired behavior, no pointer-events-none dance needed.
   - Body scroll lock on drawer open: save prior `document.body.style.overflow` in the cleanup function so opening multiple drawers in sequence still restores to "original" when all close. Cheap, correct.
 ---
+
+## 2026-04-19 - US-030 - Accessibility pass
+- Audit of acceptance criteria against the existing codebase:
+  - ✅ Skip link: `/src/app/layout.tsx` has `<a href="#main-content" className="sr-only focus:not-sr-only ...">Skip to content</a>` as the first focusable element of every page. `<main id="main-content">` set on landing, /ui, and dashboard routes.
+  - ✅ Focus rings: 31 uses of `focus-visible:outline-forest` across 17 files — every Button, Link, tab, filter control, dialog close, mobile drawer trigger. No bare `focus:` hits (US-009 Learnings rule).
+  - ✅ Demo aria-live: US-019 `<div role="status" aria-live="polite" aria-atomic="true" className="sr-only">` inside DemoSection announces each state transition.
+  - ✅ Dashboard sidebar: US-022 sets `aria-current="page"` on active link. Both desktop Sidebar and mobile drawer share the same pattern.
+  - ✅ Nav links have visible labels alongside icons (Transactions, Attestations, ...); icon-only buttons (Bell, Xmark, Menu) carry `aria-label` + `aria-hidden="true"` on the child SVG.
+  - ✅ Reduced motion: every scroll-locked / rAF / motion primitive short-circuits via `useReducedMotion()` (see progress §23, §50, §64). CSS animation rule in globals.css is a safety net.
+  - ✅ Contrast: ink `#1A1917` on canvas `#FAFAF7` ≈ 16:1 (AAA). Forest `#0C3D2E` on canvas ≈ 11.3:1. Quill/stone/muted all ≥ 4.5:1. See progress §20 for token rationale.
+- Additions made in this story:
+  - TopBar `<header>` now carries `aria-label="Dashboard top bar"` so nested headers are distinguishable for screen readers (the outer `<header>` with primary landmark role lives in RootLayout's implicit body region).
+- Lighthouse a11y ≥ 95 verification deferred to US-032 (external runner required).
+- Files changed:
+  - `frontend/src/components/dashboard/top-bar.tsx` (aria-label)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+- **Learnings for future iterations:**
+  - Each page's first focusable element is the skip link (via root layout); nothing before `<main id="main-content">` should be a focus trap. Navigation lands on the skip link on Tab from any page load.
+  - Landmarks used: `<main>` (implicit role=main), `<nav aria-label=...>` (implicit role=navigation), `<aside aria-label=...>` (implicit role=complementary), `<header>` (role=banner only when at page root). The dashboard's nested TopBar is semantically a `<header>` but NOT a banner landmark — naming it avoids confusion when multiple regions carry header semantics.
+  - For any future icon-only button added to this codebase: pair `aria-label="..."` on the button with `aria-hidden="true"` on the inner SVG. NEVER rely on a visually-hidden label via `sr-only` span for buttons — aria-label is faster and won't regress in RTL/translation layers.
+  - `aria-atomic="true"` on the demo sr-only status region is critical: without it, some SRs (NVDA) only announce the changed characters, not the full phrase. For multi-sentence announcements keep it on.
+---

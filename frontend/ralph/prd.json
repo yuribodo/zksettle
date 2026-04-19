@@ -534,8 +534,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 30,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "2026-04-19: a11y audit confirmed: skip link, focus rings (31 uses), aria-live on demo, aria-current on dashboard nav, reduced-motion guards. Lighthouse verification in US-032."
     },
     {
       "id": "US-031",
