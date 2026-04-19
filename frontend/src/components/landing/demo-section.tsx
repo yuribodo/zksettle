@@ -257,7 +257,7 @@ export function DemoSection() {
           <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
             {statusMessage}
           </div>
-          <p className="font-mono text-xs text-muted">{honestyFooter}</p>
+          <p className="font-mono text-xs text-stone">{honestyFooter}</p>
         </div>
       </div>
     </Section>

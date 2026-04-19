@@ -24,7 +24,7 @@ export function Footer() {
             </li>
           ))}
         </ul>
-        <p className="font-mono text-xs uppercase tracking-[0.08em] text-muted">{bottomLine}</p>
+        <p className="font-mono text-xs uppercase tracking-[0.08em] text-stone">{bottomLine}</p>
       </div>
     </footer>
   );

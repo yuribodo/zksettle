@@ -35,7 +35,7 @@ export function ProofConsole({ initial, lines, className }: ProofConsoleProps) {
       )}
     >
       {lines.length === 0 ? (
-        <p className="text-muted">{initial}</p>
+        <p className="text-stone">{initial}</p>
       ) : (
         <ol className="flex flex-col gap-0.5">
           {lines.map((line, i) => (

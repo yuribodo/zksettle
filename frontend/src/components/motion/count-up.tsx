@@ -55,7 +55,8 @@ export function CountUp({
   const displayValue = mounted ? value : target;
 
   return (
-    <span ref={ref} className={className} aria-label={formatter(target)}>
+    <span ref={ref} className={className}>
+      <span className="sr-only">{formatter(target)}</span>
       <span aria-hidden="true">{formatter(displayValue)}</span>
     </span>
   );
