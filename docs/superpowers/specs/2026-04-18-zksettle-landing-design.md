@@ -646,4 +646,4 @@ frontend/
 - [`zksettle_prd.md`](../../../zksettle_prd.md) — product requirements, stack rationale
 - [`zksettle_pitch.md`](../../../zksettle_pitch.md) — voice, positioning, copy tone
 - [`zksettle_adr.md`](../../../zksettle_adr.md) — architecture decisions backing the demo bytes
-- **Design system (canonical):** `https://claude.ai/design/p/428580d1-b5d6-429a-bea0-0ba1069a5d96` — 27 cards across Type, Colors, Spacing, Components, Brand. Source of truth for all decisions in §3 and component patterns in §4–§5. Treat divergence between this spec and the design system as a bug in this spec.
+- **Design system (canonical):** `https://claude.ai/design/p/428580d1-b5d6-429a-bea0-0ba1069a5d96` — 27 cards across Type, Colors, Spacing, Components, Brand. Source of truth for all decisions in §3 and component patterns in §4–§5. 
