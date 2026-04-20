@@ -8,3 +8,4 @@ pub const RECIPIENT_HI_IDX: usize = 6;
 pub const AMOUNT_IDX: usize = 7;
 
 pub const NULLIFIER_SEED: &[u8] = b"nullifier";
+pub const ATTESTATION_SEED: &[u8] = b"attestation";

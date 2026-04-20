@@ -59,10 +59,19 @@ pub mod zksettle {
         )
     }
 
-    pub fn check_attestation(
-        ctx: Context<CheckAttestation>,
+    pub fn check_attestation<'info>(
+        ctx: Context<'_, '_, '_, 'info, CheckAttestation<'info>>,
         nullifier_hash: [u8; 32],
+        validity_proof: light_sdk::instruction::ValidityProof,
+        attestation_meta: light_sdk::instruction::account_meta::CompressedAccountMetaReadOnly,
+        compressed_attestation: crate::state::compressed::CompressedAttestation,
     ) -> Result<()> {
-        instructions::check_attestation::check_handler(ctx, nullifier_hash)
+        instructions::check_attestation::check_handler(
+            ctx,
+            nullifier_hash,
+            validity_proof,
+            attestation_meta,
+            compressed_attestation,
+        )
     }
 }
