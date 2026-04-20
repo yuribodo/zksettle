@@ -1,7 +1,5 @@
 use anchor_lang::prelude::*;
 
-pub const ISSUER_SEED: &[u8] = b"issuer";
-
 #[account]
 pub struct Issuer {
     pub authority: Pubkey,

@@ -14,6 +14,12 @@ pub use instructions::*;
 
 declare_id!("AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo");
 
+/// Light Protocol CPI signer derived from the program ID.
+///
+/// INVARIANT: the literal below MUST match the one passed to `declare_id!`
+/// above. Both `declare_id!` and `derive_light_cpi_signer!` are proc macros
+/// that require a string literal, so the value cannot be extracted into a
+/// shared `const`. Update both sites together.
 pub const LIGHT_CPI_SIGNER: CpiSigner =
     derive_light_cpi_signer!("AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo");
 

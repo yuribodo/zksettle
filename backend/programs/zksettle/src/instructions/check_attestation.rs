@@ -47,7 +47,7 @@ pub fn check_handler<'info>(
         ZkSettleError::NullifierMismatch
     );
     require!(
-        compressed_attestation.issuer == ctx.accounts.issuer.key().to_bytes(),
+        Pubkey::new_from_array(compressed_attestation.issuer) == ctx.accounts.issuer.key(),
         ZkSettleError::UnauthorizedIssuer
     );
 
@@ -57,10 +57,9 @@ pub fn check_handler<'info>(
         crate::LIGHT_CPI_SIGNER,
     );
 
-    let tree_pubkeys = light_cpi_accounts.tree_pubkeys().map_err(|e| {
-        msg!("tree_pubkeys failed: {:?}", e);
-        error!(ZkSettleError::LightCpiFailed)
-    })?;
+    let tree_pubkeys = light_cpi_accounts
+        .tree_pubkeys()
+        .map_err(crate::map_light_err!("tree_pubkeys failed", ZkSettleError::LightTreeLookupFailed))?;
 
     let read_only = LightAccount::<CompressedAttestation>::new_read_only(
         &crate::ID,
@@ -68,22 +67,13 @@ pub fn check_handler<'info>(
         compressed_attestation,
         &tree_pubkeys,
     )
-    .map_err(|e| {
-        msg!("new_read_only failed: {:?}", e);
-        error!(ZkSettleError::InvalidLightAddress)
-    })?;
+    .map_err(crate::map_light_err!("new_read_only failed", ZkSettleError::InvalidLightAddress))?;
 
     LightSystemProgramCpi::new_cpi(crate::LIGHT_CPI_SIGNER, validity_proof)
         .with_light_account(read_only)
-        .map_err(|e| {
-            msg!("with_light_account read_only: {:?}", e);
-            error!(ZkSettleError::LightCpiFailed)
-        })?
+        .map_err(crate::map_light_err!("with_light_account read_only", ZkSettleError::LightAccountPackFailed))?
         .invoke(light_cpi_accounts)
-        .map_err(|e| {
-            msg!("Light CPI invoke failed: {:?}", e);
-            error!(ZkSettleError::LightCpiFailed)
-        })?;
+        .map_err(crate::map_light_err!("Light CPI invoke failed", ZkSettleError::LightInvokeFailed))?;
 
     emit!(AttestationChecked {
         issuer: ctx.accounts.issuer.key(),

@@ -20,8 +20,6 @@ use crate::state::{
 
 const GNARK_WITNESS_HEADER_LEN: usize = 12;
 
-pub use crate::constants::MAX_ROOT_AGE_SLOTS;
-
 pub const EPOCH_LEN_SECS: i64 = 86_400;
 pub const MAX_EPOCH_LAG: u64 = 1;
 
@@ -116,7 +114,7 @@ pub struct VerifyProof<'info> {
     #[account(
         seeds = [ISSUER_SEED, issuer.authority.as_ref()],
         bump = issuer.bump,
-        constraint = Clock::get()?.slot.saturating_sub(issuer.root_slot) <= MAX_ROOT_AGE_SLOTS
+        constraint = Clock::get()?.slot.saturating_sub(issuer.root_slot) <= crate::constants::MAX_ROOT_AGE_SLOTS
             @ ZkSettleError::RootStale,
     )]
     pub issuer: Account<'info, Issuer>,
@@ -155,9 +153,9 @@ pub fn handler<'info>(
 
     require!(nullifier_hash != [0u8; 32], ZkSettleError::ZeroNullifier);
 
-    let ts = Clock::get()?.unix_timestamp;
-    require!(ts >= 0, ZkSettleError::EpochInFuture);
-    let current_epoch = (ts / EPOCH_LEN_SECS) as u64;
+    let clock = Clock::get()?;
+    require!(clock.unix_timestamp >= 0, ZkSettleError::NegativeClock);
+    let current_epoch = (clock.unix_timestamp / EPOCH_LEN_SECS) as u64;
     require!(epoch <= current_epoch, ZkSettleError::EpochInFuture);
     require!(
         current_epoch.saturating_sub(epoch) <= MAX_EPOCH_LAG,
@@ -167,15 +165,11 @@ pub fn handler<'info>(
     let witness_len = expected_witness_len(NR_INPUTS);
     let (proof_bytes, witness_bytes) = split_proof_and_witness(&proof_and_witness, witness_len)?;
 
-    let proof = GnarkProof::<N_COMMITMENTS>::from_bytes(proof_bytes).map_err(|e| {
-        msg!("Gnark proof parse error: {:?}", e);
-        error!(ZkSettleError::MalformedProof)
-    })?;
+    let proof = GnarkProof::<N_COMMITMENTS>::from_bytes(proof_bytes)
+        .map_err(crate::map_light_err!("Gnark proof parse error", ZkSettleError::MalformedProof))?;
 
-    let witness = GnarkWitness::from_bytes(witness_bytes).map_err(|e| {
-        msg!("Gnark witness parse error: {:?}", e);
-        error!(ZkSettleError::MalformedProof)
-    })?;
+    let witness = GnarkWitness::from_bytes(witness_bytes)
+        .map_err(crate::map_light_err!("Gnark witness parse error", ZkSettleError::MalformedProof))?;
 
     #[cfg(not(feature = "placeholder-vk"))]
     check_bindings(
@@ -192,15 +186,14 @@ pub fn handler<'info>(
 
     let mut verifier: GnarkVerifier<NR_INPUTS> = GnarkVerifier::new(&VK);
 
-    verifier.verify(proof, witness).map_err(|e| {
-        msg!("Proof verification failed: {:?}", e);
-        error!(ZkSettleError::ProofInvalid)
-    })?;
+    verifier
+        .verify(proof, witness)
+        .map_err(crate::map_light_err!("Proof verification failed", ZkSettleError::ProofInvalid))?;
 
     let issuer_key = ctx.accounts.issuer.key();
     let merkle_root = ctx.accounts.issuer.merkle_root;
     let payer_key = ctx.accounts.payer.key();
-    let slot = Clock::get()?.slot;
+    let slot = clock.slot;
     let issuer_bytes = issuer_key.to_bytes();
 
     let light_cpi_accounts = CpiAccounts::new(
@@ -211,10 +204,7 @@ pub fn handler<'info>(
 
     let address_tree_pubkey = address_tree_info
         .get_tree_pubkey(&light_cpi_accounts)
-        .map_err(|e| {
-            msg!("get_tree_pubkey failed: {:?}", e);
-            error!(ZkSettleError::InvalidLightAddress)
-        })?;
+        .map_err(crate::map_light_err!("get_tree_pubkey failed", ZkSettleError::InvalidLightAddress))?;
 
     let (null_addr, null_seed) = derive_address(
         &[NULLIFIER_SEED, &issuer_bytes, &nullifier_hash],
@@ -254,20 +244,11 @@ pub fn handler<'info>(
     LightSystemProgramCpi::new_cpi(crate::LIGHT_CPI_SIGNER, validity_proof)
         .with_new_addresses(&[null_params, att_params])
         .with_light_account(nullifier_account)
-        .map_err(|e| {
-            msg!("with_light_account nullifier: {:?}", e);
-            error!(ZkSettleError::LightCpiFailed)
-        })?
+        .map_err(crate::map_light_err!("with_light_account nullifier", ZkSettleError::LightAccountPackFailed))?
         .with_light_account(attestation_account)
-        .map_err(|e| {
-            msg!("with_light_account attestation: {:?}", e);
-            error!(ZkSettleError::LightCpiFailed)
-        })?
+        .map_err(crate::map_light_err!("with_light_account attestation", ZkSettleError::LightAccountPackFailed))?
         .invoke(light_cpi_accounts)
-        .map_err(|e| {
-            msg!("Light CPI invoke failed: {:?}", e);
-            error!(ZkSettleError::LightCpiFailed)
-        })?;
+        .map_err(crate::map_light_err!("Light CPI invoke failed", ZkSettleError::LightInvokeFailed))?;
 
     emit!(ProofSettled {
         issuer: issuer_key,

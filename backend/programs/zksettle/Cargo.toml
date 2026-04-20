@@ -15,10 +15,6 @@ name = "zksettle"
 default = []
 placeholder-vk = []
 cpi = ["no-entrypoint"]
-# Legacy litesvm tests exercising the pre-Light rent-funded PDA flow.
-# Retained behind a gate for bisect; the Light-based replacement lives
-# behind `light-tests`.
-legacy-pda-tests = []
 # Integration tests that boot the full light-program-test harness.
 # Require a running prover server (see light-program-test README).
 light-tests = []
@@ -41,18 +37,10 @@ borsh = "0.10.4"
 gnark-verifier-solana = { git = "https://github.com/reilabs/sunspot.git", rev = "ce4765ccdf050507874bbb544be992a11dc48ffc" }
 
 [dev-dependencies]
-litesvm = "=0.7.0"
-solana-message = "2.4"
-solana-transaction = "2.2"
 solana-signer = "2.2"
 solana-keypair = "2.2"
 solana-instruction = "2.3"
-solana-transaction-error = "2.2"
-solana-clock = "2.2"
-solana-compute-budget-interface = "2.2"
 light-program-test = "=0.23.0"
-light-client = "=0.23.0"
-solana-sdk = "2.2"
 tokio = { version = "1", features = ["full"] }
 
 
