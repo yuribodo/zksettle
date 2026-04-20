@@ -27,6 +27,8 @@ custom-panic = []
 [dependencies]
 anchor-lang = "1.0.0"
 gnark-verifier-solana = { git = "https://github.com/reilabs/sunspot.git", rev = "ce4765ccdf050507874bbb544be992a11dc48ffc" }
+light-sdk = { version = "=0.23.0", default-features = false, features = ["v2"] }
+borsh = "0.10.4"
 
 [build-dependencies]
 gnark-verifier-solana = { git = "https://github.com/reilabs/sunspot.git", rev = "ce4765ccdf050507874bbb544be992a11dc48ffc" }
@@ -40,6 +42,9 @@ solana-keypair = "3.0.1"
 solana-instruction = "3.0.0"
 solana-clock = "3.0.0"
 solana-compute-budget-interface = "3.0.0"
+light-program-test = "=0.23.0"
+light-client = "=0.23.0"
+tokio = { version = "1", features = ["full"] }
 
 
 [lints.rust]
