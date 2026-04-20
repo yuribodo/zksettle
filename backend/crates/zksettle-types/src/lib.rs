@@ -11,8 +11,16 @@
 //! Solana SDK version; convert at the call site via `Pubkey::new_from_array`.
 
 pub mod accounts;
+pub mod credential;
+pub mod error;
+pub mod events;
+pub mod policy;
 
 pub use accounts::{Attestation, Issuer, Nullifier};
+pub use credential::{Credential, CredentialCommitment};
+pub use error::ZksettleError;
+pub use events::ProofSettled;
+pub use policy::Policy;
 
 /// A Solana public key — 32 raw bytes. Matches the on-chain representation.
 pub type Pubkey = [u8; 32];
