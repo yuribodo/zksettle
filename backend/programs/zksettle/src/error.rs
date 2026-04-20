@@ -34,4 +34,8 @@ pub enum ZkSettleError {
     EpochStale,
     #[msg("Attestation has expired beyond the validity window")]
     AttestationExpired,
+    #[msg("Light Protocol CPI failed")]
+    LightCpiFailed,
+    #[msg("Compressed account address is invalid")]
+    InvalidLightAddress,
 }

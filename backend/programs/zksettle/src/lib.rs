@@ -7,10 +7,15 @@ pub mod state;
 mod generated_vk;
 
 use anchor_lang::prelude::*;
+use light_sdk::cpi::CpiSigner;
+use light_sdk::derive_light_cpi_signer;
 
 pub use instructions::*;
 
 declare_id!("AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo");
+
+pub const LIGHT_CPI_SIGNER: CpiSigner =
+    derive_light_cpi_signer!("AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo");
 
 #[program]
 pub mod zksettle {
