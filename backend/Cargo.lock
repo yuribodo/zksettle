@@ -9123,6 +9123,7 @@ dependencies = [
  "solana-instruction",
  "solana-keypair",
  "solana-message",
+ "solana-sdk",
  "solana-signer",
  "solana-transaction",
  "solana-transaction-error",
