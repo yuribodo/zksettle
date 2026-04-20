@@ -5026,6 +5026,7 @@ dependencies = [
  "gnark-verifier-solana",
  "litesvm",
  "solana-clock 3.0.1",
+ "solana-compute-budget-interface",
  "solana-instruction 3.4.0",
  "solana-keypair",
  "solana-message 3.1.0",

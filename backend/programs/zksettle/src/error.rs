@@ -20,4 +20,16 @@ pub enum ZkSettleError {
     RootStale,
     #[msg("Nullifier hash must be non-zero")]
     ZeroNullifier,
+    #[msg("Witness mint limbs do not match instruction argument")]
+    MintMismatch,
+    #[msg("Witness epoch does not match instruction argument")]
+    EpochMismatch,
+    #[msg("Witness recipient limbs do not match instruction argument")]
+    RecipientMismatch,
+    #[msg("Witness amount does not match instruction argument")]
+    AmountMismatch,
+    #[msg("Proof epoch is in the future relative to on-chain clock")]
+    EpochInFuture,
+    #[msg("Proof epoch is older than allowed freshness window")]
+    EpochStale,
 }

@@ -1,10 +1,17 @@
-// Compliance thin-slice circuit: Merkle membership + nullifier derivation.
+// Compliance thin-slice circuit: Merkle membership + bound nullifier derivation.
 //
-// Public-input order is load-bearing. It must match
-// MERKLE_ROOT_IDX=0 / NULLIFIER_IDX=1 in
+// Public-input order is load-bearing. It must match the `*_IDX` constants in
 // backend/programs/zksettle/src/state/pubinputs.rs. Sunspot only promotes
 // `pub` function arguments to gnark public-witness slots (return values are
-// kept private), so merkle_root and nullifier are declared as `pub` here.
+// kept private), so every bound field is declared `pub` here.
+//
+// The nullifier binds the user's private key to the transfer context:
+//   nullifier = Poseidon2(private_key, mint_lo, mint_hi, epoch,
+//                         recipient_lo, recipient_hi, amount)
+// This closes ADR-020 (security-critical): a proof is useless outside the exact
+// (mint, epoch, recipient, amount) tuple it was minted for. Pubkey fields
+// are split into two 128-bit limbs so they fit safely inside BN254's
+// ~254-bit scalar field (hi = top 16 BE bytes, lo = bottom 16 BE bytes).
 //
 // Canonical pub-input values are derived off-circuit by the fixture nargo
 // package in `scripts/fixture-noir/`. Its `nargo execute` prints the
@@ -73,11 +80,16 @@ pub fn poseidon2_hash<let N: u32>(input: [Field; N]) -> Field {
 fn main(
     merkle_root: pub Field,
     nullifier: pub Field,
+    mint_lo: pub Field,
+    mint_hi: pub Field,
+    epoch: pub Field,
+    recipient_lo: pub Field,
+    recipient_hi: pub Field,
+    amount: pub Field,
     wallet: Field,
     path: [Field; MERKLE_DEPTH],
     path_indices: [u1; MERKLE_DEPTH],
     private_key: Field,
-    context_hash: Field,
 ) {
     let leaf = poseidon2_hash([wallet]);
 
@@ -93,6 +105,14 @@ fn main(
     }
     assert(cur == merkle_root);
 
-    let derived = poseidon2_hash([private_key, context_hash]);
+    let derived = poseidon2_hash([
+        private_key,
+        mint_lo,
+        mint_hi,
+        epoch,
+        recipient_lo,
+        recipient_hi,
+        amount,
+    ]);
     assert(derived == nullifier);
 }
