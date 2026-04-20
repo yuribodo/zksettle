@@ -13,9 +13,7 @@ use crate::state::{
 // `nr_pubinputs` 32-byte field elements.
 const GNARK_WITNESS_HEADER_LEN: usize = 12;
 
-/// Maximum age (in slots) of an issuer's merkle root before `verify_proof`
-/// rejects it. ~48h at 400ms/slot on Solana mainnet-beta.
-pub const MAX_ROOT_AGE_SLOTS: u64 = 432_000;
+pub use crate::constants::MAX_ROOT_AGE_SLOTS;
 
 /// 24h epoch length (seconds) used by ADR-020 context binding.
 pub const EPOCH_LEN_SECS: i64 = 86_400;

@@ -29,6 +29,7 @@ use solana_signer::Signer;
 use solana_transaction::{InstructionError, Transaction, TransactionError};
 
 use zksettle::error::ZkSettleError;
+use zksettle::state::{ATTESTATION_SEED, ISSUER_SEED, NULLIFIER_SEED};
 
 pub const ANCHOR_ERROR_CODE_OFFSET: u32 = 6000;
 
@@ -282,4 +283,36 @@ fn run_sunspot_prove(dir: &Path) {
         .status()
         .expect("failed to invoke sunspot");
     assert!(status.success(), "sunspot prove failed");
+}
+
+pub fn load_program() -> (LiteSVM, Keypair) {
+    let so_path = repo_root().join("backend/target/deploy/zksettle.so");
+    let bytes = fs::read(&so_path).expect("zksettle.so not built — run `anchor build` first");
+
+    let mut svm = LiteSVM::new();
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
+
+    let _ = svm.add_program(zksettle::ID, &bytes);
+    (svm, payer)
+}
+
+pub fn issuer_pda(authority: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(&[ISSUER_SEED, authority.as_ref()], &zksettle::ID).0
+}
+
+pub fn nullifier_pda(issuer: &Pubkey, nullifier_hash: &[u8; 32]) -> Pubkey {
+    Pubkey::find_program_address(
+        &[NULLIFIER_SEED, issuer.as_ref(), nullifier_hash.as_ref()],
+        &zksettle::ID,
+    )
+    .0
+}
+
+pub fn attestation_pda(issuer: &Pubkey, nullifier_hash: &[u8; 32]) -> Pubkey {
+    Pubkey::find_program_address(
+        &[ATTESTATION_SEED, issuer.as_ref(), nullifier_hash.as_ref()],
+        &zksettle::ID,
+    )
+    .0
 }

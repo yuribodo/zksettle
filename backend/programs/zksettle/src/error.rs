@@ -32,4 +32,6 @@ pub enum ZkSettleError {
     EpochInFuture,
     #[msg("Proof epoch is older than allowed freshness window")]
     EpochStale,
+    #[msg("Attestation has expired beyond the validity window")]
+    AttestationExpired,
 }

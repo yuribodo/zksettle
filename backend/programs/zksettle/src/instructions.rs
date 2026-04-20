@@ -1,3 +1,4 @@
+pub mod check_attestation;
 pub mod register_issuer;
 pub mod verify_proof;
 
@@ -5,5 +6,6 @@ pub mod verify_proof;
 // against `super::*` and the Anchor-generated `__client_accounts_*` sibling
 // modules are visible to the macro. Handler functions are named uniquely per
 // instruction to avoid glob conflicts.
+pub use check_attestation::*;
 pub use register_issuer::*;
 pub use verify_proof::*;

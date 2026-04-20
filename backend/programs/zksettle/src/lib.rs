@@ -1,3 +1,4 @@
+pub mod constants;
 pub mod error;
 pub mod instructions;
 pub mod state;
@@ -44,5 +45,12 @@ pub mod zksettle {
             recipient,
             amount,
         )
+    }
+
+    pub fn check_attestation(
+        ctx: Context<CheckAttestation>,
+        nullifier_hash: [u8; 32],
+    ) -> Result<()> {
+        instructions::check_attestation::check_handler(ctx, nullifier_hash)
     }
 }

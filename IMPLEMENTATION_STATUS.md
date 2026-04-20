@@ -20,7 +20,7 @@ This document is the ground truth for what exists in the repository today versus
 | On-chain | `verify_proof` + nullifier PDA | **DONE** |
 | On-chain | `Attestation` PDA + `ProofSettled` event | **DONE** |
 | On-chain | Token-2022 Transfer Hook | **TODO** |
-| On-chain | `check_attestation` ix | **TODO** |
+| On-chain | `check_attestation` ix | **DONE** |
 | On-chain | Light Protocol compression (real) | **TODO** (PDA stand-in only) |
 | On-chain | Bubblegum cNFT attestation | **TODO** |
 | Crate | `zksettle-types` | **TODO** |
@@ -74,9 +74,10 @@ Errors: `error.rs` (592 B, 7 variants).
 - `register_issuer.rs` (5.4 KB)
 - `verify.rs` (5.0 KB)
 - `nullifier.rs` (6.0 KB) — covers replay rejection
-- `common/` helpers
+- `check_attestation.rs` — freshness validation, expiry, nonexistent PDA
+- `common/` helpers (shared `load_program`, PDA helpers, fixture gen)
 
-Total ~482 LOC of on-chain test coverage.
+Total ~580 LOC of on-chain test coverage.
 
 ### 1.5 Documentation
 
@@ -116,7 +117,7 @@ ADR-006 / ADR-007 call for Light Protocol ZK Compression. Current implementation
 - **Nullifier context binding (ADR-020)** — circuit now derives `nullifier = Poseidon2(private_key, mint_lo, mint_hi, epoch, recipient_lo, recipient_hi, amount)` with all six limbs exposed as public inputs (BN254 fits them via 128-bit pubkey limb split). `verify_proof` rebinds these via `check_bindings` and guards epoch freshness (`EpochInFuture` / `EpochStale`, `MAX_EPOCH_LAG = 1`). Attestation PDA + `ProofSettled` event carry the tuple for off-chain indexing. **DONE.**
 - **CU budget bumped to <250K** per ADR-022 (post-ADR-020 pub-input fan-out). Measured: 219,767 CU. Safety ceiling in tests: 600K.
 - **Token-2022 Transfer Hook** (ADR-005, RF-03). No `transfer_hook` instruction, no `ExtraAccountMetaList` account, no mint configured with the hook. This is the Week 2 Friday checkpoint blocker.
-- **`check_attestation(wallet)`** instruction (PRD §7 Componente 2, RF-02). Attestation PDA exists; lookup-by-wallet / CPI contract does not.
+- **`check_attestation(nullifier_hash)`** instruction (PRD §7 Componente 2, RF-02). Validates attestation PDA freshness within `MAX_ROOT_AGE_SLOTS`; emits `AttestationChecked` event. CPI-callable by transfer hooks / other programs. **DONE.**
 - **Light Protocol integration** (ADR-006). Both nullifier and attestation use vanilla PDAs.
 - **Bubblegum cNFT attestation** (ADR-019 / README Components row).
 
@@ -226,7 +227,7 @@ For each divergence between the repository and `README.md` / `zksettle_prd.md` /
 | 4 | ~~`verify_proof` emits no attestation.~~ | **Resolved** | `Attestation` PDA + `ProofSettled` event implemented. Bubblegum cNFT form (ADR-019) still on roadmap. |
 | 5 | `scripts/fixture-noir/` ships a fixture generator; not in README repo-layout tree. | **Code** | Add `scripts/fixture-noir/` to the README layout block. |
 | 6 | README §Technology stack + repo layout call the dashboard "Vite + React"; PRD §8 calls it "Next.js + TypeScript". No frontend code yet. | **Doc self-conflict** | Pick **Vite + React** (SPA dashboard, no SSR requirement, smaller bundle, faster dev loop). Update PRD §8 to match README before scaffolding. |
-| 7 | `check_attestation(wallet)` absent from `lib.rs`; promised by PRD RF-02 and README Components row. | **Docs** | Implement: iterate attestation PDAs for a wallet, or add reverse index. Needed for DeFi CPI consumers. |
+| 7 | ~~`check_attestation(wallet)` absent from `lib.rs`.~~ | **Resolved** | `check_attestation(nullifier_hash)` implemented. Validates attestation freshness via `MAX_ROOT_AGE_SLOTS`, emits `AttestationChecked`. CPI-ready for transfer hooks. |
 | 8 | Token-2022 Transfer Hook missing entirely; ADR-005 calls it non-bypassable core. | **Docs** | Implement `transfer_hook` + `ExtraAccountMetaList` in the Anchor program. Week 2 Friday checkpoint blocker. |
 | 9 | `circuits/README.md` documents the SRS as gnark's in-memory default; ADR-002 mandates Hermez Powers of Tau for production. | **Docs** | Open a ceremony ticket; gate mainnet deploy on MPC integration. Hackathon demo may ship without it, production may not. |
 
