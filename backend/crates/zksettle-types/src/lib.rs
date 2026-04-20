@@ -10,6 +10,10 @@
 //! `Pubkey` is re-exported as a raw 32-byte alias so consumers pick their own
 //! Solana SDK version; convert at the call site via `Pubkey::new_from_array`.
 
+pub mod accounts;
+
+pub use accounts::{Attestation, Issuer, Nullifier};
+
 /// A Solana public key — 32 raw bytes. Matches the on-chain representation.
 pub type Pubkey = [u8; 32];
 
