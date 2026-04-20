@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum ZksettleError {
     // Mirrors of on-chain `ZkSettleError` variants.
     #[error("proof or witness bytes are malformed")]
