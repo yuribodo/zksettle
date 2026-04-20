@@ -6,5 +6,3 @@ pub const EPOCH_IDX: usize = 4;
 pub const RECIPIENT_LO_IDX: usize = 5;
 pub const RECIPIENT_HI_IDX: usize = 6;
 pub const AMOUNT_IDX: usize = 7;
-
-pub const NULLIFIER_SEED: &[u8] = b"nullifier";

@@ -34,4 +34,27 @@ pub enum ZkSettleError {
     EpochStale,
     #[msg("Attestation has expired beyond the validity window")]
     AttestationExpired,
+    #[msg("On-chain clock returned a negative unix timestamp")]
+    NegativeClock,
+    #[msg("Light Protocol tree pubkey lookup failed")]
+    LightTreeLookupFailed,
+    #[msg("Packing a compressed account for Light CPI failed")]
+    LightAccountPackFailed,
+    #[msg("Light Protocol CPI invoke failed")]
+    LightInvokeFailed,
+    #[msg("Compressed account address is invalid")]
+    InvalidLightAddress,
+}
+
+/// Map an external Result's Err into a `ZkSettleError`, logging the source via
+/// `msg!` first. Designed for use inside `.map_err(...)` chains around Light
+/// SDK / gnark calls.
+#[macro_export]
+macro_rules! map_light_err {
+    ($ctx:literal, $variant:expr) => {
+        |e| {
+            msg!(concat!($ctx, ": {:?}"), e);
+            error!($variant)
+        }
+    };
 }

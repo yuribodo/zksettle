@@ -1,9 +1,9 @@
 # ZKSettle — Implementation Status
 
-**Snapshot date:** 2026-04-19
+**Snapshot date:** 2026-04-20
 **Week:** 2 of 5 (PRD §12)
-**Submission target:** 2026-05-11 (22 days remaining)
-**Branch at snapshot:** `chore/circuit-fixture-sync`
+**Submission target:** 2026-05-11 (21 days remaining)
+**Branch at snapshot:** `feat/light-compression`
 
 This document is the ground truth for what exists in the repository today versus what is still planned in `README.md`, `zksettle_prd.md`, and `zksettle_adr.md`. It is not a roadmap — it is a reconciliation.
 
@@ -21,7 +21,7 @@ This document is the ground truth for what exists in the repository today versus
 | On-chain | `Attestation` PDA + `ProofSettled` event | **DONE** |
 | On-chain | Token-2022 Transfer Hook | **TODO** |
 | On-chain | `check_attestation` ix | **DONE** |
-| On-chain | Light Protocol compression (real) | **TODO** (PDA stand-in only) |
+| On-chain | Light Protocol compression (real) | **DONE** (write path + read path migrated; integration fixtures TODO) |
 | On-chain | Bubblegum cNFT attestation | **TODO** |
 | Crate | `zksettle-types` | **TODO** |
 | Crate | `zksettle-crypto` | **TODO** |
@@ -71,13 +71,9 @@ Errors: `error.rs` (592 B, 7 variants).
 
 ### 1.4 Anchor tests — `backend/programs/zksettle/tests/`
 
-- `register_issuer.rs` (5.4 KB)
-- `verify.rs` (5.0 KB)
-- `nullifier.rs` (6.0 KB) — covers replay rejection
-- `check_attestation.rs` — freshness validation, expiry, nonexistent PDA
-- `common/` helpers (shared `load_program`, PDA helpers, fixture gen)
+- `light_smoke.rs` — `LightProgramTest` harness. Boots `zksettle.so`, exercises `register_issuer` (happy path + `ZeroMerkleRoot` guard) and `update_issuer_root` (happy path + wrong-authority rejection via Anchor `ConstraintSeeds`). Gated behind `--features light-tests`; requires the `light` CLI binary on `PATH`.
 
-Total ~580 LOC of on-chain test coverage.
+The legacy litesvm suite (`register_issuer.rs`, `verify.rs`, `nullifier.rs`, `check_attestation.rs`, `common/`) was removed when `verify_proof` / `check_attestation` moved to Light CPI — the rent-funded PDA path they exercised no longer exists. End-to-end coverage of the Light-CPI instructions is tracked as the ADR-006 fixture-crate follow-up (see §2.2).
 
 ### 1.5 Documentation
 
@@ -98,9 +94,11 @@ Total ~580 LOC of on-chain test coverage.
 
 `generated_vk.rs` is bound to the current 2-pubinput slice — extending the circuit requires regenerating the VK via `build.rs`.
 
-### 2.2 Nullifier storage is not real Light Protocol
+### 2.2 Light Protocol migration — code done, fixtures pending
 
-ADR-006 / ADR-007 call for Light Protocol ZK Compression. Current implementation creates a vanilla PDA per nullifier. Functionally anti-replay works; economically it does not scale per ADR-006 rationale.
+ADR-006 / ADR-007 call for Light Protocol ZK Compression. `verify_proof` now writes both nullifier and attestation as Light compressed accounts (`LightAccount::new_init` + `LightSystemProgramCpi::invoke`); `check_attestation` reads via `LightAccount::new_read_only`. The legacy rent-funded PDA path is removed.
+
+What's still missing: **integration-test coverage of the Light-CPI paths**. `tests/light_smoke.rs` only exercises the pure-Anchor instructions (`register_issuer`, `update_issuer_root`) through `LightProgramTest`. `verify_proof` / `check_attestation` need a dedicated fixture crate wiring gnark proof + witness bytes into a compressed-account setup with a running prover server. Tracked as ADR-006 follow-up.
 
 ### 2.3 Attestation record = PDA, not cNFT
 
@@ -118,7 +116,7 @@ ADR-006 / ADR-007 call for Light Protocol ZK Compression. Current implementation
 - **CU budget bumped to <250K** per ADR-022 (post-ADR-020 pub-input fan-out). Measured: 219,767 CU. Safety ceiling in tests: 600K.
 - **Token-2022 Transfer Hook** (ADR-005, RF-03). No `transfer_hook` instruction, no `ExtraAccountMetaList` account, no mint configured with the hook. This is the Week 2 Friday checkpoint blocker.
 - **`check_attestation(nullifier_hash)`** instruction (PRD §7 Componente 2, RF-02). Validates attestation PDA freshness within `MAX_ROOT_AGE_SLOTS`; emits `AttestationChecked` event. CPI-callable by transfer hooks / other programs. **DONE.**
-- **Light Protocol integration** (ADR-006). Both nullifier and attestation use vanilla PDAs.
+- **Light Protocol integration** (ADR-006). Write + read paths migrated; integration fixtures (gnark proof bytes + compressed-account setup + prover server) are the remaining gap — see §2.2.
 - **Bubblegum cNFT attestation** (ADR-019 / README Components row).
 
 ### 3.2 Rust crates — `backend/crates/` (directory does not exist)
