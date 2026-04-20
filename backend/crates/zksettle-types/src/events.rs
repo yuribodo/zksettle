@@ -21,3 +21,28 @@ pub struct ProofSettled {
     pub slot: u64,
     pub payer: Pubkey,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Serialized size of the Anchor event payload (no discriminator here —
+    /// Anchor events are prefixed by an 8-byte discriminator in the program
+    /// log entry, but the payload itself is just the Borsh-encoded fields).
+    const EXPECTED_PAYLOAD_LEN: usize = 32 + 32 + 32 + 8 + 32;
+
+    #[test]
+    fn proof_settled_borsh_roundtrip() {
+        let original = ProofSettled {
+            issuer: [9u8; 32],
+            nullifier_hash: [8u8; 32],
+            merkle_root: [7u8; 32],
+            slot: 1_234,
+            payer: [6u8; 32],
+        };
+        let bytes = borsh::to_vec(&original).expect("serialize");
+        assert_eq!(bytes.len(), EXPECTED_PAYLOAD_LEN);
+        let decoded = ProofSettled::try_from_slice(&bytes).expect("deserialize");
+        assert_eq!(decoded, original);
+    }
+}
