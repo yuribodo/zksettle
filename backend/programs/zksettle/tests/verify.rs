@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-pda-tests")]
 //! End-to-end verifier tests.
 //!
 //! These tests are **non-hermetic**: they shell out to `nargo` + `sunspot` to

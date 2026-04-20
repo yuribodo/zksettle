@@ -32,14 +32,18 @@ pub mod zksettle {
         instructions::register_issuer::update_handler(ctx, merkle_root)
     }
 
-    pub fn verify_proof(
-        ctx: Context<VerifyProof>,
+    #[allow(clippy::too_many_arguments)]
+    pub fn verify_proof<'info>(
+        ctx: Context<'_, '_, '_, 'info, VerifyProof<'info>>,
         proof_and_witness: Vec<u8>,
         nullifier_hash: [u8; 32],
         mint: Pubkey,
         epoch: u64,
         recipient: Pubkey,
         amount: u64,
+        validity_proof: light_sdk::instruction::ValidityProof,
+        address_tree_info: light_sdk::instruction::PackedAddressTreeInfo,
+        output_state_tree_index: u8,
     ) -> Result<()> {
         instructions::verify_proof::handler(
             ctx,
@@ -49,6 +53,9 @@ pub mod zksettle {
             epoch,
             recipient,
             amount,
+            validity_proof,
+            address_tree_info,
+            output_state_tree_index,
         )
     }
 

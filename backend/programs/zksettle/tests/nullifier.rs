@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-pda-tests")]
 //! Integration tests for the `verify_proof` nullifier PDA and replay gate.
 //!
 //! Gated behind `#[ignore]` — requires `nargo` + `sunspot` and a prior

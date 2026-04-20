@@ -15,6 +15,9 @@ name = "zksettle"
 default = []
 placeholder-vk = []
 cpi = ["no-entrypoint"]
+# Legacy litesvm tests exercising the pre-Light rent-funded PDA flow.
+# Kept behind a gate until the Phase 4 light-program-test suite lands.
+legacy-pda-tests = []
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []

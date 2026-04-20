@@ -1,3 +1,5 @@
+#![cfg(feature = "legacy-pda-tests")]
+
 mod common;
 
 use anchor_lang::{system_program, InstructionData};

@@ -1,42 +1,40 @@
 use anchor_lang::prelude::*;
 use gnark_verifier_solana::{proof::GnarkProof, verifier::GnarkVerifier, witness::GnarkWitness};
+use light_sdk::{
+    account::LightAccount,
+    address::v2::derive_address,
+    cpi::{
+        v2::{CpiAccounts, LightSystemProgramCpi},
+        InvokeLightSystemProgram, LightCpiInstruction,
+    },
+    instruction::{PackedAddressTreeInfo, PackedAddressTreeInfoExt, ValidityProof},
+};
 
 use crate::error::ZkSettleError;
 use crate::generated_vk::VK;
 use crate::state::{
-    Attestation, Issuer, Nullifier, AMOUNT_IDX, ATTESTATION_SEED, EPOCH_IDX, ISSUER_SEED,
-    MERKLE_ROOT_IDX, MINT_HI_IDX, MINT_LO_IDX, NULLIFIER_IDX, NULLIFIER_SEED, RECIPIENT_HI_IDX,
-    RECIPIENT_LO_IDX,
+    compressed::{CompressedAttestation, CompressedNullifier},
+    Issuer, AMOUNT_IDX, ATTESTATION_SEED, EPOCH_IDX, ISSUER_SEED, MERKLE_ROOT_IDX, MINT_HI_IDX,
+    MINT_LO_IDX, NULLIFIER_IDX, NULLIFIER_SEED, RECIPIENT_HI_IDX, RECIPIENT_LO_IDX,
 };
 
-// gnark-verifier-solana serializes a witness as a 12-byte header followed by
-// `nr_pubinputs` 32-byte field elements.
 const GNARK_WITNESS_HEADER_LEN: usize = 12;
 
 pub use crate::constants::MAX_ROOT_AGE_SLOTS;
 
-/// 24h epoch length (seconds) used by ADR-020 context binding.
 pub const EPOCH_LEN_SECS: i64 = 86_400;
-
-/// Allowed lag (in epochs) between the proof's epoch and the current epoch.
-/// `1` means yesterday's proofs still verify, tomorrow's are rejected.
 pub const MAX_EPOCH_LAG: u64 = 1;
 
 pub(crate) const fn expected_witness_len(nr_inputs: usize) -> usize {
     GNARK_WITNESS_HEADER_LEN + nr_inputs * 32
 }
 
-// When the real ADR-020 VK is wired in, the witness must expose the full
-// 8-slot public-input layout. Fail loudly at compile time otherwise.
 #[cfg(not(feature = "placeholder-vk"))]
 const _: () = assert!(
     VK.nr_pubinputs == 8,
     "ADR-020 VK must expose exactly 8 public inputs",
 );
 
-/// Split `proof_and_witness` into `(proof_bytes, witness_bytes)` or fail with
-/// `MalformedProof` if the buffer cannot fit both a non-empty proof and the
-/// fixed-size witness.
 fn split_proof_and_witness(data: &[u8], witness_len: usize) -> Result<(&[u8], &[u8])> {
     if data.len() <= witness_len {
         return err!(ZkSettleError::MalformedProof);
@@ -44,9 +42,6 @@ fn split_proof_and_witness(data: &[u8], witness_len: usize) -> Result<(&[u8], &[
     Ok(data.split_at(data.len() - witness_len))
 }
 
-/// Split a 32-byte pubkey into (lo, hi) field-element limbs. Each limb is
-/// a 32-byte big-endian buffer holding the low/high 16 bytes of the pubkey
-/// zero-padded in the top half — safely inside BN254's ~254-bit scalar field.
 pub fn pubkey_to_limbs(pk: &Pubkey) -> ([u8; 32], [u8; 32]) {
     let bytes = pk.to_bytes();
     let mut hi = [0u8; 32];
@@ -56,15 +51,12 @@ pub fn pubkey_to_limbs(pk: &Pubkey) -> ([u8; 32], [u8; 32]) {
     (lo, hi)
 }
 
-/// Encode a `u64` as a 32-byte big-endian field element (top 24 bytes zero).
 pub fn u64_to_field_bytes(x: u64) -> [u8; 32] {
     let mut out = [0u8; 32];
     out[24..32].copy_from_slice(&x.to_be_bytes());
     out
 }
 
-/// Bundle of every field the witness must publicly commit to: issuer merkle
-/// root, instruction nullifier hash, and the ADR-020 context tuple.
 #[cfg_attr(feature = "placeholder-vk", allow(dead_code))]
 pub(crate) struct BindingInputs<'a> {
     pub merkle_root: &'a [u8; 32],
@@ -75,9 +67,6 @@ pub(crate) struct BindingInputs<'a> {
     pub amount: u64,
 }
 
-/// Enforce that the witness publicly commits to every field in `inputs`.
-/// Compiled unconditionally so unit tests run under the default feature set;
-/// the call site in `handler` stays cfg-gated.
 #[cfg_attr(feature = "placeholder-vk", allow(dead_code))]
 pub(crate) fn check_bindings<const N: usize>(
     witness: &GnarkWitness<N>,
@@ -120,14 +109,6 @@ pub(crate) fn check_bindings<const N: usize>(
 }
 
 #[derive(Accounts)]
-#[instruction(
-    proof_and_witness: Vec<u8>,
-    nullifier_hash: [u8; 32],
-    mint: Pubkey,
-    epoch: u64,
-    recipient: Pubkey,
-    amount: u64,
-)]
 pub struct VerifyProof<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -139,25 +120,6 @@ pub struct VerifyProof<'info> {
             @ ZkSettleError::RootStale,
     )]
     pub issuer: Account<'info, Issuer>,
-
-    #[account(
-        init,
-        payer = payer,
-        space = 8 + Nullifier::LEN,
-        seeds = [NULLIFIER_SEED, issuer.key().as_ref(), nullifier_hash.as_ref()],
-        bump,
-        constraint = nullifier_hash != [0u8; 32] @ ZkSettleError::ZeroNullifier,
-    )]
-    pub nullifier: Account<'info, Nullifier>,
-
-    #[account(
-        init,
-        payer = payer,
-        space = 8 + Attestation::LEN,
-        seeds = [ATTESTATION_SEED, issuer.key().as_ref(), nullifier_hash.as_ref()],
-        bump,
-    )]
-    pub attestation: Account<'info, Attestation>,
 
     pub system_program: Program<'info, System>,
 }
@@ -175,21 +137,24 @@ pub struct ProofSettled {
     pub payer: Pubkey,
 }
 
-pub fn handler(
-    ctx: Context<VerifyProof>,
+#[allow(clippy::too_many_arguments)]
+pub fn handler<'info>(
+    ctx: Context<'_, '_, '_, 'info, VerifyProof<'info>>,
     proof_and_witness: Vec<u8>,
     nullifier_hash: [u8; 32],
     mint: Pubkey,
     epoch: u64,
     recipient: Pubkey,
     amount: u64,
+    validity_proof: ValidityProof,
+    address_tree_info: PackedAddressTreeInfo,
+    output_state_tree_index: u8,
 ) -> Result<()> {
     const NR_INPUTS: usize = VK.nr_pubinputs;
     const N_COMMITMENTS: usize = VK.commitment_keys.len();
 
-    // Epoch freshness: reject proofs for future epochs or those older than
-    // MAX_EPOCH_LAG. `unix_timestamp` is i64 and could theoretically be
-    // negative on test validators; treat that as "future" for safety.
+    require!(nullifier_hash != [0u8; 32], ZkSettleError::ZeroNullifier);
+
     let ts = Clock::get()?.unix_timestamp;
     require!(ts >= 0, ZkSettleError::EpochInFuture);
     let current_epoch = (ts / EPOCH_LEN_SECS) as u64;
@@ -236,18 +201,73 @@ pub fn handler(
     let merkle_root = ctx.accounts.issuer.merkle_root;
     let payer_key = ctx.accounts.payer.key();
     let slot = Clock::get()?.slot;
+    let issuer_bytes = issuer_key.to_bytes();
 
-    let attestation = &mut ctx.accounts.attestation;
-    attestation.issuer = issuer_key;
-    attestation.nullifier_hash = nullifier_hash;
-    attestation.merkle_root = merkle_root;
-    attestation.mint = mint;
-    attestation.recipient = recipient;
-    attestation.amount = amount;
-    attestation.epoch = epoch;
-    attestation.slot = slot;
-    attestation.payer = payer_key;
-    attestation.bump = ctx.bumps.attestation;
+    let light_cpi_accounts = CpiAccounts::new(
+        ctx.accounts.payer.as_ref(),
+        ctx.remaining_accounts,
+        crate::LIGHT_CPI_SIGNER,
+    );
+
+    let address_tree_pubkey = address_tree_info
+        .get_tree_pubkey(&light_cpi_accounts)
+        .map_err(|e| {
+            msg!("get_tree_pubkey failed: {:?}", e);
+            error!(ZkSettleError::InvalidLightAddress)
+        })?;
+
+    let (null_addr, null_seed) = derive_address(
+        &[NULLIFIER_SEED, &issuer_bytes, &nullifier_hash],
+        &address_tree_pubkey,
+        &crate::ID,
+    );
+    let (att_addr, att_seed) = derive_address(
+        &[ATTESTATION_SEED, &issuer_bytes, &nullifier_hash],
+        &address_tree_pubkey,
+        &crate::ID,
+    );
+
+    let null_params = address_tree_info.into_new_address_params_assigned_packed(null_seed, Some(0));
+    let att_params = address_tree_info.into_new_address_params_assigned_packed(att_seed, Some(1));
+
+    let nullifier_account = LightAccount::<CompressedNullifier>::new_init(
+        &crate::ID,
+        Some(null_addr),
+        output_state_tree_index,
+    );
+
+    let mut attestation_account = LightAccount::<CompressedAttestation>::new_init(
+        &crate::ID,
+        Some(att_addr),
+        output_state_tree_index,
+    );
+    attestation_account.issuer = issuer_bytes;
+    attestation_account.nullifier_hash = nullifier_hash;
+    attestation_account.merkle_root = merkle_root;
+    attestation_account.mint = mint.to_bytes();
+    attestation_account.recipient = recipient.to_bytes();
+    attestation_account.amount = amount;
+    attestation_account.epoch = epoch;
+    attestation_account.slot = slot;
+    attestation_account.payer = payer_key.to_bytes();
+
+    LightSystemProgramCpi::new_cpi(crate::LIGHT_CPI_SIGNER, validity_proof)
+        .with_new_addresses(&[null_params, att_params])
+        .with_light_account(nullifier_account)
+        .map_err(|e| {
+            msg!("with_light_account nullifier: {:?}", e);
+            error!(ZkSettleError::LightCpiFailed)
+        })?
+        .with_light_account(attestation_account)
+        .map_err(|e| {
+            msg!("with_light_account attestation: {:?}", e);
+            error!(ZkSettleError::LightCpiFailed)
+        })?
+        .invoke(light_cpi_accounts)
+        .map_err(|e| {
+            msg!("Light CPI invoke failed: {:?}", e);
+            error!(ZkSettleError::LightCpiFailed)
+        })?;
 
     emit!(ProofSettled {
         issuer: issuer_key,
