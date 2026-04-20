@@ -14,9 +14,7 @@ use crate::{Hash32, Pubkey};
 /// Off-chain mirror of the on-chain `Issuer` account.
 ///
 /// Layout: `authority (32) + merkle_root (32) + root_slot (8) + bump (1)` = 73 bytes.
-#[derive(
-    Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize,
-)]
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 pub struct Issuer {
     pub authority: Pubkey,
     pub merkle_root: Hash32,
@@ -56,9 +54,7 @@ impl Nullifier {
 ///
 /// Layout: `issuer (32) + nullifier_hash (32) + merkle_root (32) + slot (8)
 /// + payer (32) + bump (1)` = 137 bytes.
-#[derive(
-    Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize,
-)]
+#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 pub struct Attestation {
     pub issuer: Pubkey,
     pub nullifier_hash: Hash32,
