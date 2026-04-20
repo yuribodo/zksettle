@@ -13,9 +13,11 @@ use anchor_lang::prelude::Pubkey;
 use anchor_lang::{system_program, AccountDeserialize, InstructionData};
 use litesvm::LiteSVM;
 use solana_keypair::Keypair;
-use solana_message::{AccountMeta, Instruction, Message};
+use solana_instruction::{error::InstructionError, AccountMeta, Instruction};
+use solana_message::Message;
 use solana_signer::Signer;
-use solana_transaction::{InstructionError, Transaction, TransactionError};
+use solana_transaction::Transaction;
+use solana_transaction_error::TransactionError;
 
 use zksettle::error::ZkSettleError;
 use zksettle::instruction::{

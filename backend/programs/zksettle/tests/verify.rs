@@ -23,9 +23,9 @@ use anchor_lang::{system_program, InstructionData};
 use litesvm::LiteSVM;
 use solana_clock::Clock;
 use solana_keypair::Keypair;
-use solana_message::{AccountMeta, Instruction};
+use solana_instruction::{error::InstructionError, AccountMeta, Instruction};
 use solana_signer::Signer;
-use solana_transaction::{InstructionError, TransactionError};
+use solana_transaction_error::TransactionError;
 
 use common::{
     expect_zksettle, gen_fixture, repo_root, send, send_with_budget, Context, Fixture,

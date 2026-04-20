@@ -13,7 +13,7 @@ use anchor_lang::{system_program, AccountDeserialize, InstructionData};
 use litesvm::LiteSVM;
 use solana_clock::Clock;
 use solana_keypair::Keypair;
-use solana_message::{AccountMeta, Instruction};
+use solana_instruction::{AccountMeta, Instruction};
 use solana_signer::Signer;
 
 use common::{

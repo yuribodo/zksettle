@@ -24,9 +24,11 @@ use anchor_lang::prelude::Pubkey;
 use litesvm::LiteSVM;
 use solana_compute_budget_interface::ComputeBudgetInstruction;
 use solana_keypair::Keypair;
-use solana_message::{Instruction, Message};
+use solana_instruction::{error::InstructionError, Instruction};
+use solana_message::Message;
 use solana_signer::Signer;
-use solana_transaction::{InstructionError, Transaction, TransactionError};
+use solana_transaction::Transaction;
+use solana_transaction_error::TransactionError;
 
 use zksettle::error::ZkSettleError;
 use zksettle::state::{ATTESTATION_SEED, ISSUER_SEED, NULLIFIER_SEED};
