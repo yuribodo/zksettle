@@ -1,16 +1,8 @@
-//! Off-chain mirrors of Anchor events emitted by the `zksettle` program.
-//!
-//! Anchor events are Borsh-encoded in program log entries. Indexers decode
-//! those payloads into these structs.
-
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{Hash32, Pubkey};
 
-/// Mirror of the `ProofSettled` event emitted by `verify_proof` on a
-/// successful proof verification. Field order matches the on-chain event in
-/// `backend/programs/zksettle/src/instructions/verify_proof.rs`.
 #[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 pub struct ProofSettled {
     pub issuer: Pubkey,
@@ -24,9 +16,6 @@ pub struct ProofSettled {
     pub payer: Pubkey,
 }
 
-/// Mirror of the `AttestationChecked` event emitted by `check_attestation`.
-/// Field order matches the on-chain event in
-/// `backend/programs/zksettle/src/instructions/check_attestation.rs`.
 #[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 pub struct AttestationChecked {
     pub issuer: Pubkey,
