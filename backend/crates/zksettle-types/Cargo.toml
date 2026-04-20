@@ -1,0 +1,11 @@
+[package]
+name = "zksettle-types"
+version = "0.1.0"
+edition = "2021"
+description = "Shared type definitions for ZKSettle on-chain and off-chain components"
+license = "Apache-2.0 OR MIT"
+
+[dependencies]
+borsh = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
