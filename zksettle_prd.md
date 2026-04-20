@@ -48,7 +48,7 @@ Nenhuma solução ZK de compliance existe nativamente no Solana. Todas as fintec
 2. Issuer adiciona wallet à Merkle tree privada, publica root on-chain via `register_issuer()`
 3. Ao transferir USDC-test, usuário gera ZK proof no browser em <10s — nenhum dado sai do dispositivo
 4. Usuário submete instrução SPL transfer com proof como extra account
-5. Transfer Hook intercepta, verifica Groth16 proof via alt_bn128 syscalls (<200K CUs, <$0.001)
+5. Transfer Hook intercepta, verifica Groth16 proof via alt_bn128 syscalls (<250K CUs, <$0.001; ver ADR-022)
 6. Transferência aprovada com proof válida, bloqueada sem proof ou com proof inválida
 7. `ComplianceAttestation` registrado on-chain como audit trail imutável
 
@@ -84,7 +84,7 @@ Exchange/stablecoin issuer prova cobertura total de saques sem revelar posiçõe
 ## 6. Requisitos não funcionais
 
 - **Latência de proof generation:** <10 segundos no browser (target: <5s)
-- **Custo de verificação on-chain:** <200K compute units, <0.001 SOL por proof
+- **Custo de verificação on-chain:** <250K compute units, <0.001 SOL por proof (ver ADR-022)
 - **Latência E2E:** proof + verificação + settlement <15 segundos total
 - **Privacidade:** zero PII transmitido para servidor. Proof gerada 100% client-side.
 - **Atomicidade:** Transfer Hook garante que transferência só executa se proof válida — impossível contornar chamando SPL diretamente
@@ -118,7 +118,7 @@ verify_proof(proof: Vec<u8>, public_inputs: Vec<u8>) -> ComplianceAttestation
 check_attestation(wallet: Pubkey) -> bool
 ```
 
-Verificação usa `alt_bn128_pairing`, `alt_bn128_addition`, `alt_bn128_multiplication` — syscalls nativas do Solana. Custo: <200K CUs, <0.001 SOL.
+Verificação usa `alt_bn128_pairing`, `alt_bn128_addition`, `alt_bn128_multiplication` — syscalls nativas do Solana. Custo: <250K CUs, <0.001 SOL (ver ADR-022).
 
 ### Componente 3 — Token Transfer Hook
 

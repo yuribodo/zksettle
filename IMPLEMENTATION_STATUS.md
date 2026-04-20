@@ -113,7 +113,8 @@ ADR-006 / ADR-007 call for Light Protocol ZK Compression. Current implementation
 
 - **Merkle root staleness check** — `verify_proof` rejects with `RootStale` once `issuer.root_slot` lags the current slot by more than `MAX_ROOT_AGE_SLOTS` (~48h at 400ms/slot). See ADR-021. **DONE.**
 - **Zero-nullifier guard** — `verify_proof` rejects `nullifier_hash == [0u8; 32]` with `ZeroNullifier`, mirroring the `ZeroMerkleRoot` guard at issuer registration. **DONE.**
-- **Nullifier context binding (ADR-020)** — circuit still derives `nullifier = Poseidon2(private_key, context_hash)` with `context_hash` a private, undefined Field. Bind `(mint, epoch, recipient, amount)` as public inputs per ADR-020. **TODO.**
+- **Nullifier context binding (ADR-020)** — circuit now derives `nullifier = Poseidon2(private_key, mint_lo, mint_hi, epoch, recipient_lo, recipient_hi, amount)` with all six limbs exposed as public inputs (BN254 fits them via 128-bit pubkey limb split). `verify_proof` rebinds these via `check_bindings` and guards epoch freshness (`EpochInFuture` / `EpochStale`, `MAX_EPOCH_LAG = 1`). Attestation PDA + `ProofSettled` event carry the tuple for off-chain indexing. **DONE.**
+- **CU budget bumped to <250K** per ADR-022 (post-ADR-020 pub-input fan-out). Measured: 219,767 CU. Safety ceiling in tests: 600K.
 - **Token-2022 Transfer Hook** (ADR-005, RF-03). No `transfer_hook` instruction, no `ExtraAccountMetaList` account, no mint configured with the hook. This is the Week 2 Friday checkpoint blocker.
 - **`check_attestation(wallet)`** instruction (PRD §7 Componente 2, RF-02). Attestation PDA exists; lookup-by-wallet / CPI contract does not.
 - **Light Protocol integration** (ADR-006). Both nullifier and attestation use vanilla PDAs.

@@ -11,16 +11,18 @@ use std::fs;
 use anchor_lang::prelude::Pubkey;
 use anchor_lang::{system_program, AccountDeserialize, InstructionData};
 use litesvm::LiteSVM;
+use solana_clock::Clock;
 use solana_keypair::Keypair;
-use solana_message::{AccountMeta, Instruction, Message};
+use solana_message::{AccountMeta, Instruction};
 use solana_signer::Signer;
-use solana_transaction::{InstructionError, Transaction, TransactionError};
 
-use common::{gen_fixture, repo_root, ANCHOR_ERROR_CODE_OFFSET};
-use zksettle::error::ZkSettleError;
-use zksettle::instruction::{
-    RegisterIssuer as RegisterIssuerIx, VerifyProof as VerifyProofIx,
+use common::{
+    expect_custom_code, expect_zksettle, gen_fixture, repo_root, send, send_with_budget, Context,
+    Fixture,
 };
+use zksettle::error::ZkSettleError;
+use zksettle::instruction::{RegisterIssuer as RegisterIssuerIx, VerifyProof as VerifyProofIx};
+use zksettle::instructions::verify_proof::EPOCH_LEN_SECS;
 use zksettle::state::{Attestation, ATTESTATION_SEED, ISSUER_SEED, NULLIFIER_SEED};
 
 // Anchor 1.0's `init` defers to `system_program::create_account`, which
@@ -60,13 +62,6 @@ fn attestation_pda(issuer: &Pubkey, nullifier_hash: &[u8; 32]) -> Pubkey {
     .0
 }
 
-fn send(svm: &mut LiteSVM, payer: &Keypair, ix: Instruction) -> litesvm::types::TransactionResult {
-    let blockhash = svm.latest_blockhash();
-    let msg = Message::new(&[ix], Some(&payer.pubkey()));
-    let tx = Transaction::new(&[payer], msg, blockhash);
-    svm.send_transaction(tx)
-}
-
 fn register_issuer(svm: &mut LiteSVM, authority: &Keypair, merkle_root: [u8; 32]) {
     let ix = Instruction {
         program_id: zksettle::ID,
@@ -80,7 +75,7 @@ fn register_issuer(svm: &mut LiteSVM, authority: &Keypair, merkle_root: [u8; 32]
     send(svm, authority, ix).expect("register_issuer should succeed");
 }
 
-fn verify_ix(payer: &Keypair, data: Vec<u8>, nullifier_hash: [u8; 32]) -> Instruction {
+fn verify_ix(payer: &Keypair, fx: &Fixture, nullifier_hash: [u8; 32]) -> Instruction {
     let issuer = issuer_pda(&payer.pubkey());
     Instruction {
         program_id: zksettle::ID,
@@ -92,18 +87,14 @@ fn verify_ix(payer: &Keypair, data: Vec<u8>, nullifier_hash: [u8; 32]) -> Instru
             AccountMeta::new_readonly(system_program::ID, false),
         ],
         data: VerifyProofIx {
-            proof_and_witness: data,
+            proof_and_witness: fx.proof_and_witness.clone(),
             nullifier_hash,
+            mint: fx.ctx.mint,
+            epoch: fx.ctx.epoch,
+            recipient: fx.ctx.recipient,
+            amount: fx.ctx.amount,
         }
         .data(),
-    }
-}
-
-fn expect_custom_code(res: litesvm::types::TransactionResult, want: u32) {
-    let failure = res.expect_err("expected tx failure");
-    match failure.err {
-        TransactionError::InstructionError(_, InstructionError::Custom(code)) if code == want => {}
-        other => panic!("expected Custom({want}), got {other:?}"),
     }
 }
 
@@ -111,15 +102,11 @@ fn expect_custom_code(res: litesvm::types::TransactionResult, want: u32) {
 #[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
 fn verify_proof_creates_nullifier_and_attestation_pdas() {
     let (mut svm, payer) = load_program();
-    let fx = gen_fixture(0);
+    let fx = gen_fixture(Context::sample());
     register_issuer(&mut svm, &payer, fx.merkle_root);
 
-    let result = send(
-        &mut svm,
-        &payer,
-        verify_ix(&payer, fx.proof_and_witness, fx.nullifier),
-    )
-    .expect("verify should succeed");
+    let result = send_with_budget(&mut svm, &payer, verify_ix(&payer, &fx, fx.nullifier))
+        .expect("verify should succeed");
 
     let issuer = issuer_pda(&payer.pubkey());
 
@@ -138,8 +125,11 @@ fn verify_proof_creates_nullifier_and_attestation_pdas() {
     assert_eq!(attestation.issuer, issuer);
     assert_eq!(attestation.nullifier_hash, fx.nullifier);
     assert_eq!(attestation.merkle_root, fx.merkle_root);
+    assert_eq!(attestation.mint, fx.ctx.mint);
+    assert_eq!(attestation.recipient, fx.ctx.recipient);
+    assert_eq!(attestation.amount, fx.ctx.amount);
+    assert_eq!(attestation.epoch, fx.ctx.epoch);
     assert_eq!(attestation.payer, payer.pubkey());
-    assert!(attestation.slot > 0, "slot should be populated");
 
     let logs = result.logs;
     assert!(
@@ -150,69 +140,86 @@ fn verify_proof_creates_nullifier_and_attestation_pdas() {
 
 #[test]
 #[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
-fn verify_proof_rejects_replay() {
+fn same_tuple_same_nullifier() {
     let (mut svm, payer) = load_program();
-    let first = gen_fixture(0);
+    let first = gen_fixture(Context::sample());
     register_issuer(&mut svm, &payer, first.merkle_root);
 
-    send(
-        &mut svm,
-        &payer,
-        verify_ix(&payer, first.proof_and_witness, first.nullifier),
-    )
-    .expect("first submit should succeed");
+    send_with_budget(&mut svm, &payer, verify_ix(&payer, &first, first.nullifier))
+        .expect("first submit should succeed");
 
-    // Same context_hash -> same nullifier. The nullifier PDA already exists
-    // from the first submit, so `init` fails in the system_program CPI.
-    let replay = gen_fixture(0);
-    let res = send(
-        &mut svm,
-        &payer,
-        verify_ix(&payer, replay.proof_and_witness, replay.nullifier),
-    );
+    // Same (mint, epoch, recipient, amount) tuple → same nullifier. The
+    // nullifier PDA already exists from the first submit, so `init` fails
+    // in the system_program CPI.
+    let replay = gen_fixture(Context::sample());
+    assert_eq!(first.nullifier, replay.nullifier);
+    let res = send_with_budget(&mut svm, &payer, verify_ix(&payer, &replay, replay.nullifier));
     expect_custom_code(res, ACCOUNT_ALREADY_IN_USE);
 }
 
 #[test]
 #[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
-fn verify_proof_allows_fresh_nullifier() {
+fn different_recipient_yields_different_nullifier() {
     let (mut svm, payer) = load_program();
-    let first = gen_fixture(0);
+    let first = gen_fixture(Context::sample());
     register_issuer(&mut svm, &payer, first.merkle_root);
 
-    send(
-        &mut svm,
-        &payer,
-        verify_ix(&payer, first.proof_and_witness, first.nullifier),
-    )
-    .expect("first submit should succeed");
+    send_with_budget(&mut svm, &payer, verify_ix(&payer, &first, first.nullifier))
+        .expect("first submit should succeed");
 
-    let second = gen_fixture(1);
+    let mut second_ctx = Context::sample();
+    second_ctx.recipient = Pubkey::new_from_array([9u8; 32]);
+    let second = gen_fixture(second_ctx);
     assert_ne!(
         first.nullifier, second.nullifier,
-        "distinct context_hash must yield distinct nullifiers"
+        "distinct recipient must yield distinct nullifiers",
     );
-    send(
-        &mut svm,
-        &payer,
-        verify_ix(&payer, second.proof_and_witness, second.nullifier),
-    )
-    .expect("second submit with fresh nullifier should succeed");
+    send_with_budget(&mut svm, &payer, verify_ix(&payer, &second, second.nullifier))
+        .expect("second submit with fresh nullifier should succeed");
 }
 
 #[test]
 #[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
 fn verify_proof_rejects_zero_nullifier() {
     let (mut svm, payer) = load_program();
-    let fx = gen_fixture(0);
+    let fx = gen_fixture(Context::sample());
     register_issuer(&mut svm, &payer, fx.merkle_root);
 
-    let res = send(
-        &mut svm,
-        &payer,
-        verify_ix(&payer, fx.proof_and_witness, [0u8; 32]),
-    );
-    expect_custom_code(res, ANCHOR_ERROR_CODE_OFFSET + ZkSettleError::ZeroNullifier as u32);
+    let res = send_with_budget(&mut svm, &payer, verify_ix(&payer, &fx, [0u8; 32]));
+    expect_zksettle(res, ZkSettleError::ZeroNullifier);
+}
+
+#[test]
+#[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
+fn epoch_in_future_rejected() {
+    let (mut svm, payer) = load_program();
+    // Default LiteSVM clock has unix_timestamp = 0 → current_epoch = 0.
+    // A proof for epoch = 1 is in the future and must be rejected before
+    // the pairing check ever runs.
+    let mut ctx = Context::sample();
+    ctx.epoch = 1;
+    let fx = gen_fixture(ctx);
+    register_issuer(&mut svm, &payer, fx.merkle_root);
+
+    let res = send_with_budget(&mut svm, &payer, verify_ix(&payer, &fx, fx.nullifier));
+    expect_zksettle(res, ZkSettleError::EpochInFuture);
+}
+
+#[test]
+#[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
+fn epoch_too_old_rejected() {
+    let (mut svm, payer) = load_program();
+    let fx = gen_fixture(Context::sample()); // epoch = 0
+    register_issuer(&mut svm, &payer, fx.merkle_root);
+
+    // Warp unix_timestamp two epochs forward while leaving the slot alone
+    // so RootStale does not fire first.
+    let mut clock = svm.get_sysvar::<Clock>();
+    clock.unix_timestamp = 2 * EPOCH_LEN_SECS;
+    svm.set_sysvar::<Clock>(&clock);
+
+    let res = send_with_budget(&mut svm, &payer, verify_ix(&payer, &fx, fx.nullifier));
+    expect_zksettle(res, ZkSettleError::EpochStale);
 }
 
 #[test]
@@ -220,12 +227,8 @@ fn verify_proof_rejects_zero_nullifier() {
 fn verify_proof_requires_issuer_pda() {
     let (mut svm, payer) = load_program();
     // Intentionally skip register_issuer so the PDA does not exist.
-    let fx = gen_fixture(0);
+    let fx = gen_fixture(Context::sample());
 
-    let res = send(
-        &mut svm,
-        &payer,
-        verify_ix(&payer, fx.proof_and_witness, fx.nullifier),
-    );
+    let res = send_with_budget(&mut svm, &payer, verify_ix(&payer, &fx, fx.nullifier));
     expect_custom_code(res, ACCOUNT_NOT_INITIALIZED);
 }

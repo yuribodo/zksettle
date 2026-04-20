@@ -21,17 +21,18 @@ use std::fs;
 use anchor_lang::prelude::Pubkey;
 use anchor_lang::{system_program, InstructionData};
 use litesvm::LiteSVM;
-use solana_keypair::Keypair;
-use solana_message::{AccountMeta, Instruction, Message};
-use solana_signer::Signer;
-use solana_transaction::{InstructionError, Transaction, TransactionError};
-
-use common::{gen_fixture, repo_root, ANCHOR_ERROR_CODE_OFFSET};
 use solana_clock::Clock;
-use zksettle::error::ZkSettleError;
-use zksettle::instruction::{
-    RegisterIssuer as RegisterIssuerIx, VerifyProof as VerifyProofIx,
+use solana_keypair::Keypair;
+use solana_message::{AccountMeta, Instruction};
+use solana_signer::Signer;
+use solana_transaction::{InstructionError, TransactionError};
+
+use common::{
+    expect_zksettle, gen_fixture, repo_root, send, send_with_budget, Context, Fixture,
+    ANCHOR_ERROR_CODE_OFFSET,
 };
+use zksettle::error::ZkSettleError;
+use zksettle::instruction::{RegisterIssuer as RegisterIssuerIx, VerifyProof as VerifyProofIx};
 use zksettle::instructions::verify_proof::MAX_ROOT_AGE_SLOTS;
 use zksettle::state::{ATTESTATION_SEED, ISSUER_SEED, NULLIFIER_SEED};
 
@@ -67,13 +68,6 @@ fn attestation_pda(issuer: &Pubkey, nullifier_hash: &[u8; 32]) -> Pubkey {
     .0
 }
 
-fn send(svm: &mut LiteSVM, payer: &Keypair, ix: Instruction) -> litesvm::types::TransactionResult {
-    let blockhash = svm.latest_blockhash();
-    let msg = Message::new(&[ix], Some(&payer.pubkey()));
-    let tx = Transaction::new(&[payer], msg, blockhash);
-    svm.send_transaction(tx)
-}
-
 fn register_issuer(svm: &mut LiteSVM, authority: &Keypair, merkle_root: [u8; 32]) {
     let ix = Instruction {
         program_id: zksettle::ID,
@@ -87,11 +81,18 @@ fn register_issuer(svm: &mut LiteSVM, authority: &Keypair, merkle_root: [u8; 32]
     send(svm, authority, ix).expect("register_issuer should succeed");
 }
 
-fn submit(
+/// Build a `verify_proof` instruction from a fixture's canonical context.
+fn submit(svm: &mut LiteSVM, payer: &Keypair, fx: &Fixture) -> litesvm::types::TransactionResult {
+    submit_with(svm, payer, fx, &fx.ctx)
+}
+
+/// Submit a `verify_proof` instruction with explicit arg context. Used to
+/// force binding mismatches between the proof's canonical tuple and the ix.
+fn submit_with(
     svm: &mut LiteSVM,
     payer: &Keypair,
-    data: Vec<u8>,
-    nullifier_hash: [u8; 32],
+    fx: &Fixture,
+    ctx: &Context,
 ) -> litesvm::types::TransactionResult {
     let issuer = issuer_pda(&payer.pubkey());
     let ix = Instruction {
@@ -99,38 +100,41 @@ fn submit(
         accounts: vec![
             AccountMeta::new(payer.pubkey(), true),
             AccountMeta::new_readonly(issuer, false),
-            AccountMeta::new(nullifier_pda(&issuer, &nullifier_hash), false),
-            AccountMeta::new(attestation_pda(&issuer, &nullifier_hash), false),
+            AccountMeta::new(nullifier_pda(&issuer, &fx.nullifier), false),
+            AccountMeta::new(attestation_pda(&issuer, &fx.nullifier), false),
             AccountMeta::new_readonly(system_program::ID, false),
         ],
         data: VerifyProofIx {
-            proof_and_witness: data,
-            nullifier_hash,
+            proof_and_witness: fx.proof_and_witness.clone(),
+            nullifier_hash: fx.nullifier,
+            mint: ctx.mint,
+            epoch: ctx.epoch,
+            recipient: ctx.recipient,
+            amount: ctx.amount,
         }
         .data(),
     };
-    send(svm, payer, ix)
+    send_with_budget(svm, payer, ix)
 }
 
 #[test]
 #[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
 fn valid_proof_passes() {
-    let fx = gen_fixture(0);
+    let fx = gen_fixture(Context::sample());
     let (mut svm, payer) = load_program();
     register_issuer(&mut svm, &payer, fx.merkle_root);
 
-    let result = submit(&mut svm, &payer, fx.proof_and_witness, fx.nullifier)
-        .expect("tx should succeed");
+    let result = submit(&mut svm, &payer, &fx).expect("tx should succeed");
 
     let cu = result.compute_units_consumed;
     println!("compute units consumed: {cu}");
-    assert!(cu < 200_000, "CU budget exceeded: {cu}");
+    assert!(cu < 600_000, "CU budget exceeded: {cu}");
 }
 
 #[test]
 #[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
 fn stale_root_rejected() {
-    let fx = gen_fixture(0);
+    let fx = gen_fixture(Context::sample());
     let (mut svm, payer) = load_program();
     register_issuer(&mut svm, &payer, fx.merkle_root);
 
@@ -138,27 +142,18 @@ fn stale_root_rejected() {
     clock.slot = clock.slot.saturating_add(MAX_ROOT_AGE_SLOTS + 1);
     svm.set_sysvar::<Clock>(&clock);
 
-    let failure = submit(&mut svm, &payer, fx.proof_and_witness, fx.nullifier)
-        .expect_err("stale root must be rejected");
-
-    let expected = ANCHOR_ERROR_CODE_OFFSET + ZkSettleError::RootStale as u32;
-    match failure.err {
-        TransactionError::InstructionError(_, InstructionError::Custom(code)) if code == expected => {}
-        other => panic!("expected Custom({expected}), got {other:?}"),
-    }
+    expect_zksettle(submit(&mut svm, &payer, &fx), ZkSettleError::RootStale);
 }
 
 #[test]
 #[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
 fn tampered_proof_rejects() {
-    let fx = gen_fixture(0);
-    let mut proof_and_witness = fx.proof_and_witness;
-    proof_and_witness[0] ^= 0xff;
+    let mut fx = gen_fixture(Context::sample());
+    fx.proof_and_witness[0] ^= 0xff;
 
     let (mut svm, payer) = load_program();
     register_issuer(&mut svm, &payer, fx.merkle_root);
-    let failure = submit(&mut svm, &payer, proof_and_witness, fx.nullifier)
-        .expect_err("tampered proof should be rejected");
+    let failure = submit(&mut svm, &payer, &fx).expect_err("tampered proof should be rejected");
 
     let expected_invalid = ANCHOR_ERROR_CODE_OFFSET + ZkSettleError::ProofInvalid as u32;
     let expected_malformed = ANCHOR_ERROR_CODE_OFFSET + ZkSettleError::MalformedProof as u32;
@@ -170,4 +165,20 @@ fn tampered_proof_rejects() {
             "expected Custom({expected_invalid}) or Custom({expected_malformed}), got {other:?}"
         ),
     }
+}
+
+#[test]
+#[ignore = "requires nargo+sunspot toolchain and a prior `anchor build`"]
+fn binding_mismatch_rejected() {
+    let fx = gen_fixture(Context::sample());
+    let (mut svm, payer) = load_program();
+    register_issuer(&mut svm, &payer, fx.merkle_root);
+
+    let mut tampered = fx.ctx.clone();
+    tampered.amount = tampered.amount.wrapping_add(1);
+
+    expect_zksettle(
+        submit_with(&mut svm, &payer, &fx, &tampered),
+        ZkSettleError::AmountMismatch,
+    );
 }

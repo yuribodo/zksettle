@@ -30,7 +30,19 @@ pub mod zksettle {
         ctx: Context<VerifyProof>,
         proof_and_witness: Vec<u8>,
         nullifier_hash: [u8; 32],
+        mint: Pubkey,
+        epoch: u64,
+        recipient: Pubkey,
+        amount: u64,
     ) -> Result<()> {
-        instructions::verify_proof::handler(ctx, proof_and_witness, nullifier_hash)
+        instructions::verify_proof::handler(
+            ctx,
+            proof_and_witness,
+            nullifier_hash,
+            mint,
+            epoch,
+            recipient,
+            amount,
+        )
     }
 }
