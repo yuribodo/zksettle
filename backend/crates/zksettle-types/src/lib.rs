@@ -16,10 +16,10 @@ pub mod error;
 pub mod events;
 pub mod policy;
 
-pub use accounts::{Attestation, Issuer, Nullifier};
+pub use accounts::{CompressedAttestation, CompressedNullifier, Issuer};
 pub use credential::{Credential, CredentialCommitment};
 pub use error::ZksettleError;
-pub use events::ProofSettled;
+pub use events::{AttestationChecked, ProofSettled};
 pub use policy::Policy;
 
 /// A Solana public key — 32 raw bytes. Matches the on-chain representation.
@@ -28,17 +28,22 @@ pub type Pubkey = [u8; 32];
 /// A 32-byte hash output (Poseidon, Merkle root, nullifier hash, etc.).
 pub type Hash32 = [u8; 32];
 
-/// PDA seed for issuer accounts. Must match `state::ISSUER_SEED` in the Anchor program.
+/// PDA seed for issuer accounts. Must match `state::seeds::ISSUER_SEED`.
 pub const ISSUER_SEED: &[u8] = b"issuer";
 
-/// PDA seed for nullifier marker accounts. Must match `state::NULLIFIER_SEED`.
+/// PDA seed for nullifier marker accounts. Must match `state::seeds::NULLIFIER_SEED`.
 pub const NULLIFIER_SEED: &[u8] = b"nullifier";
 
-/// PDA seed for attestation accounts. Must match `state::ATTESTATION_SEED`.
+/// PDA seed for attestation accounts. Must match `state::seeds::ATTESTATION_SEED`.
 pub const ATTESTATION_SEED: &[u8] = b"attestation";
 
-/// Index of the Merkle root inside the Groth16 public-input vector.
+// Groth16 public-input indices. Order and count must match
+// `backend/programs/zksettle/src/state/pubinputs.rs`.
 pub const MERKLE_ROOT_IDX: usize = 0;
-
-/// Index of the nullifier hash inside the Groth16 public-input vector.
 pub const NULLIFIER_IDX: usize = 1;
+pub const MINT_LO_IDX: usize = 2;
+pub const MINT_HI_IDX: usize = 3;
+pub const EPOCH_IDX: usize = 4;
+pub const RECIPIENT_LO_IDX: usize = 5;
+pub const RECIPIENT_HI_IDX: usize = 6;
+pub const AMOUNT_IDX: usize = 7;
