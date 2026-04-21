@@ -19,7 +19,7 @@ This document is the ground truth for what exists in the repository today versus
 | On-chain | `register_issuer` / `update_issuer_root` | **DONE** |
 | On-chain | `verify_proof` + nullifier PDA | **DONE** |
 | On-chain | `Attestation` PDA + `ProofSettled` event | **DONE** |
-| On-chain | Token-2022 Transfer Hook | **TODO** |
+| On-chain | Token-2022 Transfer Hook | **DONE (partial)** (staging + settle + execute + atomicity gate wired; fixtures pending) |
 | On-chain | `check_attestation` ix | **DONE** |
 | On-chain | Light Protocol compression (real) | **DONE** (write path + read path migrated; integration fixtures TODO) |
 | On-chain | Bubblegum cNFT attestation | **TODO** |
@@ -114,7 +114,7 @@ What's still missing: **integration-test coverage of the Light-CPI paths**. `tes
 - **Zero-nullifier guard** — `verify_proof` rejects `nullifier_hash == [0u8; 32]` with `ZeroNullifier`, mirroring the `ZeroMerkleRoot` guard at issuer registration. **DONE.**
 - **Nullifier context binding (ADR-020)** — circuit now derives `nullifier = Poseidon2(private_key, mint_lo, mint_hi, epoch, recipient_lo, recipient_hi, amount)` with all six limbs exposed as public inputs (BN254 fits them via 128-bit pubkey limb split). `verify_proof` rebinds these via `check_bindings` and guards epoch freshness (`EpochInFuture` / `EpochStale`, `MAX_EPOCH_LAG = 1`). Attestation PDA + `ProofSettled` event carry the tuple for off-chain indexing. **DONE.**
 - **CU budget bumped to <250K** per ADR-022 (post-ADR-020 pub-input fan-out). Measured: 219,767 CU. Safety ceiling in tests: 600K.
-- **Token-2022 Transfer Hook** (ADR-005, RF-03). No `transfer_hook` instruction, no `ExtraAccountMetaList` account, no mint configured with the hook. This is the Week 2 Friday checkpoint blocker.
+- **Token-2022 Transfer Hook** (ADR-005, RF-03). `transfer_hook`, `settle_hook`, `set_hook_payload`, and `init_extra_account_meta_list` instructions wired in `lib.rs`. Two-phase flow: client stages proof + Light args via `set_hook_payload` and Token-2022 Execute (or direct `settle_hook`) consumes the payload, runs `verify_bundle`, and mints compressed nullifier + attestation via Light CPI. Atomicity enforced via `spl_token_2022::extension::transfer_hook::TransferHookAccount.transferring` gate + source-token owner-program + base-owner checks. Known trade-offs: single outstanding payload per authority (TLV resolution only sees `amount: u64` + account keys, so PDAs cannot be nullifier-seeded); hook-path payload PDA is not closed (SPL passes `owner` as `new_readonly`, blocking `close = owner` — rent reclaim deferred, tracked as follow-up). **DONE (partial).** Remaining gap: gnark fixture + Token-2022 mint configured with the hook to lift the `#[ignore]` on `transfer_hook_smoke.rs`; hook-path CU measurement vs ADR-022 ceiling (probe feature `hook-cu-probe` exists, value unrecorded).
 - **`check_attestation(nullifier_hash)`** instruction (PRD §7 Componente 2, RF-02). Validates attestation PDA freshness within `MAX_ROOT_AGE_SLOTS`; emits `AttestationChecked` event. CPI-callable by transfer hooks / other programs. **DONE.**
 - **Light Protocol integration** (ADR-006). Write + read paths migrated; integration fixtures (gnark proof bytes + compressed-account setup + prover server) are the remaining gap — see §2.2.
 - **Bubblegum cNFT attestation** (ADR-019 / README Components row).
@@ -156,7 +156,7 @@ None of the six crates promised by the README layout exist:
 - [~] Circuit complete: membership + nullifier **done**; sanctions + jurisdiction + expiry **todo**
 - [x] Groth16 compile + VK generated (`default.vk` → `generated_vk.rs`)
 - [x] `verify_proof` with `alt_bn128` via Sunspot crate
-- [ ] Transfer Hook + Light Protocol nullifier tracking (PDA stand-in only)
+- [~] Transfer Hook + Light Protocol nullifier tracking — wiring done (stage + execute/settle + Light-CPI compressed nullifier + atomicity gate); gnark fixture + hook-configured Token-2022 mint pending
 - [ ] **Friday checkpoint:** end-to-end browser proof → on-chain verify
 
 ### Week 3 (25 Apr – 1 May) — Produto
@@ -187,7 +187,7 @@ None of the six crates promised by the README layout exist:
 ## 5. Critical path / blockers
 
 1. **ADR-002 trusted setup ceremony** — `circuits/README.md` notes the current SRS is gnark's in-memory default; ADR-002 mandates Hermez Powers of Tau for production. No MPC ceremony integration yet. Production-deploy gate.
-2. **Transfer Hook** — without it the entire atomicity story of ADR-005 collapses and no end-to-end demo is possible. Highest priority.
+2. ~~**Transfer Hook**~~ — on-chain wiring resolved: staging + settle/execute + Light-CPI compressed nullifier + `TransferHookAccount.transferring` atomicity gate. Remaining demo-blockers: gnark fixture bytes + Token-2022 mint configured with the hook to exercise `transfer_hook_smoke.rs`, and end-to-end browser proof → transfer flow.
 3. **`zksettle-types` + `zksettle-crypto`** — every off-chain service plus the SDK need shared types and Poseidon-compatible Merkle/SMT utilities. Scaffold these before issuer-service to avoid rework.
 4. **Issuer service + SDK prove path** — together they unlock the first end-to-end proof → verify flow. Target before Week 3 Friday checkpoint.
 5. **Indexer consuming `ProofSettled`** — event is already emitted; needs Helius webhook subscriber + Arweave persister to close the RF-06 loop.
@@ -226,7 +226,7 @@ For each divergence between the repository and `README.md` / `zksettle_prd.md` /
 | 5 | `scripts/fixture-noir/` ships a fixture generator; not in README repo-layout tree. | **Code** | Add `scripts/fixture-noir/` to the README layout block. |
 | 6 | README §Technology stack + repo layout call the dashboard "Vite + React"; PRD §8 calls it "Next.js + TypeScript". No frontend code yet. | **Doc self-conflict** | Pick **Vite + React** (SPA dashboard, no SSR requirement, smaller bundle, faster dev loop). Update PRD §8 to match README before scaffolding. |
 | 7 | ~~`check_attestation(wallet)` absent from `lib.rs`.~~ | **Resolved** | `check_attestation(nullifier_hash)` implemented. Validates attestation freshness via `MAX_ROOT_AGE_SLOTS`, emits `AttestationChecked`. CPI-ready for transfer hooks. |
-| 8 | Token-2022 Transfer Hook missing entirely; ADR-005 calls it non-bypassable core. | **Docs** | Implement `transfer_hook` + `ExtraAccountMetaList` in the Anchor program. Week 2 Friday checkpoint blocker. |
+| 8 | ~~Token-2022 Transfer Hook missing entirely; ADR-005 calls it non-bypassable core.~~ | **Resolved** | `set_hook_payload` + `init_extra_account_meta_list` + `settle_hook` + `transfer_hook` wired. Atomicity enforced via `spl_token_2022::extension::transfer_hook::TransferHookAccount.transferring` gate in `execute_hook_handler`. Compressed nullifier + attestation minted via Light CPI. Trade-offs (rent not reclaimed on hook path; one outstanding payload per authority) tracked in §3.1. Integration fixture still pending. |
 | 9 | `circuits/README.md` documents the SRS as gnark's in-memory default; ADR-002 mandates Hermez Powers of Tau for production. | **Docs** | Open a ceremony ticket; gate mainnet deploy on MPC integration. Hackathon demo may ship without it, production may not. |
 
 ### Docs adjusted in this pass

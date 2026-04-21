@@ -121,8 +121,8 @@ sequenceDiagram
 | **ZK Compliance Circuit** | Proves Merkle membership, sanctions exclusion, jurisdiction check, expiry, and nullifier — all in one Groth16 proof | `circuits/` (Noir) |
 
 > ℹ️ **Thin-slice in progress:** `circuits/src/main.nr` currently proves Merkle membership + nullifier only; sanctions, jurisdiction and expiry gates are still pending. The verifier key in `backend/programs/zksettle/src/generated_vk.rs` is regenerated from `default.vk` by `build.rs`, so any circuit change requires refreshing the VK before on-chain proofs will verify.
-| **Anchor program** | On-chain verifier. Exposes `register_issuer()`, `update_issuer_root()`, `verify_proof()`, `check_attestation()` | `backend/programs/zksettle/` (Rust) |
-| **Transfer Hook** | Atomic compliance gate for SPL transfers | `backend/programs/zksettle/` |
+| **Anchor program** | On-chain verifier. Exposes `register_issuer()`, `update_issuer_root()`, `verify_proof()`, `check_attestation()`, plus the hook flow: `init_extra_account_meta_list()`, `set_hook_payload()`, `settle_hook()`, `transfer_hook()` | `backend/programs/zksettle/` (Rust) |
+| **Transfer Hook** | Atomic Token-2022 compliance gate. Client stages a proof payload with `set_hook_payload`; Token-2022's Execute entry (or a direct `settle_hook` call) rebinds it to the live transfer, runs `verify_bundle`, and mints a compressed nullifier + attestation via Light CPI. Standalone calls are rejected via the `TransferHookAccount.transferring` flag. | `backend/programs/zksettle/` |
 | **Issuer service** | Credential issuance, Merkle tree maintenance, root publication | `backend/crates/issuer-service/` (Rust) |
 | **Indexer** | Consumes Helius webhooks, persists audit trail to Arweave | `backend/crates/indexer/` (Rust) |
 | **API gateway** | Billing, rate limiting, tier enforcement | `backend/crates/api-gateway/` (Rust) |
