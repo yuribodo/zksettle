@@ -27,15 +27,22 @@ pub const LIGHT_CPI_SIGNER: CpiSigner =
 pub mod zksettle {
     use super::*;
 
-    pub fn register_issuer(ctx: Context<RegisterIssuer>, merkle_root: [u8; 32]) -> Result<()> {
-        instructions::register_issuer::register_handler(ctx, merkle_root)
+    pub fn register_issuer(
+        ctx: Context<RegisterIssuer>,
+        merkle_root: [u8; 32],
+        sanctions_root: [u8; 32],
+        jurisdiction_root: [u8; 32],
+    ) -> Result<()> {
+        instructions::register_issuer::register_handler(ctx, merkle_root, sanctions_root, jurisdiction_root)
     }
 
     pub fn update_issuer_root(
         ctx: Context<UpdateIssuerRoot>,
         merkle_root: [u8; 32],
+        sanctions_root: [u8; 32],
+        jurisdiction_root: [u8; 32],
     ) -> Result<()> {
-        instructions::register_issuer::update_handler(ctx, merkle_root)
+        instructions::register_issuer::update_handler(ctx, merkle_root, sanctions_root, jurisdiction_root)
     }
 
     #[allow(clippy::too_many_arguments)]

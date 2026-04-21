@@ -1,18 +1,14 @@
-// Fixture generator for the zksettle thin-slice circuit.
+// Fixture generator for the zksettle compliance circuit.
 //
-// Same hash & merkle logic as `circuits/src/main.nr`, but with `merkle_root`
-// and `nullifier` exposed as the `pub` return tuple instead of as `pub`
-// inputs. Callers invoke `nargo execute` and parse the `Circuit output: [..]`
-// stdout line to obtain the two field elements that the main circuit's
-// Prover.toml should commit to.
+// Same hash & merkle logic as `circuits/src/main.nr`, but with computed roots
+// and nullifier exposed as the `pub` return tuple instead of as `pub` inputs.
+// Callers invoke `nargo execute` and parse the `Circuit output: [..]` stdout
+// line to obtain the field elements that the main circuit's Prover.toml should
+// commit to.
 //
-// Mirrors ADR-020 context binding: the nullifier absorbs (mint_lo, mint_hi,
-// epoch, recipient_lo, recipient_hi, amount) so the fixture matches the
-// canonical derivation in the main circuit.
+// Returns [merkle_root, nullifier, sanctions_root, jurisdiction_root].
 //
 // This package intentionally duplicates the sponge from the main circuit.
-// Sharing via a library would require an extra Nargo.toml member and
-// nothing about the thin slice needs that yet.
 // Keep sponge logic below in sync with circuits/src/main.nr.
 
 use std::hash::poseidon2_permutation;
@@ -69,6 +65,24 @@ fn poseidon2_hash<let N: u32>(input: [Field; N]) -> Field {
     sponge.squeeze()
 }
 
+fn compute_merkle_root(
+    leaf: Field,
+    path: [Field; MERKLE_DEPTH],
+    path_indices: [u1; MERKLE_DEPTH],
+) -> Field {
+    let mut cur = leaf;
+    for i in 0..MERKLE_DEPTH {
+        let sibling = path[i];
+        let (l, r) = if path_indices[i] == 0 {
+            (cur, sibling)
+        } else {
+            (sibling, cur)
+        };
+        cur = poseidon2_hash([l, r]);
+    }
+    cur
+}
+
 fn main(
     wallet: Field,
     path: [Field; MERKLE_DEPTH],
@@ -80,19 +94,14 @@ fn main(
     recipient_lo: Field,
     recipient_hi: Field,
     amount: Field,
-) -> pub [Field; 2] {
-    let leaf = poseidon2_hash([wallet]);
-
-    let mut cur = leaf;
-    for i in 0..MERKLE_DEPTH {
-        let sibling = path[i];
-        let (l, r) = if path_indices[i] == 0 {
-            (cur, sibling)
-        } else {
-            (sibling, cur)
-        };
-        cur = poseidon2_hash([l, r]);
-    }
+    sanctions_path: [Field; MERKLE_DEPTH],
+    sanctions_leaf_value: Field,
+    jurisdiction: Field,
+    jurisdiction_path: [Field; MERKLE_DEPTH],
+    jurisdiction_path_indices: [u1; MERKLE_DEPTH],
+) -> pub [Field; 4] {
+    let membership_leaf = poseidon2_hash([wallet]);
+    let merkle_root = compute_merkle_root(membership_leaf, path, path_indices);
 
     let nullifier = poseidon2_hash([
         private_key,
@@ -104,5 +113,23 @@ fn main(
         amount,
     ]);
 
-    [cur, nullifier]
+    let key_bits: [u1; 254] = membership_leaf.to_le_bits();
+    let mut sanctions_path_indices: [u1; MERKLE_DEPTH] = [0; MERKLE_DEPTH];
+    for i in 0..MERKLE_DEPTH {
+        sanctions_path_indices[i] = key_bits[i];
+    }
+    let sanctions_root = compute_merkle_root(
+        sanctions_leaf_value,
+        sanctions_path,
+        sanctions_path_indices,
+    );
+
+    let jurisdiction_leaf = poseidon2_hash([jurisdiction]);
+    let jurisdiction_root = compute_merkle_root(
+        jurisdiction_leaf,
+        jurisdiction_path,
+        jurisdiction_path_indices,
+    );
+
+    [merkle_root, nullifier, sanctions_root, jurisdiction_root]
 }

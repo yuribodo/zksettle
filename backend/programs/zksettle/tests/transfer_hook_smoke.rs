@@ -1,38 +1,198 @@
 #![cfg(feature = "light-tests")]
-//! Smoke skeleton for the Token-2022 `transfer_hook` path post-Light migration.
+//! Smoke tests for the Token-2022 transfer-hook path.
 //!
-//! Boots the `LightProgramTest` harness with compiled `zksettle.so` and
-//! documents the shape of the end-to-end flow. The body stays `#[ignore]`
-//! until we have gnark proof/witness fixtures bound to a real
-//! (mint, epoch, recipient, amount) tuple plus a Token-2022 mint with the
-//! hook configured.
-//!
-//! Flow under test (per ADR-020 + ADR-022):
-//!
-//! 1. `register_issuer(merkle_root)` — issuer PDA.
-//! 2. `init_extra_account_meta_list(mint)` — hook extra-accounts config.
-//! 3. `set_hook_payload(proof_and_witness, nullifier_hash, mint, epoch,
-//!    recipient, amount)` — writes payload PDA bound to the tx tuple.
-//! 4. `transfer_hook(amount, validity_proof, address_tree_info,
-//!    output_state_tree_index)` — invoked by Token-2022 Execute; binds
-//!    payload to live tx, runs `verify_bundle`, inserts compressed
-//!    `Nullifier` + `Attestation` via Light CPI, closes payload to owner.
-//! 5. Replay with same `nullifier_hash` fails at the Light CPI create-address
-//!    step (Poseidon(sk, mint, epoch, recipient, amount) collision).
+//! Tests here exercise `set_hook_payload` and `init_extra_account_meta_list`
+//! which don't need gnark fixtures. The full settle path (`transfer_hook` /
+//! `settle_hook`) stays `#[ignore]` until gnark proof + Token-2022 mint
+//! fixtures exist (see ADR-006 follow-up).
 //!
 //! Run with:
 //!
 //! ```bash
-//! cargo test --features light-tests --test transfer_hook_smoke -- --ignored --nocapture
+//! cargo test --features light-tests --test transfer_hook_smoke -- --nocapture
 //! ```
-//!
-//! Requires a running prover server and compiled `zksettle.so`.
 
-use light_program_test::{LightProgramTest, ProgramTestConfig};
+mod helpers;
 
-async fn boot_harness() -> LightProgramTest {
-    let config = ProgramTestConfig::new_v2(false, Some(vec![("zksettle", zksettle::ID)]));
-    LightProgramTest::new(config).await.expect("boot light harness")
+use anchor_lang::prelude::Pubkey;
+use light_program_test::{utils::assert::assert_rpc_error, Rpc};
+use solana_signer::Signer;
+
+use zksettle::error::ZkSettleError;
+use zksettle::instructions::transfer_hook::ExtraAccountMetaInput;
+
+use helpers::{
+    boot_harness, default_light_args, extra_meta_pda, funded_authority, hook_payload_pda,
+    init_extra_meta_ix, issuer_pda, register_ix, set_hook_payload_ix, ANCHOR_ERROR_CODE_OFFSET,
+};
+
+#[tokio::test]
+async fn set_hook_payload_stores_fields() {
+    let mut rpc = boot_harness().await;
+    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+
+    rpc.create_and_send_transaction(
+        &[register_ix(&authority.pubkey(), [1u8; 32])],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("register should succeed");
+
+    let issuer_key = issuer_pda(&authority.pubkey());
+    let mint = Pubkey::new_unique();
+    let recipient = Pubkey::new_unique();
+    let nullifier = {
+        let mut n = [0u8; 32];
+        n[0] = 1;
+        n
+    };
+
+    rpc.create_and_send_transaction(
+        &[set_hook_payload_ix(
+            &authority.pubkey(),
+            &issuer_key,
+            vec![0xaa; 256],
+            nullifier,
+            mint,
+            10,
+            recipient,
+            500,
+            default_light_args(),
+        )],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("set_hook_payload should succeed");
+
+    let (payload_key, _) = hook_payload_pda(&authority.pubkey());
+    let payload: zksettle::instructions::transfer_hook::HookPayload = rpc
+        .get_anchor_account(&payload_key)
+        .await
+        .expect("fetch")
+        .expect("payload must exist");
+
+    assert_eq!(payload.issuer, issuer_key);
+    assert_eq!(payload.nullifier_hash, nullifier);
+    assert_eq!(payload.mint, mint);
+    assert_eq!(payload.recipient, recipient);
+    assert_eq!(payload.amount, 500);
+    assert_eq!(payload.epoch, 10);
+    assert_eq!(payload.proof_and_witness.len(), 256);
+}
+
+#[tokio::test]
+async fn set_hook_payload_rejects_zero_nullifier() {
+    let mut rpc = boot_harness().await;
+    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+
+    rpc.create_and_send_transaction(
+        &[register_ix(&authority.pubkey(), [1u8; 32])],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("register");
+
+    let issuer_key = issuer_pda(&authority.pubkey());
+    let result = rpc
+        .create_and_send_transaction(
+            &[set_hook_payload_ix(
+                &authority.pubkey(),
+                &issuer_key,
+                vec![0xaa; 256],
+                [0u8; 32],
+                Pubkey::new_unique(),
+                10,
+                Pubkey::new_unique(),
+                500,
+                default_light_args(),
+            )],
+            &authority.pubkey(),
+            &[&authority],
+        )
+        .await;
+
+    assert_rpc_error(
+        result,
+        0,
+        ANCHOR_ERROR_CODE_OFFSET + ZkSettleError::ZeroNullifier as u32,
+    )
+    .expect("expected ZeroNullifier");
+}
+
+#[tokio::test]
+async fn set_hook_payload_rejects_zero_amount() {
+    let mut rpc = boot_harness().await;
+    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+
+    rpc.create_and_send_transaction(
+        &[register_ix(&authority.pubkey(), [1u8; 32])],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("register");
+
+    let issuer_key = issuer_pda(&authority.pubkey());
+    let mut nullifier = [0u8; 32];
+    nullifier[0] = 1;
+
+    let result = rpc
+        .create_and_send_transaction(
+            &[set_hook_payload_ix(
+                &authority.pubkey(),
+                &issuer_key,
+                vec![0xaa; 256],
+                nullifier,
+                Pubkey::new_unique(),
+                10,
+                Pubkey::new_unique(),
+                0,
+                default_light_args(),
+            )],
+            &authority.pubkey(),
+            &[&authority],
+        )
+        .await;
+
+    assert_rpc_error(
+        result,
+        0,
+        ANCHOR_ERROR_CODE_OFFSET + ZkSettleError::InvalidTransferAmount as u32,
+    )
+    .expect("expected InvalidTransferAmount");
+}
+
+#[tokio::test]
+async fn init_extra_account_meta_list_succeeds() {
+    let mut rpc = boot_harness().await;
+    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+    let mint = Pubkey::new_unique();
+
+    let meta = ExtraAccountMetaInput {
+        discriminator: 0,
+        address_config: authority.pubkey().to_bytes(),
+        is_signer: false,
+        is_writable: true,
+    };
+
+    rpc.create_and_send_transaction(
+        &[init_extra_meta_ix(&authority.pubkey(), &mint, vec![meta])],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("init_extra_account_meta_list should succeed");
+
+    let (meta_pda, _) = extra_meta_pda(&mint);
+    let info = rpc
+        .get_account(meta_pda)
+        .await
+        .expect("fetch meta account")
+        .expect("meta account must exist");
+    assert!(info.data.len() > 0, "TLV data should be non-empty");
 }
 
 #[tokio::test]
