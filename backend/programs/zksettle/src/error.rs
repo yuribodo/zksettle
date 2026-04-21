@@ -44,6 +44,18 @@ pub enum ZkSettleError {
     LightInvokeFailed,
     #[msg("Compressed account address is invalid")]
     InvalidLightAddress,
+    #[msg("Hook payload is malformed or too large")]
+    HookPayloadInvalid,
+    #[msg("Transfer amount must be non-zero")]
+    InvalidTransferAmount,
+    #[msg("Hook payload issuer does not match issuer account")]
+    IssuerMismatch,
+    #[msg("Source token account is not owned by Token-2022")]
+    NotToken2022,
+    #[msg("Transfer hook invoked outside an active Token-2022 transfer")]
+    NotInTransfer,
+    #[msg("Source token account owner does not match hook owner")]
+    OwnerMismatch,
 }
 
 /// Map an external Result's Err into a `ZkSettleError`, logging the source via

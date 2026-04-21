@@ -80,4 +80,64 @@ pub mod zksettle {
             compressed_attestation,
         )
     }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn set_hook_payload(
+        ctx: Context<SetHookPayload>,
+        proof_and_witness: Vec<u8>,
+        nullifier_hash: [u8; 32],
+        mint: Pubkey,
+        epoch: u64,
+        recipient: Pubkey,
+        amount: u64,
+        light_args: instructions::transfer_hook::StagedLightArgs,
+    ) -> Result<()> {
+        instructions::transfer_hook::set_hook_payload_handler(
+            ctx,
+            proof_and_witness,
+            nullifier_hash,
+            mint,
+            epoch,
+            recipient,
+            amount,
+            light_args,
+        )
+    }
+
+    pub fn init_extra_account_meta_list(
+        ctx: Context<InitExtraAccountMetaList>,
+        extras: Vec<instructions::transfer_hook::ExtraAccountMetaInput>,
+    ) -> Result<()> {
+        instructions::transfer_hook::init_extra_account_meta_list_handler(ctx, extras)
+    }
+
+    /// Direct-call settlement. Issuer authority signs and receives rent refund
+    /// from the closed payload. Not invoked by Token-2022.
+    pub fn settle_hook<'info>(
+        ctx: Context<'_, '_, '_, 'info, SettleHook<'info>>,
+        amount: u64,
+    ) -> Result<()> {
+        instructions::transfer_hook::settle_hook_handler(ctx, amount)
+    }
+
+    /// Token-2022 transfer-hook `Execute` entry. Discriminator matches
+    /// `sha256("spl-transfer-hook-interface:execute")[..8]` — value taken from
+    /// `spl_transfer_hook_interface::instruction::ExecuteInstruction::SPL_DISCRIMINATOR`.
+    ///
+    /// Replay barrier: Light compressed-address collision on
+    /// `[NULLIFIER_SEED, issuer, nullifier_hash]` (ADR-007 + ADR-020). The
+    /// payload PDA is NOT closed here — SPL passes `owner` as read-only
+    /// (`AccountMeta::new_readonly`), blocking `close = owner`, and no other
+    /// account in the Execute layout is writable enough to accept the rent.
+    /// Rent overhead is bounded (one `HookPayload` per outstanding settlement)
+    /// and is reclaimed via `settle_hook` when that path is used. Collecting
+    /// hook-path payload rent is tracked as future work (add a writable TLV
+    /// extra-account to serve as the close target).
+    #[instruction(discriminator = &[105, 37, 101, 197, 75, 251, 102, 26])]
+    pub fn transfer_hook<'info>(
+        ctx: Context<'_, '_, '_, 'info, ExecuteHook<'info>>,
+        amount: u64,
+    ) -> Result<()> {
+        instructions::transfer_hook::execute_hook_handler(ctx, amount)
+    }
 }

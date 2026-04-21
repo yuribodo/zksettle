@@ -447,6 +447,10 @@ Novo ceiling operacional: **<250K CU** por proof. A transação envelopa com `Se
 - Referências a <200K em ADR-001, README e PRD agora apontam para ADR-022 como fonte canônica.
 - Redução futura possível via (a) batch verification (ADR-009), (b) Poseidon on-chain do tuple para comprimir pub-inputs em um único field element.
 
+### Addendum — caminho `transfer_hook`
+
+O mesmo `verify_bundle` roda sob o hook do Token-2022, mas o path adiciona: (a) parse + check de extensões do `source_token` (`TransferHookAccount.transferring`), (b) Light-CPI emitindo nullifier + attestation comprimidos na mesma tx. O ceiling de 250K cobre apenas o Groth16. Hook-path total ainda não foi medido; feature `hook-cu-probe` emite `sol_log_compute_units` antes/depois do `verify_bundle` e do Light CPI. TODO: registrar o número aqui após o primeiro run do harness com fixture gnark + mint Token-2022 configurado.
+
 ---
 
 ## Resumo das propostas

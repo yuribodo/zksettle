@@ -110,19 +110,31 @@ O circuit prova simultaneamente:
 
 ### Componente 2 — Anchor Program
 
-Programa Rust/Anchor no Solana com três instruções:
+Programa Rust/Anchor no Solana. Instruções principais:
 
 ```rust
-register_issuer(merkle_root: [u8; 32], pubkey: Pubkey)
-verify_proof(proof: Vec<u8>, public_inputs: Vec<u8>) -> ComplianceAttestation
-check_attestation(wallet: Pubkey) -> bool
+register_issuer(merkle_root: [u8; 32])
+update_issuer_root(merkle_root: [u8; 32])
+verify_proof(proof_and_witness, nullifier_hash, mint, epoch, recipient, amount, ...)
+check_attestation(nullifier_hash, ...)
+
+// Transfer-hook flow (Componente 3)
+init_extra_account_meta_list(extras)            // uma vez por mint
+set_hook_payload(proof_and_witness, nullifier_hash, mint, epoch, recipient, amount, light_args)
+settle_hook(amount)                              // caminho direto (agents / testes)
+transfer_hook(amount)                            // entry do Token-2022 Execute
 ```
 
 Verificação usa `alt_bn128_pairing`, `alt_bn128_addition`, `alt_bn128_multiplication` — syscalls nativas do Solana. Custo: <250K CUs, <0.001 SOL (ver ADR-022).
 
 ### Componente 3 — Token Transfer Hook
 
-Integração com Token Extensions (Token-2022). Intercepta toda transferência SPL atomicamente. Aprovada com proof válida. Bloqueada sem proof. Impossível de contornar chamando SPL diretamente.
+Integração com Token Extensions (Token-2022). Fluxo em duas fases por limitação do `ExecuteInstruction` (dados = apenas `amount: u64`, sem espaço para proof + witness):
+
+1. Cliente invoca `set_hook_payload` na mesma transação, armazenando proof/witness + `StagedLightArgs` num PDA `[HOOK_PAYLOAD_SEED, authority.key()]`.
+2. Token-2022 invoca `transfer_hook(amount)` automaticamente durante o transfer. O handler rebinde o payload ao contexto da tx (mint, recipient, amount), chama `verify_bundle`, e cria nullifier + attestation comprimidos via Light CPI.
+
+Atomicidade enforçada com o flag `TransferHookAccount.transferring` do Token-2022 (chamadas stand-alone ao `transfer_hook` falham com `NotInTransfer`). Anti-replay via colisão de endereço Light compressed (ADR-007 + ADR-020). Caminho alternativo: `settle_hook` para chamadas diretas (off-chain agents, testes).
 
 ### Componente 4 — TypeScript SDK (@zksettle/sdk)
 
