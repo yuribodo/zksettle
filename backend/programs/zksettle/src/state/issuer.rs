@@ -12,3 +12,16 @@ impl Issuer {
     // authority (32) + merkle_root (32) + root_slot (8) + bump (1)
     pub const LEN: usize = 32 + 32 + 8 + 1;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn issuer_len_matches_fields() {
+        assert_eq!(
+            Issuer::LEN,
+            std::mem::size_of::<Pubkey>() + 32 + 8 + 1,
+        );
+    }
+}
