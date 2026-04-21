@@ -15,6 +15,13 @@ name = "zksettle"
 default = []
 placeholder-vk = []
 cpi = ["no-entrypoint"]
+# Integration tests that boot the full light-program-test harness.
+# Require a running prover server (see light-program-test README).
+light-tests = []
+# Emit `sol_log_compute_units` probes around the transfer_hook critical
+# section (verify_bundle + Light CPI) so CU cost can be measured under the
+# ADR-022 250K ceiling. Off by default to avoid probe overhead in prod.
+hook-cu-probe = []
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
@@ -25,19 +32,23 @@ custom-panic = []
 
 
 [dependencies]
-anchor-lang = "1.0.0"
+anchor-lang = { version = "=0.31.1", features = ["interface-instructions"] }
+anchor-spl = { version = "=0.31.1", features = ["token_2022"] }
 gnark-verifier-solana = { git = "https://github.com/reilabs/sunspot.git", rev = "ce4765ccdf050507874bbb544be992a11dc48ffc" }
+light-sdk = { version = "=0.23.0", default-features = false, features = ["v2", "anchor"] }
+borsh = "0.10.4"
+spl-tlv-account-resolution = "0.11.1"
+spl-transfer-hook-interface = "2.1.0"
 
 [build-dependencies]
 gnark-verifier-solana = { git = "https://github.com/reilabs/sunspot.git", rev = "ce4765ccdf050507874bbb544be992a11dc48ffc" }
 
 [dev-dependencies]
-litesvm = "0.10.0"
-solana-message = "3.0.1"
-solana-transaction = "3.0.2"
-solana-signer = "3.0.0"
-solana-keypair = "3.0.1"
-solana-instruction = "3.0.0"
+solana-signer = "2.2"
+solana-keypair = "2.2"
+solana-instruction = "2.3"
+light-program-test = "=0.23.0"
+tokio = { version = "1", features = ["full"] }
 
 
 [lints.rust]

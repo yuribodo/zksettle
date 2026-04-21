@@ -48,7 +48,7 @@ Nenhuma solução ZK de compliance existe nativamente no Solana. Todas as fintec
 2. Issuer adiciona wallet à Merkle tree privada, publica root on-chain via `register_issuer()`
 3. Ao transferir USDC-test, usuário gera ZK proof no browser em <10s — nenhum dado sai do dispositivo
 4. Usuário submete instrução SPL transfer com proof como extra account
-5. Transfer Hook intercepta, verifica Groth16 proof via alt_bn128 syscalls (<200K CUs, <$0.001)
+5. Transfer Hook intercepta, verifica Groth16 proof via alt_bn128 syscalls (<250K CUs, <$0.001; ver ADR-022)
 6. Transferência aprovada com proof válida, bloqueada sem proof ou com proof inválida
 7. `ComplianceAttestation` registrado on-chain como audit trail imutável
 
@@ -84,7 +84,7 @@ Exchange/stablecoin issuer prova cobertura total de saques sem revelar posiçõe
 ## 6. Requisitos não funcionais
 
 - **Latência de proof generation:** <10 segundos no browser (target: <5s)
-- **Custo de verificação on-chain:** <200K compute units, <0.001 SOL por proof
+- **Custo de verificação on-chain:** <250K compute units, <0.001 SOL por proof (ver ADR-022)
 - **Latência E2E:** proof + verificação + settlement <15 segundos total
 - **Privacidade:** zero PII transmitido para servidor. Proof gerada 100% client-side.
 - **Atomicidade:** Transfer Hook garante que transferência só executa se proof válida — impossível contornar chamando SPL diretamente
@@ -110,19 +110,31 @@ O circuit prova simultaneamente:
 
 ### Componente 2 — Anchor Program
 
-Programa Rust/Anchor no Solana com três instruções:
+Programa Rust/Anchor no Solana. Instruções principais:
 
 ```rust
-register_issuer(merkle_root: [u8; 32], pubkey: Pubkey)
-verify_proof(proof: Vec<u8>, public_inputs: Vec<u8>) -> ComplianceAttestation
-check_attestation(wallet: Pubkey) -> bool
+register_issuer(merkle_root: [u8; 32])
+update_issuer_root(merkle_root: [u8; 32])
+verify_proof(proof_and_witness, nullifier_hash, mint, epoch, recipient, amount, ...)
+check_attestation(nullifier_hash, ...)
+
+// Transfer-hook flow (Componente 3)
+init_extra_account_meta_list(extras)            // uma vez por mint
+set_hook_payload(proof_and_witness, nullifier_hash, mint, epoch, recipient, amount, light_args)
+settle_hook(amount)                              // caminho direto (agents / testes)
+transfer_hook(amount)                            // entry do Token-2022 Execute
 ```
 
-Verificação usa `alt_bn128_pairing`, `alt_bn128_addition`, `alt_bn128_multiplication` — syscalls nativas do Solana. Custo: <200K CUs, <0.001 SOL.
+Verificação usa `alt_bn128_pairing`, `alt_bn128_addition`, `alt_bn128_multiplication` — syscalls nativas do Solana. Custo: <250K CUs, <0.001 SOL (ver ADR-022).
 
 ### Componente 3 — Token Transfer Hook
 
-Integração com Token Extensions (Token-2022). Intercepta toda transferência SPL atomicamente. Aprovada com proof válida. Bloqueada sem proof. Impossível de contornar chamando SPL diretamente.
+Integração com Token Extensions (Token-2022). Fluxo em duas fases por limitação do `ExecuteInstruction` (dados = apenas `amount: u64`, sem espaço para proof + witness):
+
+1. Cliente invoca `set_hook_payload` na mesma transação, armazenando proof/witness + `StagedLightArgs` num PDA `[HOOK_PAYLOAD_SEED, authority.key()]`.
+2. Token-2022 invoca `transfer_hook(amount)` automaticamente durante o transfer. O handler rebinde o payload ao contexto da tx (mint, recipient, amount), chama `verify_bundle`, e cria nullifier + attestation comprimidos via Light CPI.
+
+Atomicidade enforçada com o flag `TransferHookAccount.transferring` do Token-2022 (chamadas stand-alone ao `transfer_hook` falham com `NotInTransfer`). Anti-replay via colisão de endereço Light compressed (ADR-007 + ADR-020). Caminho alternativo: `settle_hook` para chamadas diretas (off-chain agents, testes).
 
 ### Componente 4 — TypeScript SDK (@zksettle/sdk)
 

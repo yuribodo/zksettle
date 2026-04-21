@@ -1,0 +1,1 @@
+pub const MAX_ROOT_AGE_SLOTS: u64 = 432_000;

@@ -47,7 +47,7 @@ ZKSettle provides a production-ready compliance primitive on Solana:
 2. Issuer adds the wallet to a private Merkle tree and publishes the root on-chain via `register_issuer()`.
 3. When transferring USDC, the user generates a ZK proof locally in under 10 seconds. No data leaves the browser.
 4. The user submits a standard SPL transfer instruction with the proof attached as an extra account.
-5. The Transfer Hook intercepts the transfer, verifies the Groth16 proof via `alt_bn128` syscalls (<200K compute units, <$0.001). The thin-slice program uses Reilabs' [`gnark-verifier-solana`](https://github.com/reilabs/sunspot) (Sunspot) crate, which wraps those syscalls — we do not call them directly.
+5. The Transfer Hook intercepts the transfer, verifies the Groth16 proof via `alt_bn128` syscalls (<250K compute units, <$0.001; see ADR-022). The thin-slice program uses Reilabs' [`gnark-verifier-solana`](https://github.com/reilabs/sunspot) (Sunspot) crate, which wraps those syscalls — we do not call them directly.
 6. Valid proof → transfer settles atomically. Invalid proof → transfer reverts.
 7. A `ComplianceAttestation` is emitted on-chain as an immutable audit record.
 
@@ -99,7 +99,7 @@ sequenceDiagram
     U->>T: SPL transfer ix + proof as extra account
     T->>H: invoke Transfer Hook atomically
     H->>P: verify_proof(proof, public_inputs)
-    P->>P: alt_bn128_pairing check<br/>(<200K CU)
+    P->>P: alt_bn128_pairing check<br/>(<250K CU)
     P->>P: nullifier check (Light Protocol)
     alt proof valid
         P-->>H: ComplianceAttestation
@@ -121,8 +121,8 @@ sequenceDiagram
 | **ZK Compliance Circuit** | Proves Merkle membership, sanctions exclusion, jurisdiction check, expiry, and nullifier — all in one Groth16 proof | `circuits/` (Noir) |
 
 > ℹ️ **Thin-slice in progress:** `circuits/src/main.nr` currently proves Merkle membership + nullifier only; sanctions, jurisdiction and expiry gates are still pending. The verifier key in `backend/programs/zksettle/src/generated_vk.rs` is regenerated from `default.vk` by `build.rs`, so any circuit change requires refreshing the VK before on-chain proofs will verify.
-| **Anchor program** | On-chain verifier. Exposes `register_issuer()`, `update_issuer_root()`, `verify_proof()`, `check_attestation()` | `backend/programs/zksettle/` (Rust) |
-| **Transfer Hook** | Atomic compliance gate for SPL transfers | `backend/programs/zksettle/` |
+| **Anchor program** | On-chain verifier. Exposes `register_issuer()`, `update_issuer_root()`, `verify_proof()`, `check_attestation()`, plus the hook flow: `init_extra_account_meta_list()`, `set_hook_payload()`, `settle_hook()`, `transfer_hook()` | `backend/programs/zksettle/` (Rust) |
+| **Transfer Hook** | Atomic Token-2022 compliance gate. Client stages a proof payload with `set_hook_payload`; Token-2022's Execute entry (or a direct `settle_hook` call) rebinds it to the live transfer, runs `verify_bundle`, and mints a compressed nullifier + attestation via Light CPI. Standalone calls are rejected via the `TransferHookAccount.transferring` flag. | `backend/programs/zksettle/` |
 | **Issuer service** | Credential issuance, Merkle tree maintenance, root publication | `backend/crates/issuer-service/` (Rust) |
 | **Indexer** | Consumes Helius webhooks, persists audit trail to Arweave | `backend/crates/indexer/` (Rust) |
 | **API gateway** | Billing, rate limiting, tier enforcement | `backend/crates/api-gateway/` (Rust) |

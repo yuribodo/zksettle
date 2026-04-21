@@ -6,6 +6,10 @@
 // stdout line to obtain the two field elements that the main circuit's
 // Prover.toml should commit to.
 //
+// Mirrors ADR-020 context binding: the nullifier absorbs (mint_lo, mint_hi,
+// epoch, recipient_lo, recipient_hi, amount) so the fixture matches the
+// canonical derivation in the main circuit.
+//
 // This package intentionally duplicates the sponge from the main circuit.
 // Sharing via a library would require an extra Nargo.toml member and
 // nothing about the thin slice needs that yet.
@@ -70,7 +74,12 @@ fn main(
     path: [Field; MERKLE_DEPTH],
     path_indices: [u1; MERKLE_DEPTH],
     private_key: Field,
-    context_hash: Field,
+    mint_lo: Field,
+    mint_hi: Field,
+    epoch: Field,
+    recipient_lo: Field,
+    recipient_hi: Field,
+    amount: Field,
 ) -> pub [Field; 2] {
     let leaf = poseidon2_hash([wallet]);
 
@@ -85,7 +94,15 @@ fn main(
         cur = poseidon2_hash([l, r]);
     }
 
-    let nullifier = poseidon2_hash([private_key, context_hash]);
+    let nullifier = poseidon2_hash([
+        private_key,
+        mint_lo,
+        mint_hi,
+        epoch,
+        recipient_lo,
+        recipient_hi,
+        amount,
+    ]);
 
     [cur, nullifier]
 }

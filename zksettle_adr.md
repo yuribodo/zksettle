@@ -17,7 +17,7 @@ O Solana tem syscalls nativas para operações em curvas elípticas específicas
 Usar **BN254** (Barreto-Naehrig 254-bit) via syscalls `alt_bn128` do Solana.
 
 ### Por quê
-BN254 é a única curva com syscalls nativas no Solana (`alt_bn128_pairing`, `alt_bn128_addition`, `alt_bn128_multiplication`), tornando verificação Groth16 extremamente barata — menos de 200K compute units por proof. Sem as syscalls, a verificação exigiria milhões de CUs, tornando o produto economicamente inviável.
+BN254 é a única curva com syscalls nativas no Solana (`alt_bn128_pairing`, `alt_bn128_addition`, `alt_bn128_multiplication`), tornando verificação Groth16 extremamente barata — menos de 250K compute units por proof (ver ADR-022 para decomposição pós-ADR-020). Sem as syscalls, a verificação exigiria milhões de CUs, tornando o produto economicamente inviável.
 
 ### Alternativas rejeitadas
 - **BLS12-381:** Não tem syscalls no Solana. Verificação custaria ordens de magnitude mais.
@@ -389,7 +389,7 @@ Padrão Solana reconhecido. Desbloqueia UC-03/UC-04 sem mudança do core. Requer
 
 ## ADR-020 · Nullifier context explícito
 
-**Status:** Proposto (refina ADR-007, PRD §15.12)
+**Status:** Decidido / implementado (refina ADR-007, PRD §15.12)
 
 ### Contexto
 ADR-007 define `nullifier = Poseidon(sk, context_hash)` mas deixa `context` sem especificação formal. Risco de implementações inconsistentes.
@@ -404,6 +404,52 @@ Bind a `recipient` + `amount` previne front-running (ver threat model). `epoch_i
 
 ### Consequências
 Circuit recebe `mint`, `epoch`, `recipient`, `amount` como public inputs. Hook valida esses campos vs tx corrente. Fix de segurança crítico além da melhoria de UX.
+
+### Notas de implementação
+- Pubkeys são split em dois limbs de 128 bits (`*_lo`, `*_hi`) para caber no scalar field BN254 (~254 bits). `pubkey_to_limbs` garante correspondência byte-a-byte entre circuit witness e ix args.
+- `epoch` e `amount` viajam como `u64` (pad BE em 32 bytes) via `u64_to_field_bytes`.
+- `verify_proof` valida frescor de `epoch`: `EpochInFuture` se `epoch > current_epoch`, `EpochStale` se `current_epoch - epoch > MAX_EPOCH_LAG` (hoje `1` — ontem vale, amanhã não).
+- Sem Transfer Hook, a vinculação é apenas tão forte quanto os args que o chamador passa. Ligação completa (campos preenchidos pelo `TransferHookInstruction`) é seguida em IMPLEMENTATION_STATUS §5.
+
+---
+
+## ADR-021 · Janela de frescor da Merkle root do issuer
+
+**Status:** Decidido (implementado)
+
+### Contexto
+`Issuer.root_slot` é gravado em `register_issuer` e `update_issuer_root` mas até então não era consultado por `verify_proof`. Uma root antiga (issuer offline, chave comprometida sem rotação, ou qualquer janela onde a árvore off-chain diverge da root on-chain) permanecia válida indefinidamente, alargando a janela de ataque para provas obsoletas.
+
+### Decisão
+`verify_proof` rejeita com `ZkSettleError::RootStale` quando
+`current_slot - issuer.root_slot > MAX_ROOT_AGE_SLOTS`,
+com `MAX_ROOT_AGE_SLOTS = 432_000` (~48h a 400ms/slot). O issuer é forçado a republicar a root via `update_issuer_root` em cadência de no máximo 48h; falha em republicar pausa verificações sem exigir upgrade on-chain.
+
+### Consequências
+- Issuer service precisa de job de rotação de root com SLA < 48h.
+- Zero impacto em testes existentes — o fixture roda imediatamente após `register_issuer`.
+- Ajustável: configuração futura pode expor `MAX_ROOT_AGE_SLOTS` por issuer caso diferentes verticais peçam janelas distintas.
+
+---
+
+## ADR-022 · Orçamento de CU pós-ADR-020
+
+**Status:** Decidido
+
+### Contexto
+ADR-001 fixou o custo de verificação em <200K CU. ADR-020 expandiu os public inputs de 2 → 8 (mint limbs, epoch, recipient limbs, amount), cada um exigindo preparação de MSM adicional durante a verificação Groth16. Medição pós-implementação: **219.767 CU** (`cargo test --test verify valid_proof_passes`).
+
+### Decisão
+Novo ceiling operacional: **<250K CU** por proof. A transação envelopa com `SetComputeUnitLimit(600_000)` para margem de segurança e overhead da budget instruction. O valor de 600K é o safety ceiling nos testes, não o custo esperado.
+
+### Consequências
+- Custo SOL/proof sobe proporcionalmente (ainda <$0.001 a preços atuais de CU).
+- Referências a <200K em ADR-001, README e PRD agora apontam para ADR-022 como fonte canônica.
+- Redução futura possível via (a) batch verification (ADR-009), (b) Poseidon on-chain do tuple para comprimir pub-inputs em um único field element.
+
+### Addendum — caminho `transfer_hook`
+
+O mesmo `verify_bundle` roda sob o hook do Token-2022, mas o path adiciona: (a) parse + check de extensões do `source_token` (`TransferHookAccount.transferring`), (b) Light-CPI emitindo nullifier + attestation comprimidos na mesma tx. O ceiling de 250K cobre apenas o Groth16. Hook-path total ainda não foi medido; feature `hook-cu-probe` emite `sol_log_compute_units` antes/depois do `verify_bundle` e do Light CPI. TODO: registrar o número aqui após o primeiro run do harness com fixture gnark + mint Token-2022 configurado.
 
 ---
 
@@ -422,4 +468,6 @@ Circuit recebe `mint`, `epoch`, `recipient`, `amount` como public inputs. Hook v
 | ADR-017 | Audit epoch merkleizado | Alta (produção) |
 | ADR-018 | W3C VC + BBS+ | Alta (pitch) |
 | ADR-019 | cNFT attestation | Média (UC-03/04) |
-| ADR-020 | Nullifier context explícito | Crítica (security) |
+| ADR-020 | Nullifier context explícito | Decidido (security) |
+| ADR-021 | Janela de frescor da Merkle root | Decidido (security) |
+| ADR-022 | Orçamento de CU pós-ADR-020 | Decidido (perf) |
