@@ -3,7 +3,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum ZksettleError {
-    // Mirrors of on-chain `ZkSettleError` variants.
+    // Mirrors on-chain `ZkSettleError` (capital K) — lowercase here per Rust convention.
     #[error("proof or witness bytes are malformed")]
     MalformedProof,
     #[error("proof verification failed")]

@@ -27,3 +27,27 @@ pub const EPOCH_IDX: usize = 4;
 pub const RECIPIENT_LO_IDX: usize = 5;
 pub const RECIPIENT_HI_IDX: usize = 6;
 pub const AMOUNT_IDX: usize = 7;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn seed_constants_match_on_chain() {
+        assert_eq!(ISSUER_SEED, b"issuer");
+        assert_eq!(NULLIFIER_SEED, b"nullifier");
+        assert_eq!(ATTESTATION_SEED, b"attestation");
+    }
+
+    #[test]
+    fn pubinput_indices_match_on_chain() {
+        assert_eq!(MERKLE_ROOT_IDX, 0);
+        assert_eq!(NULLIFIER_IDX, 1);
+        assert_eq!(MINT_LO_IDX, 2);
+        assert_eq!(MINT_HI_IDX, 3);
+        assert_eq!(EPOCH_IDX, 4);
+        assert_eq!(RECIPIENT_LO_IDX, 5);
+        assert_eq!(RECIPIENT_HI_IDX, 6);
+        assert_eq!(AMOUNT_IDX, 7);
+    }
+}

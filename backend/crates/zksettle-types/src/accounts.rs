@@ -31,6 +31,8 @@ impl Issuer {
 )]
 pub struct CompressedNullifier;
 
+/// Persisted compressed account state (LightDiscriminator). Same fields as ProofSettled
+/// but represents account data, not an event payload.
 #[derive(
     Clone, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize,
 )]
@@ -46,13 +48,15 @@ pub struct CompressedAttestation {
     pub payer: Pubkey,
 }
 
+impl CompressedAttestation {
+    pub const LEN: usize = 32 + 32 + 32 + 32 + 32 + 8 + 8 + 8 + 32;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const ON_CHAIN_ISSUER_LEN: usize = 73;
-    const COMPRESSED_ATTESTATION_PAYLOAD_LEN: usize = 32 + 32 + 32 + 32 + 32 + 8 + 8 + 8 + 32;
-
     #[test]
     fn issuer_len_matches_on_chain() {
         assert_eq!(Issuer::LEN, ON_CHAIN_ISSUER_LEN);
@@ -93,7 +97,7 @@ mod tests {
             payer: [8u8; 32],
         };
         let bytes = borsh::to_vec(&original).expect("serialize");
-        assert_eq!(bytes.len(), COMPRESSED_ATTESTATION_PAYLOAD_LEN);
+        assert_eq!(bytes.len(), CompressedAttestation::LEN);
         let decoded = CompressedAttestation::try_from_slice(&bytes).expect("deserialize");
         assert_eq!(decoded, original);
     }

@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Hash32, Pubkey};
 
+/// Event payload emitted on-chain (#[event]). Same fields as CompressedAttestation
+/// but represents a logged event, not persisted account state.
 #[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
 pub struct ProofSettled {
     pub issuer: Pubkey,
