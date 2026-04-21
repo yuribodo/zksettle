@@ -6,8 +6,8 @@ use gnark_verifier_solana::witness::GnarkWitness;
 
 use crate::error::ZkSettleError;
 use crate::state::{
-    AMOUNT_IDX, EPOCH_IDX, MERKLE_ROOT_IDX, MINT_HI_IDX, MINT_LO_IDX, NULLIFIER_IDX,
-    RECIPIENT_HI_IDX, RECIPIENT_LO_IDX,
+    AMOUNT_IDX, EPOCH_IDX, JURISDICTION_ROOT_IDX, MERKLE_ROOT_IDX, MINT_HI_IDX, MINT_LO_IDX,
+    NULLIFIER_IDX, RECIPIENT_HI_IDX, RECIPIENT_LO_IDX, SANCTIONS_ROOT_IDX, TIMESTAMP_IDX,
 };
 
 use super::bindings::{check_bindings, BindingInputs};
@@ -84,10 +84,13 @@ mod bindings {
         epoch: u64,
         recipient: &Pubkey,
         amount: u64,
-    ) -> GnarkWitness<8> {
+        sanctions_root: [u8; 32],
+        jurisdiction_root: [u8; 32],
+        timestamp: u64,
+    ) -> GnarkWitness<11> {
         let (mint_lo, mint_hi) = pubkey_to_limbs(mint);
         let (rcpt_lo, rcpt_hi) = pubkey_to_limbs(recipient);
-        let mut entries = [[0u8; 32]; 8];
+        let mut entries = [[0u8; 32]; 11];
         entries[MERKLE_ROOT_IDX] = root;
         entries[NULLIFIER_IDX] = nullifier;
         entries[MINT_LO_IDX] = mint_lo;
@@ -96,6 +99,9 @@ mod bindings {
         entries[RECIPIENT_LO_IDX] = rcpt_lo;
         entries[RECIPIENT_HI_IDX] = rcpt_hi;
         entries[AMOUNT_IDX] = u64_to_field_bytes(amount);
+        entries[SANCTIONS_ROOT_IDX] = sanctions_root;
+        entries[JURISDICTION_ROOT_IDX] = jurisdiction_root;
+        entries[TIMESTAMP_IDX] = u64_to_field_bytes(timestamp);
         GnarkWitness { entries }
     }
 
@@ -106,6 +112,9 @@ mod bindings {
         epoch: u64,
         rcpt: Pubkey,
         amt: u64,
+        sanctions_root: [u8; 32],
+        jurisdiction_root: [u8; 32],
+        timestamp: u64,
     }
 
     fn sample() -> Sample {
@@ -116,6 +125,9 @@ mod bindings {
             epoch: 42,
             rcpt: Pubkey::new_unique(),
             amt: 1_000,
+            sanctions_root: [3u8; 32],
+            jurisdiction_root: [4u8; 32],
+            timestamp: 1_700_000_000,
         }
     }
 
@@ -128,10 +140,13 @@ mod bindings {
                 epoch: self.epoch,
                 recipient: &self.rcpt,
                 amount: self.amt,
+                sanctions_root: &self.sanctions_root,
+                jurisdiction_root: &self.jurisdiction_root,
+                timestamp: self.timestamp,
             }
         }
 
-        fn witness(&self) -> GnarkWitness<8> {
+        fn witness(&self) -> GnarkWitness<11> {
             witness_for(
                 self.root,
                 self.nul,
@@ -139,6 +154,9 @@ mod bindings {
                 self.epoch,
                 &self.rcpt,
                 self.amt,
+                self.sanctions_root,
+                self.jurisdiction_root,
+                self.timestamp,
             )
         }
     }
@@ -218,6 +236,41 @@ mod bindings {
             ERROR_CODE_OFFSET + ZkSettleError::AmountMismatch as u32,
         );
     }
+
+    #[test]
+    fn rejects_sanctions_root_mismatch() {
+        let s = sample();
+        let other = [9u8; 32];
+        let mut inputs = s.inputs();
+        inputs.sanctions_root = &other;
+        assert_eq!(
+            err_code(check_bindings(&s.witness(), &inputs)),
+            ERROR_CODE_OFFSET + ZkSettleError::SanctionsRootMismatch as u32,
+        );
+    }
+
+    #[test]
+    fn rejects_jurisdiction_root_mismatch() {
+        let s = sample();
+        let other = [9u8; 32];
+        let mut inputs = s.inputs();
+        inputs.jurisdiction_root = &other;
+        assert_eq!(
+            err_code(check_bindings(&s.witness(), &inputs)),
+            ERROR_CODE_OFFSET + ZkSettleError::JurisdictionRootMismatch as u32,
+        );
+    }
+
+    #[test]
+    fn rejects_timestamp_mismatch() {
+        let s = sample();
+        let mut inputs = s.inputs();
+        inputs.timestamp += 1;
+        assert_eq!(
+            err_code(check_bindings(&s.witness(), &inputs)),
+            ERROR_CODE_OFFSET + ZkSettleError::TimestampMismatch as u32,
+        );
+    }
 }
 
 mod epoch {
@@ -283,7 +336,7 @@ mod epoch {
 
     #[test]
     fn expected_witness_len_formula() {
-        assert_eq!(expected_witness_len(8), 268);
+        assert_eq!(expected_witness_len(11), 364);
     }
 
     #[test]

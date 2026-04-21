@@ -24,10 +24,13 @@ pub struct ProofSettled {
     pub issuer: Pubkey,
     pub nullifier_hash: [u8; 32],
     pub merkle_root: [u8; 32],
+    pub sanctions_root: [u8; 32],
+    pub jurisdiction_root: [u8; 32],
     pub mint: Pubkey,
     pub recipient: Pubkey,
     pub amount: u64,
     pub epoch: u64,
+    pub timestamp: u64,
     pub slot: u64,
     pub payer: Pubkey,
 }
@@ -50,6 +53,9 @@ pub fn handler<'info>(
     let clock = Clock::get()?;
     validate_epoch(clock.unix_timestamp, epoch)?;
 
+    let timestamp = u64::try_from(clock.unix_timestamp)
+        .map_err(|_| error!(ZkSettleError::NegativeClock))?;
+
     verify_bundle(
         &proof_and_witness,
         &BindingInputs {
@@ -59,11 +65,16 @@ pub fn handler<'info>(
             epoch,
             recipient: &recipient,
             amount,
+            sanctions_root: &ctx.accounts.issuer.sanctions_root,
+            jurisdiction_root: &ctx.accounts.issuer.jurisdiction_root,
+            timestamp,
         },
     )?;
 
     let issuer_key = ctx.accounts.issuer.key();
     let merkle_root = ctx.accounts.issuer.merkle_root;
+    let sanctions_root = ctx.accounts.issuer.sanctions_root;
+    let jurisdiction_root = ctx.accounts.issuer.jurisdiction_root;
     let payer_key = ctx.accounts.payer.key();
     let slot = clock.slot;
     let issuer_bytes = issuer_key.to_bytes();
@@ -110,10 +121,13 @@ pub fn handler<'info>(
     attestation_account.issuer = issuer_bytes;
     attestation_account.nullifier_hash = nullifier_hash;
     attestation_account.merkle_root = merkle_root;
+    attestation_account.sanctions_root = sanctions_root;
+    attestation_account.jurisdiction_root = jurisdiction_root;
     attestation_account.mint = mint.to_bytes();
     attestation_account.recipient = recipient.to_bytes();
     attestation_account.amount = amount;
     attestation_account.epoch = epoch;
+    attestation_account.timestamp = timestamp;
     attestation_account.slot = slot;
     attestation_account.payer = payer_key.to_bytes();
 
@@ -139,10 +153,13 @@ pub fn handler<'info>(
         issuer: issuer_key,
         nullifier_hash,
         merkle_root,
+        sanctions_root,
+        jurisdiction_root,
         mint,
         recipient,
         amount,
         epoch,
+        timestamp,
         slot,
         payer: payer_key,
     });

@@ -4,16 +4,16 @@ use gnark_verifier_solana::{proof::GnarkProof, verifier::GnarkVerifier, witness:
 use crate::error::ZkSettleError;
 use crate::generated_vk::VK;
 use crate::state::{
-    AMOUNT_IDX, EPOCH_IDX, MERKLE_ROOT_IDX, MINT_HI_IDX, MINT_LO_IDX, NULLIFIER_IDX,
-    RECIPIENT_HI_IDX, RECIPIENT_LO_IDX,
+    AMOUNT_IDX, EPOCH_IDX, JURISDICTION_ROOT_IDX, MERKLE_ROOT_IDX, MINT_HI_IDX, MINT_LO_IDX,
+    NULLIFIER_IDX, RECIPIENT_HI_IDX, RECIPIENT_LO_IDX, SANCTIONS_ROOT_IDX, TIMESTAMP_IDX,
 };
 
 use super::helpers::{expected_witness_len, pubkey_to_limbs, split_proof_and_witness, u64_to_field_bytes};
 
 #[cfg(not(feature = "placeholder-vk"))]
 const _: () = assert!(
-    VK.nr_pubinputs == 8,
-    "ADR-020 VK must expose exactly 8 public inputs",
+    VK.nr_pubinputs == 11,
+    "VK must expose exactly 11 public inputs",
 );
 
 #[cfg_attr(feature = "placeholder-vk", allow(dead_code))]
@@ -24,6 +24,9 @@ pub(crate) struct BindingInputs<'a> {
     pub epoch: u64,
     pub recipient: &'a Pubkey,
     pub amount: u64,
+    pub sanctions_root: &'a [u8; 32],
+    pub jurisdiction_root: &'a [u8; 32],
+    pub timestamp: u64,
 }
 
 #[cfg_attr(feature = "placeholder-vk", allow(dead_code))]
@@ -31,7 +34,7 @@ pub(crate) fn check_bindings<const N: usize>(
     witness: &GnarkWitness<N>,
     inputs: &BindingInputs<'_>,
 ) -> Result<()> {
-    require!(N > AMOUNT_IDX, ZkSettleError::WitnessTooShort);
+    require!(N > TIMESTAMP_IDX, ZkSettleError::WitnessTooShort);
     require!(
         &witness.entries[MERKLE_ROOT_IDX] == inputs.merkle_root,
         ZkSettleError::MerkleRootMismatch
@@ -63,6 +66,21 @@ pub(crate) fn check_bindings<const N: usize>(
         ZkSettleError::AmountMismatch
     );
 
+    require!(
+        &witness.entries[SANCTIONS_ROOT_IDX] == inputs.sanctions_root,
+        ZkSettleError::SanctionsRootMismatch
+    );
+
+    require!(
+        &witness.entries[JURISDICTION_ROOT_IDX] == inputs.jurisdiction_root,
+        ZkSettleError::JurisdictionRootMismatch
+    );
+
+    require!(
+        witness.entries[TIMESTAMP_IDX] == u64_to_field_bytes(inputs.timestamp),
+        ZkSettleError::TimestampMismatch
+    );
+
     Ok(())
 }
 
@@ -70,6 +88,7 @@ pub(crate) fn check_bindings<const N: usize>(
 /// the Groth16 pairing check. Returns `Ok(())` only if every binding matches
 /// and the proof verifies. Shared by `verify_proof` handler and the Token-2022
 /// transfer hook.
+#[cfg_attr(feature = "placeholder-vk", allow(unused_variables))]
 pub(crate) fn verify_bundle(proof_and_witness: &[u8], bindings: &BindingInputs<'_>) -> Result<()> {
     const NR_INPUTS: usize = VK.nr_pubinputs;
     const N_COMMITMENTS: usize = VK.commitment_keys.len();

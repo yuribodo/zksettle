@@ -30,6 +30,15 @@ pub fn extra_meta_pda(mint: &Pubkey) -> (Pubkey, u8) {
 }
 
 pub fn register_ix(authority: &Pubkey, merkle_root: [u8; 32]) -> Instruction {
+    register_ix_full(authority, merkle_root, [10u8; 32], [11u8; 32])
+}
+
+pub fn register_ix_full(
+    authority: &Pubkey,
+    merkle_root: [u8; 32],
+    sanctions_root: [u8; 32],
+    jurisdiction_root: [u8; 32],
+) -> Instruction {
     Instruction {
         program_id: zksettle::ID,
         accounts: vec![
@@ -37,18 +46,38 @@ pub fn register_ix(authority: &Pubkey, merkle_root: [u8; 32]) -> Instruction {
             AccountMeta::new(issuer_pda(authority), false),
             AccountMeta::new_readonly(system_program::ID, false),
         ],
-        data: RegisterIssuerIx { merkle_root }.data(),
+        data: RegisterIssuerIx {
+            merkle_root,
+            sanctions_root,
+            jurisdiction_root,
+        }
+        .data(),
     }
 }
 
 pub fn update_ix(authority: &Pubkey, issuer: &Pubkey, merkle_root: [u8; 32]) -> Instruction {
+    update_ix_full(authority, issuer, merkle_root, [10u8; 32], [11u8; 32])
+}
+
+pub fn update_ix_full(
+    authority: &Pubkey,
+    issuer: &Pubkey,
+    merkle_root: [u8; 32],
+    sanctions_root: [u8; 32],
+    jurisdiction_root: [u8; 32],
+) -> Instruction {
     Instruction {
         program_id: zksettle::ID,
         accounts: vec![
             AccountMeta::new_readonly(*authority, true),
             AccountMeta::new(*issuer, false),
         ],
-        data: UpdateIssuerRootIx { merkle_root }.data(),
+        data: UpdateIssuerRootIx {
+            merkle_root,
+            sanctions_root,
+            jurisdiction_root,
+        }
+        .data(),
     }
 }
 
