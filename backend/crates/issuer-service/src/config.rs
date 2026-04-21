@@ -1,0 +1,29 @@
+use std::net::SocketAddr;
+
+pub struct Config {
+    pub rpc_url: String,
+    pub keypair_path: String,
+    pub program_id: String,
+    pub rotation_interval_secs: u64,
+    pub listen_addr: SocketAddr,
+}
+
+impl Config {
+    pub fn from_env() -> Self {
+        Self {
+            rpc_url: env_or("RPC_URL", "http://127.0.0.1:8899"),
+            keypair_path: env_or("KEYPAIR_PATH", "~/.config/solana/id.json"),
+            program_id: env_or("PROGRAM_ID", "zkSet11ezkSet11ezkSet11ezkSet11ezkSet11ezkS"),
+            rotation_interval_secs: env_or("ROTATION_INTERVAL_SECS", "43200")
+                .parse()
+                .expect("ROTATION_INTERVAL_SECS must be u64"),
+            listen_addr: env_or("LISTEN_ADDR", "0.0.0.0:3000")
+                .parse()
+                .expect("LISTEN_ADDR must be valid socket addr"),
+        }
+    }
+}
+
+fn env_or(key: &str, default: &str) -> String {
+    std::env::var(key).unwrap_or_else(|_| default.to_string())
+}
