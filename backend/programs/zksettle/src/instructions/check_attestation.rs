@@ -110,10 +110,13 @@ mod tests {
             issuer: issuer.to_bytes(),
             nullifier_hash: nullifier,
             merkle_root: [0u8; 32],
+            sanctions_root: [0u8; 32],
+            jurisdiction_root: [0u8; 32],
             mint: [0u8; 32],
             recipient: [0u8; 32],
             amount: 100,
             epoch: 1,
+            timestamp: 0,
             slot,
             payer: [0u8; 32],
         }

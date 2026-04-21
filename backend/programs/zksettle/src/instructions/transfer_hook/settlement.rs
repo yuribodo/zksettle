@@ -87,6 +87,9 @@ fn run_settlement(sctx: SettlementContext<'_, '_>) -> Result<()> {
         clock.unix_timestamp,
     )?;
 
+    let timestamp = u64::try_from(clock.unix_timestamp)
+        .map_err(|_| error!(ZkSettleError::NegativeClock))?;
+
     cu_probe!("pre-verify_bundle");
     verify_bundle(
         &sctx.payload.proof_and_witness,
@@ -97,6 +100,9 @@ fn run_settlement(sctx: SettlementContext<'_, '_>) -> Result<()> {
             epoch: sctx.payload.epoch,
             recipient: &sctx.payload.recipient,
             amount: sctx.payload.amount,
+            sanctions_root: &sctx.issuer.sanctions_root,
+            jurisdiction_root: &sctx.issuer.jurisdiction_root,
+            timestamp,
         },
     )?;
     cu_probe!("post-verify_bundle");
@@ -104,6 +110,8 @@ fn run_settlement(sctx: SettlementContext<'_, '_>) -> Result<()> {
     let nullifier_hash = sctx.payload.nullifier_hash;
     let issuer_bytes = sctx.issuer_key.to_bytes();
     let merkle_root = sctx.issuer.merkle_root;
+    let sanctions_root = sctx.issuer.sanctions_root;
+    let jurisdiction_root = sctx.issuer.jurisdiction_root;
     let payload_amount = sctx.payload.amount;
     let payload_epoch = sctx.payload.epoch;
     let slot = clock.slot;
@@ -151,10 +159,13 @@ fn run_settlement(sctx: SettlementContext<'_, '_>) -> Result<()> {
     attestation_account.issuer = issuer_bytes;
     attestation_account.nullifier_hash = nullifier_hash;
     attestation_account.merkle_root = merkle_root;
+    attestation_account.sanctions_root = sanctions_root;
+    attestation_account.jurisdiction_root = jurisdiction_root;
     attestation_account.mint = sctx.mint_key.to_bytes();
     attestation_account.recipient = sctx.destination_key.to_bytes();
     attestation_account.amount = payload_amount;
     attestation_account.epoch = payload_epoch;
+    attestation_account.timestamp = timestamp;
     attestation_account.slot = slot;
     attestation_account.payer = sctx.payer_key.to_bytes();
 
@@ -181,10 +192,13 @@ fn run_settlement(sctx: SettlementContext<'_, '_>) -> Result<()> {
         issuer: sctx.issuer_key,
         nullifier_hash,
         merkle_root,
+        sanctions_root,
+        jurisdiction_root,
         mint: sctx.mint_key,
         recipient: sctx.destination_key,
         amount: payload_amount,
         epoch: payload_epoch,
+        timestamp,
         slot,
         payer: sctx.payer_key,
     });

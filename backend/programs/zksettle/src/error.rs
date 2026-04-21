@@ -56,6 +56,16 @@ pub enum ZkSettleError {
     NotInTransfer,
     #[msg("Source token account owner does not match hook owner")]
     OwnerMismatch,
+    #[msg("Witness sanctions_root does not match issuer PDA")]
+    SanctionsRootMismatch,
+    #[msg("Witness jurisdiction_root does not match issuer PDA")]
+    JurisdictionRootMismatch,
+    #[msg("Witness timestamp does not match on-chain clock")]
+    TimestampMismatch,
+    #[msg("Sanctions root must be non-zero")]
+    ZeroSanctionsRoot,
+    #[msg("Jurisdiction root must be non-zero")]
+    ZeroJurisdictionRoot,
 }
 
 /// Map an external Result's Err into a `ZkSettleError`, logging the source via
@@ -118,6 +128,11 @@ mod tests {
             ZkSettleError::NotToken2022 as u32,
             ZkSettleError::NotInTransfer as u32,
             ZkSettleError::OwnerMismatch as u32,
+            ZkSettleError::SanctionsRootMismatch as u32,
+            ZkSettleError::JurisdictionRootMismatch as u32,
+            ZkSettleError::TimestampMismatch as u32,
+            ZkSettleError::ZeroSanctionsRoot as u32,
+            ZkSettleError::ZeroJurisdictionRoot as u32,
         ];
         let mut seen = std::collections::HashSet::new();
         for code in &codes {
