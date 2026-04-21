@@ -106,6 +106,37 @@ pub(crate) fn check_bindings<const N: usize>(
     Ok(())
 }
 
+/// Parse `proof_and_witness`, rebind public inputs to `BindingInputs`, and run
+/// the Groth16 pairing check. Returns `Ok(())` only if every binding matches
+/// and the proof verifies. Shared by `verify_proof` handler and the Token-2022
+/// transfer hook.
+pub(crate) fn verify_bundle(
+    proof_and_witness: &[u8],
+    bindings: &BindingInputs<'_>,
+) -> Result<()> {
+    const NR_INPUTS: usize = VK.nr_pubinputs;
+    const N_COMMITMENTS: usize = VK.commitment_keys.len();
+
+    let witness_len = expected_witness_len(NR_INPUTS);
+    let (proof_bytes, witness_bytes) = split_proof_and_witness(proof_and_witness, witness_len)?;
+
+    let proof = GnarkProof::<N_COMMITMENTS>::from_bytes(proof_bytes)
+        .map_err(crate::map_light_err!("Gnark proof parse error", ZkSettleError::MalformedProof))?;
+
+    let witness = GnarkWitness::from_bytes(witness_bytes)
+        .map_err(crate::map_light_err!("Gnark witness parse error", ZkSettleError::MalformedProof))?;
+
+    #[cfg(not(feature = "placeholder-vk"))]
+    check_bindings(&witness, bindings)?;
+
+    let mut verifier: GnarkVerifier<NR_INPUTS> = GnarkVerifier::new(&VK);
+    verifier
+        .verify(proof, witness)
+        .map_err(crate::map_light_err!("Proof verification failed", ZkSettleError::ProofInvalid))?;
+
+    Ok(())
+}
+
 #[derive(Accounts)]
 pub struct VerifyProof<'info> {
     #[account(mut)]
@@ -148,9 +179,6 @@ pub fn handler<'info>(
     address_tree_info: PackedAddressTreeInfo,
     output_state_tree_index: u8,
 ) -> Result<()> {
-    const NR_INPUTS: usize = VK.nr_pubinputs;
-    const N_COMMITMENTS: usize = VK.commitment_keys.len();
-
     require!(nullifier_hash != [0u8; 32], ZkSettleError::ZeroNullifier);
 
     let clock = Clock::get()?;
@@ -162,18 +190,8 @@ pub fn handler<'info>(
         ZkSettleError::EpochStale
     );
 
-    let witness_len = expected_witness_len(NR_INPUTS);
-    let (proof_bytes, witness_bytes) = split_proof_and_witness(&proof_and_witness, witness_len)?;
-
-    let proof = GnarkProof::<N_COMMITMENTS>::from_bytes(proof_bytes)
-        .map_err(crate::map_light_err!("Gnark proof parse error", ZkSettleError::MalformedProof))?;
-
-    let witness = GnarkWitness::from_bytes(witness_bytes)
-        .map_err(crate::map_light_err!("Gnark witness parse error", ZkSettleError::MalformedProof))?;
-
-    #[cfg(not(feature = "placeholder-vk"))]
-    check_bindings(
-        &witness,
+    verify_bundle(
+        &proof_and_witness,
         &BindingInputs {
             merkle_root: &ctx.accounts.issuer.merkle_root,
             nullifier_hash: &nullifier_hash,
@@ -183,12 +201,6 @@ pub fn handler<'info>(
             amount,
         },
     )?;
-
-    let mut verifier: GnarkVerifier<NR_INPUTS> = GnarkVerifier::new(&VK);
-
-    verifier
-        .verify(proof, witness)
-        .map_err(crate::map_light_err!("Proof verification failed", ZkSettleError::ProofInvalid))?;
 
     let issuer_key = ctx.accounts.issuer.key();
     let merkle_root = ctx.accounts.issuer.merkle_root;
