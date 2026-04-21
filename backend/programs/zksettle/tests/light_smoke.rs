@@ -22,60 +22,18 @@
 //! `backend/target/deploy/zksettle.so` so `ProgramTestConfig::new_v2` can
 //! load it by name.
 
-use anchor_lang::prelude::Pubkey;
-use anchor_lang::{system_program, InstructionData};
-use light_program_test::{utils::assert::assert_rpc_error, LightProgramTest, ProgramTestConfig, Rpc};
-use solana_instruction::{AccountMeta, Instruction};
-use solana_keypair::Keypair;
+mod helpers;
+
+use light_program_test::{utils::assert::assert_rpc_error, Rpc};
 use solana_signer::Signer;
 
 use zksettle::error::ZkSettleError;
-use zksettle::instruction::{
-    RegisterIssuer as RegisterIssuerIx, UpdateIssuerRoot as UpdateIssuerRootIx,
+use zksettle::state::Issuer;
+
+use helpers::{
+    boot_harness, funded_authority, issuer_pda, register_ix, update_ix,
+    ANCHOR_ERROR_CODE_OFFSET, CONSTRAINT_SEEDS,
 };
-use zksettle::state::{Issuer, ISSUER_SEED};
-
-const ANCHOR_ERROR_CODE_OFFSET: u32 = 6000;
-// Anchor built-in `ErrorCode::ConstraintSeeds`.
-const CONSTRAINT_SEEDS: u32 = 2006;
-
-fn issuer_pda(authority: &Pubkey) -> Pubkey {
-    Pubkey::find_program_address(&[ISSUER_SEED, authority.as_ref()], &zksettle::ID).0
-}
-
-fn register_ix(authority: &Pubkey, merkle_root: [u8; 32]) -> Instruction {
-    Instruction {
-        program_id: zksettle::ID,
-        accounts: vec![
-            AccountMeta::new(*authority, true),
-            AccountMeta::new(issuer_pda(authority), false),
-            AccountMeta::new_readonly(system_program::ID, false),
-        ],
-        data: RegisterIssuerIx { merkle_root }.data(),
-    }
-}
-
-fn update_ix(authority: &Pubkey, issuer: &Pubkey, merkle_root: [u8; 32]) -> Instruction {
-    Instruction {
-        program_id: zksettle::ID,
-        accounts: vec![
-            AccountMeta::new_readonly(*authority, true),
-            AccountMeta::new(*issuer, false),
-        ],
-        data: UpdateIssuerRootIx { merkle_root }.data(),
-    }
-}
-
-async fn boot_harness() -> LightProgramTest {
-    let config = ProgramTestConfig::new_v2(false, Some(vec![("zksettle", zksettle::ID)]));
-    LightProgramTest::new(config).await.expect("boot light harness")
-}
-
-async fn funded_authority(rpc: &mut LightProgramTest, lamports: u64) -> Keypair {
-    let kp = Keypair::new();
-    rpc.airdrop_lamports(&kp.pubkey(), lamports).await.expect("airdrop");
-    kp
-}
 
 #[tokio::test]
 async fn harness_boots_with_zksettle_program() {
