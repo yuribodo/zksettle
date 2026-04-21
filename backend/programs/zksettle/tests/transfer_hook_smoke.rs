@@ -12,124 +12,19 @@
 //! cargo test --features light-tests --test transfer_hook_smoke -- --nocapture
 //! ```
 
+mod helpers;
+
 use anchor_lang::prelude::Pubkey;
-use anchor_lang::{system_program, InstructionData};
-use light_program_test::{utils::assert::assert_rpc_error, LightProgramTest, ProgramTestConfig, Rpc};
-use solana_instruction::{AccountMeta, Instruction};
-use solana_keypair::Keypair;
+use light_program_test::{utils::assert::assert_rpc_error, Rpc};
 use solana_signer::Signer;
 
 use zksettle::error::ZkSettleError;
-use zksettle::instruction::{
-    InitExtraAccountMetaList as InitMetaIx, RegisterIssuer as RegisterIssuerIx,
-    SetHookPayload as SetPayloadIx,
+use zksettle::instructions::transfer_hook::ExtraAccountMetaInput;
+
+use helpers::{
+    boot_harness, default_light_args, extra_meta_pda, funded_authority, hook_payload_pda,
+    init_extra_meta_ix, issuer_pda, register_ix, set_hook_payload_ix, ANCHOR_ERROR_CODE_OFFSET,
 };
-use zksettle::instructions::transfer_hook::{
-    ExtraAccountMetaInput, StagedLightArgs, EXTRA_ACCOUNT_META_LIST_SEED, HOOK_PAYLOAD_SEED,
-};
-use zksettle::state::ISSUER_SEED;
-
-const ANCHOR_ERROR_CODE_OFFSET: u32 = 6000;
-
-fn issuer_pda(authority: &Pubkey) -> Pubkey {
-    Pubkey::find_program_address(&[ISSUER_SEED, authority.as_ref()], &zksettle::ID).0
-}
-
-fn hook_payload_pda(owner: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[HOOK_PAYLOAD_SEED, owner.as_ref()], &zksettle::ID)
-}
-
-fn extra_meta_pda(mint: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(
-        &[EXTRA_ACCOUNT_META_LIST_SEED, mint.as_ref()],
-        &zksettle::ID,
-    )
-}
-
-fn register_ix(authority: &Pubkey, merkle_root: [u8; 32]) -> Instruction {
-    Instruction {
-        program_id: zksettle::ID,
-        accounts: vec![
-            AccountMeta::new(*authority, true),
-            AccountMeta::new(issuer_pda(authority), false),
-            AccountMeta::new_readonly(system_program::ID, false),
-        ],
-        data: RegisterIssuerIx { merkle_root }.data(),
-    }
-}
-
-fn set_hook_payload_ix(
-    owner: &Pubkey,
-    issuer_key: &Pubkey,
-    proof_and_witness: Vec<u8>,
-    nullifier_hash: [u8; 32],
-    mint: Pubkey,
-    epoch: u64,
-    recipient: Pubkey,
-    amount: u64,
-    light_args: StagedLightArgs,
-) -> Instruction {
-    let (payload_pda, _) = hook_payload_pda(owner);
-    Instruction {
-        program_id: zksettle::ID,
-        accounts: vec![
-            AccountMeta::new(*owner, true),
-            AccountMeta::new(payload_pda, false),
-            AccountMeta::new_readonly(*issuer_key, false),
-            AccountMeta::new_readonly(system_program::ID, false),
-        ],
-        data: SetPayloadIx {
-            proof_and_witness,
-            nullifier_hash,
-            mint,
-            epoch,
-            recipient,
-            amount,
-            light_args,
-        }
-        .data(),
-    }
-}
-
-fn init_extra_meta_ix(
-    authority: &Pubkey,
-    mint: &Pubkey,
-    extras: Vec<ExtraAccountMetaInput>,
-) -> Instruction {
-    let (meta_pda, _) = extra_meta_pda(mint);
-    Instruction {
-        program_id: zksettle::ID,
-        accounts: vec![
-            AccountMeta::new(*authority, true),
-            AccountMeta::new(meta_pda, false),
-            AccountMeta::new_readonly(*mint, false),
-            AccountMeta::new_readonly(system_program::ID, false),
-        ],
-        data: InitMetaIx { extras }.data(),
-    }
-}
-
-fn default_light_args() -> StagedLightArgs {
-    StagedLightArgs {
-        proof_present: false,
-        proof_bytes: [0u8; 128],
-        address_mt_index: 0,
-        address_queue_index: 0,
-        address_root_index: 0,
-        output_state_tree_index: 0,
-    }
-}
-
-async fn boot_harness() -> LightProgramTest {
-    let config = ProgramTestConfig::new_v2(false, Some(vec![("zksettle", zksettle::ID)]));
-    LightProgramTest::new(config).await.expect("boot light harness")
-}
-
-async fn funded_authority(rpc: &mut LightProgramTest, lamports: u64) -> Keypair {
-    let kp = Keypair::new();
-    rpc.airdrop_lamports(&kp.pubkey(), lamports).await.expect("airdrop");
-    kp
-}
 
 #[tokio::test]
 async fn set_hook_payload_stores_fields() {
