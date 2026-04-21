@@ -1,0 +1,13 @@
+[package]
+name = "zksettle-crypto"
+version = "0.1.0"
+edition = "2021"
+description = "Poseidon2 hash, Merkle tree, and SMT utilities matching the zksettle Noir circuit"
+
+[dependencies]
+ark-bn254 = "0.5"
+ark-ff = "0.5"
+thiserror = "2"
+
+[dev-dependencies]
+hex = "0.4"
