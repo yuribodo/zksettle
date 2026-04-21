@@ -27,6 +27,17 @@ pub(crate) const fn expected_witness_len(nr_inputs: usize) -> usize {
     GNARK_WITNESS_HEADER_LEN + nr_inputs * 32
 }
 
+pub(crate) fn validate_epoch(unix_timestamp: i64, epoch: u64) -> Result<()> {
+    require!(unix_timestamp >= 0, ZkSettleError::NegativeClock);
+    let current_epoch = (unix_timestamp / EPOCH_LEN_SECS) as u64;
+    require!(epoch <= current_epoch, ZkSettleError::EpochInFuture);
+    require!(
+        current_epoch.saturating_sub(epoch) <= MAX_EPOCH_LAG,
+        ZkSettleError::EpochStale
+    );
+    Ok(())
+}
+
 #[cfg(not(feature = "placeholder-vk"))]
 const _: () = assert!(
     VK.nr_pubinputs == 8,
@@ -182,13 +193,7 @@ pub fn handler<'info>(
     require!(nullifier_hash != [0u8; 32], ZkSettleError::ZeroNullifier);
 
     let clock = Clock::get()?;
-    require!(clock.unix_timestamp >= 0, ZkSettleError::NegativeClock);
-    let current_epoch = (clock.unix_timestamp / EPOCH_LEN_SECS) as u64;
-    require!(epoch <= current_epoch, ZkSettleError::EpochInFuture);
-    require!(
-        current_epoch.saturating_sub(epoch) <= MAX_EPOCH_LAG,
-        ZkSettleError::EpochStale
-    );
+    validate_epoch(clock.unix_timestamp, epoch)?;
 
     verify_bundle(
         &proof_and_witness,
@@ -476,6 +481,78 @@ mod tests {
                 err_code(check_bindings(&s.witness(), &inputs)),
                 ERROR_CODE_OFFSET + ZkSettleError::AmountMismatch as u32,
             );
+        }
+    }
+
+    mod epoch {
+        use super::*;
+
+        #[test]
+        fn accepts_current_epoch() {
+            let ts = EPOCH_LEN_SECS * 10;
+            assert!(validate_epoch(ts, 10).is_ok());
+        }
+
+        #[test]
+        fn accepts_one_behind_at_max_lag() {
+            let ts = EPOCH_LEN_SECS * 10;
+            assert!(validate_epoch(ts, 10 - MAX_EPOCH_LAG).is_ok());
+        }
+
+        #[test]
+        fn rejects_future() {
+            let ts = EPOCH_LEN_SECS * 10;
+            assert_eq!(
+                err_code(validate_epoch(ts, 11)),
+                ERROR_CODE_OFFSET + ZkSettleError::EpochInFuture as u32,
+            );
+        }
+
+        #[test]
+        fn rejects_stale() {
+            let ts = EPOCH_LEN_SECS * 10;
+            assert_eq!(
+                err_code(validate_epoch(ts, 10 - MAX_EPOCH_LAG - 1)),
+                ERROR_CODE_OFFSET + ZkSettleError::EpochStale as u32,
+            );
+        }
+
+        #[test]
+        fn boundary_exactly_at_max_lag() {
+            let ts = EPOCH_LEN_SECS * 5;
+            assert!(validate_epoch(ts, 5 - MAX_EPOCH_LAG).is_ok());
+        }
+
+        #[test]
+        fn boundary_one_past_max_lag() {
+            let ts = EPOCH_LEN_SECS * 5;
+            assert_eq!(
+                err_code(validate_epoch(ts, 5 - MAX_EPOCH_LAG - 1)),
+                ERROR_CODE_OFFSET + ZkSettleError::EpochStale as u32,
+            );
+        }
+
+        #[test]
+        fn rejects_negative_clock() {
+            assert_eq!(
+                err_code(validate_epoch(-1, 0)),
+                ERROR_CODE_OFFSET + ZkSettleError::NegativeClock as u32,
+            );
+        }
+
+        #[test]
+        fn at_zero_timestamp() {
+            assert!(validate_epoch(0, 0).is_ok());
+        }
+
+        #[test]
+        fn expected_witness_len_formula() {
+            assert_eq!(expected_witness_len(8), 268);
+        }
+
+        #[test]
+        fn expected_witness_len_zero_inputs() {
+            assert_eq!(expected_witness_len(0), 12);
         }
     }
 }

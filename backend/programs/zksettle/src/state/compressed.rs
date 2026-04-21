@@ -24,3 +24,50 @@ pub struct CompressedAttestation {
     pub slot: u64,
     pub payer: [u8; 32],
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use borsh::{BorshDeserialize, BorshSerialize};
+
+    #[test]
+    fn nullifier_default_roundtrip() {
+        let n = CompressedNullifier::default();
+        let bytes = n.try_to_vec().unwrap();
+        let n2 = CompressedNullifier::try_from_slice(&bytes).unwrap();
+        assert_eq!(format!("{n:?}"), format!("{n2:?}"));
+    }
+
+    #[test]
+    fn attestation_default_roundtrip() {
+        let a = CompressedAttestation::default();
+        let bytes = a.try_to_vec().unwrap();
+        let a2 = CompressedAttestation::try_from_slice(&bytes).unwrap();
+        assert_eq!(a2.amount, 0);
+        assert_eq!(a2.epoch, 0);
+        assert_eq!(a2.slot, 0);
+    }
+
+    #[test]
+    fn attestation_serialization_stability() {
+        let a = CompressedAttestation {
+            issuer: [1u8; 32],
+            nullifier_hash: [2u8; 32],
+            merkle_root: [3u8; 32],
+            mint: [4u8; 32],
+            recipient: [5u8; 32],
+            amount: 999,
+            epoch: 42,
+            slot: 12345,
+            payer: [6u8; 32],
+        };
+        let bytes = a.try_to_vec().unwrap();
+        let a2 = CompressedAttestation::try_from_slice(&bytes).unwrap();
+        assert_eq!(a2.issuer, [1u8; 32]);
+        assert_eq!(a2.nullifier_hash, [2u8; 32]);
+        assert_eq!(a2.amount, 999);
+        assert_eq!(a2.epoch, 42);
+        assert_eq!(a2.slot, 12345);
+        assert_eq!(a2.payer, [6u8; 32]);
+    }
+}

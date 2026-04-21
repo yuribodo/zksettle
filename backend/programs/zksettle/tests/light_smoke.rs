@@ -172,3 +172,137 @@ async fn update_by_wrong_authority_rejects() {
     assert_rpc_error(result, 0, CONSTRAINT_SEEDS)
         .expect("expected ConstraintSeeds when attacker targets victim PDA");
 }
+
+#[tokio::test]
+async fn update_rejects_zero_root() {
+    let mut rpc = boot_harness().await;
+    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+
+    rpc.create_and_send_transaction(
+        &[register_ix(&authority.pubkey(), [1u8; 32])],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("register_issuer should succeed");
+
+    let issuer_key = issuer_pda(&authority.pubkey());
+    let result = rpc
+        .create_and_send_transaction(
+            &[update_ix(&authority.pubkey(), &issuer_key, [0u8; 32])],
+            &authority.pubkey(),
+            &[&authority],
+        )
+        .await;
+
+    assert_rpc_error(
+        result,
+        0,
+        ANCHOR_ERROR_CODE_OFFSET + ZkSettleError::ZeroMerkleRoot as u32,
+    )
+    .expect("expected ZeroMerkleRoot on zero-root update");
+}
+
+#[tokio::test]
+async fn double_register_same_authority_fails() {
+    let mut rpc = boot_harness().await;
+    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+
+    rpc.create_and_send_transaction(
+        &[register_ix(&authority.pubkey(), [1u8; 32])],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("first register should succeed");
+
+    let result = rpc
+        .create_and_send_transaction(
+            &[register_ix(&authority.pubkey(), [2u8; 32])],
+            &authority.pubkey(),
+            &[&authority],
+        )
+        .await;
+
+    assert!(result.is_err(), "second register with same authority must fail (PDA already exists)");
+}
+
+#[tokio::test]
+async fn register_then_update_preserves_authority_and_bump() {
+    let mut rpc = boot_harness().await;
+    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+
+    rpc.create_and_send_transaction(
+        &[register_ix(&authority.pubkey(), [3u8; 32])],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("register should succeed");
+
+    let issuer_key = issuer_pda(&authority.pubkey());
+    let before: Issuer = rpc
+        .get_anchor_account(&issuer_key)
+        .await
+        .expect("fetch")
+        .expect("exists");
+
+    rpc.create_and_send_transaction(
+        &[update_ix(&authority.pubkey(), &issuer_key, [4u8; 32])],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("update should succeed");
+
+    let after: Issuer = rpc
+        .get_anchor_account(&issuer_key)
+        .await
+        .expect("fetch")
+        .expect("exists");
+
+    assert_eq!(before.authority, after.authority);
+    assert_eq!(before.bump, after.bump);
+    assert_ne!(before.merkle_root, after.merkle_root);
+    assert_eq!(after.merkle_root, [4u8; 32]);
+}
+
+#[tokio::test]
+async fn update_advances_root_slot() {
+    let mut rpc = boot_harness().await;
+    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+
+    rpc.create_and_send_transaction(
+        &[register_ix(&authority.pubkey(), [1u8; 32])],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("register should succeed");
+
+    let issuer_key = issuer_pda(&authority.pubkey());
+    let before: Issuer = rpc
+        .get_anchor_account(&issuer_key)
+        .await
+        .expect("fetch")
+        .expect("exists");
+
+    rpc.create_and_send_transaction(
+        &[update_ix(&authority.pubkey(), &issuer_key, [2u8; 32])],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("update should succeed");
+
+    let after: Issuer = rpc
+        .get_anchor_account(&issuer_key)
+        .await
+        .expect("fetch")
+        .expect("exists");
+
+    assert!(
+        after.root_slot >= before.root_slot,
+        "root_slot must advance on update"
+    );
+}

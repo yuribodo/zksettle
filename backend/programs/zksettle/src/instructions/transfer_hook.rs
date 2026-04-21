@@ -14,9 +14,7 @@ use spl_transfer_hook_interface::instruction::ExecuteInstruction;
 
 use crate::constants::MAX_ROOT_AGE_SLOTS;
 use crate::error::ZkSettleError;
-use crate::instructions::verify_proof::{
-    verify_bundle, BindingInputs, ProofSettled, EPOCH_LEN_SECS, MAX_EPOCH_LAG,
-};
+use crate::instructions::verify_proof::{verify_bundle, BindingInputs, ProofSettled};
 use crate::state::{
     compressed::{CompressedAttestation, CompressedNullifier},
     Issuer, ATTESTATION_SEED, ISSUER_SEED, NULLIFIER_SEED,
@@ -340,33 +338,47 @@ struct SettlementContext<'a, 'info> {
     remaining: &'a [AccountInfo<'info>],
 }
 
-fn run_settlement(sctx: SettlementContext<'_, '_>) -> Result<()> {
-    require!(sctx.amount > 0, ZkSettleError::InvalidTransferAmount);
-    require!(sctx.payload.mint == sctx.mint_key, ZkSettleError::MintMismatch);
+pub(crate) fn validate_settlement_guards(
+    payload_mint: &Pubkey,
+    payload_recipient: &Pubkey,
+    payload_amount: u64,
+    payload_epoch: u64,
+    actual_mint: &Pubkey,
+    actual_destination: &Pubkey,
+    actual_amount: u64,
+    issuer_root_slot: u64,
+    current_slot: u64,
+    unix_timestamp: i64,
+) -> Result<()> {
+    require!(actual_amount > 0, ZkSettleError::InvalidTransferAmount);
+    require!(*payload_mint == *actual_mint, ZkSettleError::MintMismatch);
     require!(
-        sctx.payload.recipient == sctx.destination_key,
+        *payload_recipient == *actual_destination,
         ZkSettleError::RecipientMismatch
     );
+    require!(payload_amount == actual_amount, ZkSettleError::AmountMismatch);
     require!(
-        sctx.payload.amount == sctx.amount,
-        ZkSettleError::AmountMismatch
-    );
-
-    let clock = Clock::get()?;
-    require!(
-        clock.slot.saturating_sub(sctx.issuer.root_slot) <= MAX_ROOT_AGE_SLOTS,
+        current_slot.saturating_sub(issuer_root_slot) <= MAX_ROOT_AGE_SLOTS,
         ZkSettleError::RootStale
     );
-    require!(clock.unix_timestamp >= 0, ZkSettleError::NegativeClock);
-    let current_epoch = (clock.unix_timestamp / EPOCH_LEN_SECS) as u64;
-    require!(
-        sctx.payload.epoch <= current_epoch,
-        ZkSettleError::EpochInFuture
-    );
-    require!(
-        current_epoch.saturating_sub(sctx.payload.epoch) <= MAX_EPOCH_LAG,
-        ZkSettleError::EpochStale
-    );
+    crate::instructions::verify_proof::validate_epoch(unix_timestamp, payload_epoch)?;
+    Ok(())
+}
+
+fn run_settlement(sctx: SettlementContext<'_, '_>) -> Result<()> {
+    let clock = Clock::get()?;
+    validate_settlement_guards(
+        &sctx.payload.mint,
+        &sctx.payload.recipient,
+        sctx.payload.amount,
+        sctx.payload.epoch,
+        &sctx.mint_key,
+        &sctx.destination_key,
+        sctx.amount,
+        sctx.issuer.root_slot,
+        clock.slot,
+        clock.unix_timestamp,
+    )?;
 
     cu_probe!("pre-verify_bundle");
     verify_bundle(
@@ -702,5 +714,168 @@ mod tests {
             + StagedLightArgs::INIT_SPACE
             + 4 /* Vec prefix */ + MAX_HOOK_PROOF_BYTES + 1;
         assert_eq!(HookPayload::INIT_SPACE, fixed);
+    }
+
+    mod settlement_guards {
+        use super::*;
+        use crate::instructions::verify_proof::{EPOCH_LEN_SECS, MAX_EPOCH_LAG};
+
+        fn base() -> (Pubkey, Pubkey, u64, u64, u64, u64, i64) {
+            let mint = Pubkey::new_unique();
+            let recipient = Pubkey::new_unique();
+            let amount = 1_000u64;
+            let epoch = 10u64;
+            let issuer_root_slot = 500u64;
+            let current_slot = 500u64;
+            let unix_timestamp = EPOCH_LEN_SECS * epoch as i64;
+            (mint, recipient, amount, epoch, issuer_root_slot, current_slot, unix_timestamp)
+        }
+
+        #[test]
+        fn accepts_matching_inputs() {
+            let (mint, recipient, amount, epoch, root_slot, slot, ts) = base();
+            assert!(validate_settlement_guards(
+                &mint, &recipient, amount, epoch,
+                &mint, &recipient, amount, root_slot, slot, ts,
+            ).is_ok());
+        }
+
+        #[test]
+        fn rejects_zero_amount() {
+            let (mint, recipient, _amount, epoch, root_slot, slot, ts) = base();
+            assert_eq!(
+                err_code(validate_settlement_guards(
+                    &mint, &recipient, 0, epoch,
+                    &mint, &recipient, 0, root_slot, slot, ts,
+                )),
+                ERROR_CODE_OFFSET + ZkSettleError::InvalidTransferAmount as u32,
+            );
+        }
+
+        #[test]
+        fn rejects_mint_mismatch() {
+            let (mint, recipient, amount, epoch, root_slot, slot, ts) = base();
+            let wrong_mint = Pubkey::new_unique();
+            assert_eq!(
+                err_code(validate_settlement_guards(
+                    &mint, &recipient, amount, epoch,
+                    &wrong_mint, &recipient, amount, root_slot, slot, ts,
+                )),
+                ERROR_CODE_OFFSET + ZkSettleError::MintMismatch as u32,
+            );
+        }
+
+        #[test]
+        fn rejects_recipient_mismatch() {
+            let (mint, recipient, amount, epoch, root_slot, slot, ts) = base();
+            let wrong_rcpt = Pubkey::new_unique();
+            assert_eq!(
+                err_code(validate_settlement_guards(
+                    &mint, &recipient, amount, epoch,
+                    &mint, &wrong_rcpt, amount, root_slot, slot, ts,
+                )),
+                ERROR_CODE_OFFSET + ZkSettleError::RecipientMismatch as u32,
+            );
+        }
+
+        #[test]
+        fn rejects_amount_mismatch() {
+            let (mint, recipient, amount, epoch, root_slot, slot, ts) = base();
+            assert_eq!(
+                err_code(validate_settlement_guards(
+                    &mint, &recipient, amount, epoch,
+                    &mint, &recipient, amount + 1, root_slot, slot, ts,
+                )),
+                ERROR_CODE_OFFSET + ZkSettleError::AmountMismatch as u32,
+            );
+        }
+
+        #[test]
+        fn rejects_stale_root() {
+            let (mint, recipient, amount, epoch, root_slot, _slot, ts) = base();
+            let stale_slot = root_slot + MAX_ROOT_AGE_SLOTS + 1;
+            assert_eq!(
+                err_code(validate_settlement_guards(
+                    &mint, &recipient, amount, epoch,
+                    &mint, &recipient, amount, root_slot, stale_slot, ts,
+                )),
+                ERROR_CODE_OFFSET + ZkSettleError::RootStale as u32,
+            );
+        }
+
+        #[test]
+        fn accepts_root_at_max_age() {
+            let (mint, recipient, amount, epoch, root_slot, _slot, ts) = base();
+            let slot = root_slot + MAX_ROOT_AGE_SLOTS;
+            assert!(validate_settlement_guards(
+                &mint, &recipient, amount, epoch,
+                &mint, &recipient, amount, root_slot, slot, ts,
+            ).is_ok());
+        }
+
+        #[test]
+        fn rejects_epoch_in_future() {
+            let (mint, recipient, amount, _epoch, root_slot, slot, ts) = base();
+            let future_epoch = (ts / EPOCH_LEN_SECS) as u64 + 1;
+            assert_eq!(
+                err_code(validate_settlement_guards(
+                    &mint, &recipient, amount, future_epoch,
+                    &mint, &recipient, amount, root_slot, slot, ts,
+                )),
+                ERROR_CODE_OFFSET + ZkSettleError::EpochInFuture as u32,
+            );
+        }
+
+        #[test]
+        fn rejects_epoch_stale() {
+            let (mint, recipient, amount, _epoch, root_slot, slot, ts) = base();
+            let current_epoch = (ts / EPOCH_LEN_SECS) as u64;
+            let stale_epoch = current_epoch.saturating_sub(MAX_EPOCH_LAG + 1);
+            assert_eq!(
+                err_code(validate_settlement_guards(
+                    &mint, &recipient, amount, stale_epoch,
+                    &mint, &recipient, amount, root_slot, slot, ts,
+                )),
+                ERROR_CODE_OFFSET + ZkSettleError::EpochStale as u32,
+            );
+        }
+
+        #[test]
+        fn accepts_epoch_at_max_lag() {
+            let (mint, recipient, amount, _epoch, root_slot, slot, ts) = base();
+            let current_epoch = (ts / EPOCH_LEN_SECS) as u64;
+            let lagged = current_epoch - MAX_EPOCH_LAG;
+            assert!(validate_settlement_guards(
+                &mint, &recipient, amount, lagged,
+                &mint, &recipient, amount, root_slot, slot, ts,
+            ).is_ok());
+        }
+
+        #[test]
+        fn staged_args_validity_proof_present_all_zeros() {
+            let args = StagedLightArgs {
+                proof_present: true,
+                proof_bytes: [0u8; 128],
+                address_mt_index: 0,
+                address_queue_index: 0,
+                address_root_index: 0,
+                output_state_tree_index: 0,
+            };
+            let vp = args.to_validity_proof().unwrap();
+            assert!(vp.0.is_some());
+        }
+
+        #[test]
+        fn staged_args_validity_proof_absent_ignores_garbage() {
+            let args = StagedLightArgs {
+                proof_present: false,
+                proof_bytes: [0xff; 128],
+                address_mt_index: 255,
+                address_queue_index: 255,
+                address_root_index: 65535,
+                output_state_tree_index: 255,
+            };
+            assert!(args.to_validity_proof().unwrap().0.is_none());
+        }
     }
 }
