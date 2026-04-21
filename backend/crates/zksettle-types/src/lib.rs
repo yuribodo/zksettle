@@ -1,5 +1,3 @@
-//! Shared types for ZKSettle on-chain / off-chain interop.
-
 pub mod accounts;
 pub mod credential;
 pub mod error;

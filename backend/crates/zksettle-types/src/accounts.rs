@@ -12,7 +12,6 @@ pub struct Issuer {
 }
 
 impl Issuer {
-    // authority (32) + merkle_root (32) + root_slot (8) + bump (1)
     pub const LEN: usize = 32 + 32 + 8 + 1;
 }
 
