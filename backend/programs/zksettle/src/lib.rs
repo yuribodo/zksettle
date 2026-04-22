@@ -3,6 +3,8 @@ mod cu_probe;
 pub mod error;
 pub mod instructions;
 pub mod state;
+#[cfg(test)]
+mod test_utils;
 
 #[allow(dead_code, clippy::all)]
 mod generated_vk;

@@ -2,6 +2,7 @@ pub mod bubblegum_mint;
 pub mod check_attestation;
 pub mod init_attestation_tree;
 pub mod register_issuer;
+mod settle_core;
 pub mod transfer_hook;
 pub mod verify_proof;
 
