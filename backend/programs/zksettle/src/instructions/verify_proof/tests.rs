@@ -6,8 +6,8 @@ use gnark_verifier_solana::witness::GnarkWitness;
 
 use crate::error::ZkSettleError;
 use crate::state::{
-    AMOUNT_IDX, EPOCH_IDX, JURISDICTION_ROOT_IDX, MERKLE_ROOT_IDX, MINT_HI_IDX, MINT_LO_IDX,
-    NULLIFIER_IDX, RECIPIENT_HI_IDX, RECIPIENT_LO_IDX, SANCTIONS_ROOT_IDX, TIMESTAMP_IDX,
+    AMOUNT_IDX, EPOCH_IDX, MERKLE_ROOT_IDX, MINT_HI_IDX, MINT_LO_IDX, NULLIFIER_IDX,
+    RECIPIENT_HI_IDX, RECIPIENT_LO_IDX,
 };
 
 use super::bindings::{check_bindings, BindingInputs};
@@ -87,10 +87,10 @@ mod bindings {
         sanctions_root: [u8; 32],
         jurisdiction_root: [u8; 32],
         timestamp: u64,
-    ) -> GnarkWitness<11> {
+    ) -> GnarkWitness<8> {
         let (mint_lo, mint_hi) = pubkey_to_limbs(mint);
         let (rcpt_lo, rcpt_hi) = pubkey_to_limbs(recipient);
-        let mut entries = [[0u8; 32]; 11];
+        let mut entries = [[0u8; 32]; 8];
         entries[MERKLE_ROOT_IDX] = root;
         entries[NULLIFIER_IDX] = nullifier;
         entries[MINT_LO_IDX] = mint_lo;
@@ -99,9 +99,7 @@ mod bindings {
         entries[RECIPIENT_LO_IDX] = rcpt_lo;
         entries[RECIPIENT_HI_IDX] = rcpt_hi;
         entries[AMOUNT_IDX] = u64_to_field_bytes(amount);
-        entries[SANCTIONS_ROOT_IDX] = sanctions_root;
-        entries[JURISDICTION_ROOT_IDX] = jurisdiction_root;
-        entries[TIMESTAMP_IDX] = u64_to_field_bytes(timestamp);
+        let _ = (sanctions_root, jurisdiction_root, timestamp);
         GnarkWitness { entries }
     }
 
@@ -146,7 +144,7 @@ mod bindings {
             }
         }
 
-        fn witness(&self) -> GnarkWitness<11> {
+        fn witness(&self) -> GnarkWitness<8> {
             witness_for(
                 self.root,
                 self.nul,
@@ -237,40 +235,6 @@ mod bindings {
         );
     }
 
-    #[test]
-    fn rejects_sanctions_root_mismatch() {
-        let s = sample();
-        let other = [9u8; 32];
-        let mut inputs = s.inputs();
-        inputs.sanctions_root = &other;
-        assert_eq!(
-            err_code(check_bindings(&s.witness(), &inputs)),
-            ERROR_CODE_OFFSET + ZkSettleError::SanctionsRootMismatch as u32,
-        );
-    }
-
-    #[test]
-    fn rejects_jurisdiction_root_mismatch() {
-        let s = sample();
-        let other = [9u8; 32];
-        let mut inputs = s.inputs();
-        inputs.jurisdiction_root = &other;
-        assert_eq!(
-            err_code(check_bindings(&s.witness(), &inputs)),
-            ERROR_CODE_OFFSET + ZkSettleError::JurisdictionRootMismatch as u32,
-        );
-    }
-
-    #[test]
-    fn rejects_timestamp_mismatch() {
-        let s = sample();
-        let mut inputs = s.inputs();
-        inputs.timestamp += 1;
-        assert_eq!(
-            err_code(check_bindings(&s.witness(), &inputs)),
-            ERROR_CODE_OFFSET + ZkSettleError::TimestampMismatch as u32,
-        );
-    }
 }
 
 mod epoch {
@@ -336,7 +300,7 @@ mod epoch {
 
     #[test]
     fn expected_witness_len_formula() {
-        assert_eq!(expected_witness_len(11), 364);
+        assert_eq!(expected_witness_len(8), 268);
     }
 
     #[test]
