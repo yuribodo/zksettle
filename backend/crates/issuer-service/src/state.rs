@@ -9,7 +9,7 @@ use crate::convert::fr_to_bytes_be;
 pub type SharedState = Arc<RwLock<IssuerState>>;
 pub type PublishLock = Arc<Mutex<()>>;
 
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CredentialRecord {
     pub wallet: [u8; 32],
     pub leaf_index: usize,
@@ -24,6 +24,7 @@ pub struct IssuerState {
     pub credentials: HashMap<[u8; 32], CredentialRecord>,
     pub last_publish_slot: u64,
     pub registered: bool,
+    pub roots_dirty: bool,
 }
 
 impl IssuerState {
@@ -35,6 +36,7 @@ impl IssuerState {
             credentials: HashMap::new(),
             last_publish_slot: 0,
             registered: false,
+            roots_dirty: false,
         }
     }
 

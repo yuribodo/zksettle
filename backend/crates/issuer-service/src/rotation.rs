@@ -43,6 +43,10 @@ async fn publish_roots(
 
     let (mr, sr, jr, was_registered) = {
         let st = state.read().await;
+        if !st.roots_dirty && st.registered {
+            tracing::debug!("roots unchanged, skipping rotation publish");
+            return;
+        }
         let roots = st.roots_as_bytes();
         (roots.0, roots.1, roots.2, st.registered)
     };
@@ -66,6 +70,7 @@ async fn publish_roots(
                 tracing::info!(slot = pr.slot, "roots published on-chain");
             }
             st.last_publish_slot = pr.slot;
+            st.roots_dirty = false;
         }
         Ok(Err(e)) => {
             tracing::error!(%e, "failed to publish roots");

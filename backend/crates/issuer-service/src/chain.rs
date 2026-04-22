@@ -132,6 +132,12 @@ fn send_tx(
         .send_and_confirm_transaction(&tx)
         .map_err(|e| ServiceError::Chain(e.to_string()))?;
     tracing::info!(%sig, "tx confirmed");
-    let slot = rpc.get_slot().map_err(|e| ServiceError::Chain(e.to_string()))?;
+    let statuses = rpc
+        .get_signature_statuses(&[sig])
+        .map_err(|e| ServiceError::Chain(format!("get_signature_statuses: {e}")))?;
+    let slot = statuses.value[0]
+        .as_ref()
+        .ok_or_else(|| ServiceError::Chain("tx confirmed but status not found".into()))?
+        .slot;
     Ok(slot)
 }

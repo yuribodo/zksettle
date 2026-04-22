@@ -6,6 +6,7 @@ pub struct Config {
     pub program_id: String,
     pub rotation_interval_secs: u64,
     pub listen_addr: SocketAddr,
+    pub state_path: Option<String>,
 }
 
 impl Config {
@@ -20,6 +21,7 @@ impl Config {
             listen_addr: env_or("LISTEN_ADDR", "127.0.0.1:3000")
                 .parse()
                 .expect("LISTEN_ADDR must be valid socket addr"),
+            state_path: std::env::var("STATE_PATH").ok(),
         }
     }
 }

@@ -36,7 +36,10 @@ async fn main() -> anyhow::Result<()> {
     let state = Arc::new(AppState {
         config: config.clone(),
         irys,
-        dedup: NullifierStore::new(),
+        dedup: NullifierStore::new(
+            config.dedup_capacity,
+            std::time::Duration::from_secs(config.dedup_ttl_secs),
+        ),
     });
 
     let addr = format!("0.0.0.0:{}", config.port);

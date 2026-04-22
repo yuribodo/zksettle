@@ -3,6 +3,7 @@ mod config;
 mod convert;
 mod error;
 mod handlers;
+mod persist;
 mod rotation;
 mod state;
 
@@ -24,6 +25,8 @@ pub struct RpcUrl(pub String);
 pub struct KeypairBytes(pub Vec<u8>);
 #[derive(Clone)]
 pub struct ProgramId(pub Pubkey);
+#[derive(Clone)]
+pub struct StatePath(pub Option<String>);
 
 #[tokio::main]
 async fn main() {
@@ -68,7 +71,20 @@ async fn main() {
         }
     };
 
-    let mut initial_state = IssuerState::new();
+    let mut initial_state = if let Some(ref path) = cfg.state_path {
+        match persist::load(path) {
+            Ok(state) => {
+                tracing::info!(wallets = state.wallet_count(), "restored state from disk");
+                state
+            }
+            Err(e) => {
+                tracing::warn!(%e, "could not load persisted state, starting fresh");
+                IssuerState::new()
+            }
+        }
+    } else {
+        IssuerState::new()
+    };
     initial_state.registered = already_registered;
     let shared = Arc::new(RwLock::new(initial_state));
     let publish_lock: PublishLock = Arc::new(tokio::sync::Mutex::new(()));
@@ -98,6 +114,7 @@ async fn main() {
         .layer(Extension(KeypairBytes(keypair_json)))
         .layer(Extension(ProgramId(program_id)))
         .layer(Extension(publish_lock))
+        .layer(Extension(StatePath(cfg.state_path)))
         .with_state(shared);
 
     let listener = tokio::net::TcpListener::bind(cfg.listen_addr).await.unwrap();

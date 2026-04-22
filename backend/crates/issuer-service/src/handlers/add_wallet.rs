@@ -19,6 +19,7 @@ pub struct AddWalletResponse {
 
 pub async fn handler(
     State(state): State<SharedState>,
+    axum::Extension(crate::StatePath(state_path)): axum::Extension<crate::StatePath>,
     Json(req): Json<AddWalletRequest>,
 ) -> Result<Json<AddWalletResponse>, ServiceError> {
     let wallet_bytes = wallet_hex_to_bytes(&req.wallet)?;
@@ -29,6 +30,7 @@ pub async fn handler(
         return Err(ServiceError::DuplicateWallet);
     }
     st.membership_tree.insert(wallet_fr);
+    st.roots_dirty = true;
     let leaf_index = st.credentials.len();
     st.credentials.insert(
         wallet_bytes,
@@ -42,6 +44,10 @@ pub async fn handler(
                 .as_secs(),
         },
     );
+
+    if let Some(ref path) = state_path {
+        crate::persist::save(path, &st)?;
+    }
 
     Ok(Json(AddWalletResponse {
         wallet: req.wallet,

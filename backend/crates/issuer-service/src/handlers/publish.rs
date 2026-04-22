@@ -24,6 +24,12 @@ pub async fn handler(
 
     let (mr, sr, jr, was_registered) = {
         let st = state.read().await;
+        if !st.roots_dirty && st.registered {
+            return Ok(Json(PublishResponse {
+                slot: st.last_publish_slot,
+                registered: true,
+            }));
+        }
         let roots = st.roots_as_bytes();
         (roots.0, roots.1, roots.2, st.registered)
     };
@@ -39,6 +45,7 @@ pub async fn handler(
         st.registered = true;
     }
     st.last_publish_slot = result.slot;
+    st.roots_dirty = false;
     let registered = st.registered;
 
     Ok(Json(PublishResponse {

@@ -38,13 +38,15 @@ pub fn test_app() -> Router {
         irys_wallet_key: None,
         program_id: "11111111111111111111111111111111".into(),
         log_level: "error".into(),
+        dedup_capacity: 1_000_000,
+        dedup_ttl_secs: 86400,
     };
     let http = reqwest::Client::new();
     let irys = IrysClient::new(config.irys_node_url.clone(), None, http);
     let state = Arc::new(AppState {
         config,
         irys,
-        dedup: NullifierStore::new(),
+        dedup: NullifierStore::new(1_000_000, std::time::Duration::from_secs(86400)),
     });
     build_router(state)
 }

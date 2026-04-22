@@ -22,6 +22,9 @@ pub enum ServiceError {
 
     #[error("chain error: {0}")]
     Chain(String),
+
+    #[error("persist error: {0}")]
+    Persist(String),
 }
 
 impl From<zksettle_crypto::error::CryptoError> for ServiceError {
@@ -44,6 +47,7 @@ impl IntoResponse for ServiceError {
             ServiceError::WalletIsSanctioned => (StatusCode::FORBIDDEN, self.to_string()),
             ServiceError::Tree(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
             ServiceError::Chain(_) => (StatusCode::BAD_GATEWAY, self.to_string()),
+            ServiceError::Persist(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
         };
         let body = axum::Json(json!({ "error": msg }));
         (status, body).into_response()
