@@ -16,12 +16,7 @@ use super::helpers::{
     validate_epoch, EPOCH_LEN_SECS, MAX_EPOCH_LAG,
 };
 
-fn err_code<T: std::fmt::Debug>(r: Result<T>) -> u32 {
-    match r {
-        Err(anchor_lang::error::Error::AnchorError(e)) => e.error_code_number,
-        other => panic!("expected AnchorError, got {other:?}"),
-    }
-}
+use crate::test_utils::err_code;
 
 #[test]
 fn rejects_empty_proof_at_exact_witness_len() {
