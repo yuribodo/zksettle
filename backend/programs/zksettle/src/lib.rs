@@ -1,4 +1,5 @@
 pub mod constants;
+mod cu_probe;
 pub mod error;
 pub mod instructions;
 pub mod state;
@@ -26,6 +27,10 @@ pub const LIGHT_CPI_SIGNER: CpiSigner =
 #[program]
 pub mod zksettle {
     use super::*;
+
+    pub fn init_attestation_tree(ctx: Context<InitAttestationTree>) -> Result<()> {
+        crate::instructions::init_attestation_tree::init_handler(ctx)
+    }
 
     pub fn register_issuer(
         ctx: Context<RegisterIssuer>,

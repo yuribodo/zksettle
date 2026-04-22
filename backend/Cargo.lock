@@ -7570,6 +7570,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "spl-account-compression"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71829fad7a8bd049131b603bc5ae193882285694bcef8f786c5e60df19d1216a"
+dependencies = [
+ "anchor-lang",
+ "bytemuck",
+ "solana-program",
+ "solana-security-txt",
+ "spl-concurrent-merkle-tree",
+ "spl-noop",
+]
+
+[[package]]
 name = "spl-associated-token-account"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7609,6 +7623,17 @@ checksum = "d6f8349dbcbe575f354f9a533a21f272f3eb3808a49e2fdc1c34393b88ba76cb"
 dependencies = [
  "solana-instruction 2.3.3",
  "solana-pubkey 2.4.0",
+]
+
+[[package]]
+name = "spl-concurrent-merkle-tree"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b961b37626729dc8cb8e3aedab8ad8bdeb249666280faaf012d38484dc84ae0b"
+dependencies = [
+ "bytemuck",
+ "solana-program",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -7717,6 +7742,15 @@ dependencies = [
  "solana-program-entrypoint",
  "solana-program-error 2.2.2",
  "solana-pubkey 2.4.0",
+]
+
+[[package]]
+name = "spl-noop"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c3bc351f7543a46f6807c231fc29ef2c4912c79bd6a4fb7d038cba6836f0fd7"
+dependencies = [
+ "solana-program",
 ]
 
 [[package]]
@@ -9985,6 +10019,7 @@ dependencies = [
  "solana-instruction 2.3.3",
  "solana-keypair",
  "solana-signer 2.2.1",
+ "spl-account-compression",
  "spl-tlv-account-resolution 0.11.1",
  "spl-transfer-hook-interface 2.1.0",
  "tokio",
