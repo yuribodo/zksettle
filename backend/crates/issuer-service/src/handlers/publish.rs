@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::chain;
 use crate::error::ServiceError;
-use crate::state::SharedState;
+use crate::state::{PublishLock, SharedState};
 use crate::{KeypairBytes, ProgramId, RpcUrl};
 
 #[derive(Serialize)]
@@ -18,7 +18,10 @@ pub async fn handler(
     axum::Extension(RpcUrl(rpc_url)): axum::Extension<RpcUrl>,
     axum::Extension(KeypairBytes(keypair_bytes)): axum::Extension<KeypairBytes>,
     axum::Extension(ProgramId(program_id)): axum::Extension<ProgramId>,
+    axum::Extension(publish_lock): axum::Extension<PublishLock>,
 ) -> Result<Json<PublishResponse>, ServiceError> {
+    let _guard = publish_lock.lock().await;
+
     let (mr, sr, jr, was_registered) = {
         let st = state.read().await;
         let roots = st.roots_as_bytes();
@@ -36,9 +39,10 @@ pub async fn handler(
         st.registered = true;
     }
     st.last_publish_slot = result.slot;
+    let registered = st.registered;
 
     Ok(Json(PublishResponse {
         slot: result.slot,
-        registered: result.did_register,
+        registered,
     }))
 }

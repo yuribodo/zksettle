@@ -1,6 +1,6 @@
 use crate::error::IndexerError;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Config {
     pub port: u16,
     pub helius_auth_token: String,
@@ -8,6 +8,19 @@ pub struct Config {
     pub irys_wallet_key: Option<String>,
     pub program_id: String,
     pub log_level: String,
+}
+
+impl std::fmt::Debug for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Config")
+            .field("port", &self.port)
+            .field("helius_auth_token", &"[REDACTED]")
+            .field("irys_node_url", &self.irys_node_url)
+            .field("irys_wallet_key", &self.irys_wallet_key.as_ref().map(|_| "[REDACTED]"))
+            .field("program_id", &self.program_id)
+            .field("log_level", &self.log_level)
+            .finish()
+    }
 }
 
 impl Config {

@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 use zksettle_crypto::{MerkleTree, SparseMerkleTree};
 
 use crate::convert::fr_to_bytes_be;
 
 pub type SharedState = Arc<RwLock<IssuerState>>;
+pub type PublishLock = Arc<Mutex<()>>;
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct CredentialRecord {

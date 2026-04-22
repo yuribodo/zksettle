@@ -16,7 +16,7 @@ use solana_sdk::signer::Signer;
 use tokio::sync::{watch, RwLock};
 
 use config::Config;
-use state::IssuerState;
+use state::{IssuerState, PublishLock};
 
 #[derive(Clone)]
 pub struct RpcUrl(pub String);
@@ -56,7 +56,22 @@ async fn main() {
         "starting issuer service"
     );
 
-    let shared = Arc::new(RwLock::new(IssuerState::new()));
+    let already_registered = match chain::is_issuer_registered(&cfg.rpc_url, &keypair.pubkey(), &program_id) {
+        Ok(true) => {
+            tracing::info!("issuer PDA exists on-chain, resuming as registered");
+            true
+        }
+        Ok(false) => false,
+        Err(e) => {
+            tracing::warn!(%e, "could not probe issuer PDA, assuming not registered");
+            false
+        }
+    };
+
+    let mut initial_state = IssuerState::new();
+    initial_state.registered = already_registered;
+    let shared = Arc::new(RwLock::new(initial_state));
+    let publish_lock: PublishLock = Arc::new(tokio::sync::Mutex::new(()));
     let (shutdown_tx, shutdown_rx) = watch::channel(());
 
     let rotation_keypair = Keypair::try_from(keypair_json.as_slice()).unwrap();
@@ -67,6 +82,7 @@ async fn main() {
         program_id,
         cfg.rotation_interval_secs,
         shutdown_rx,
+        publish_lock.clone(),
     );
 
     let app = Router::new()
@@ -81,6 +97,7 @@ async fn main() {
         .layer(Extension(RpcUrl(cfg.rpc_url)))
         .layer(Extension(KeypairBytes(keypair_json)))
         .layer(Extension(ProgramId(program_id)))
+        .layer(Extension(publish_lock))
         .with_state(shared);
 
     let listener = tokio::net::TcpListener::bind(cfg.listen_addr).await.unwrap();

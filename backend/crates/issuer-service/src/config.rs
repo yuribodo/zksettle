@@ -17,7 +17,7 @@ impl Config {
             rotation_interval_secs: env_or("ROTATION_INTERVAL_SECS", "43200")
                 .parse()
                 .expect("ROTATION_INTERVAL_SECS must be u64"),
-            listen_addr: env_or("LISTEN_ADDR", "0.0.0.0:3000")
+            listen_addr: env_or("LISTEN_ADDR", "127.0.0.1:3000")
                 .parse()
                 .expect("LISTEN_ADDR must be valid socket addr"),
         }
