@@ -1,26 +1,13 @@
 use anchor_lang::prelude::*;
-use light_sdk::{
-    account::LightAccount,
-    address::v2::derive_address,
-    cpi::{
-        v2::{CpiAccounts, LightSystemProgramCpi},
-        InvokeLightSystemProgram, LightCpiInstruction,
-    },
-    instruction::PackedAddressTreeInfoExt,
-};
 
 use crate::constants::MAX_ROOT_AGE_SLOTS;
 use crate::error::ZkSettleError;
-use crate::instructions::verify_proof::{verify_bundle, BindingInputs, ProofSettled};
-use crate::state::{
-    compressed::{CompressedAttestation, CompressedNullifier},
-    Issuer, ATTESTATION_SEED, NULLIFIER_SEED,
-};
+use crate::instructions::settle_core::{settle_core, SettlementParams};
+use crate::instructions::verify_proof::{verify_bundle, BindingInputs};
+use crate::state::Issuer;
 
 use super::{types::HookPayload, ExecuteHook, SettleHook};
 
-/// Emit a CU probe when the `hook-cu-probe` feature is on; no-op otherwise.
-/// Used to measure the hook path's CU budget against the ADR-022 250K ceiling.
 macro_rules! cu_probe {
     ($label:literal) => {
         #[cfg(feature = "hook-cu-probe")]
@@ -31,8 +18,6 @@ macro_rules! cu_probe {
     };
 }
 
-/// Inputs for the shared verify + Light-CPI path. `payer` is the Light payer
-/// (also the rent-refund target for settle-path closes).
 struct SettlementContext<'a, 'info> {
     payload: &'a HookPayload,
     issuer: &'a Issuer,
@@ -107,101 +92,31 @@ fn run_settlement(sctx: SettlementContext<'_, '_>) -> Result<()> {
     )?;
     cu_probe!("post-verify_bundle");
 
-    let nullifier_hash = sctx.payload.nullifier_hash;
-    let issuer_bytes = sctx.issuer_key.to_bytes();
-    let merkle_root = sctx.issuer.merkle_root;
-    let sanctions_root = sctx.issuer.sanctions_root;
-    let jurisdiction_root = sctx.issuer.jurisdiction_root;
-    let payload_amount = sctx.payload.amount;
-    let payload_epoch = sctx.payload.epoch;
-    let slot = clock.slot;
     let light_args = sctx.payload.light_args;
     let validity_proof = light_args.to_validity_proof()?;
-    let address_tree_info = light_args.to_tree_info();
-    let output_state_tree_index = light_args.output_state_tree_index;
 
-    let light_cpi_accounts =
-        CpiAccounts::new(sctx.payer_info, sctx.remaining, crate::LIGHT_CPI_SIGNER);
-
-    let address_tree_pubkey = address_tree_info
-        .get_tree_pubkey(&light_cpi_accounts)
-        .map_err(crate::map_light_err!(
-            "get_tree_pubkey failed",
-            ZkSettleError::InvalidLightAddress
-        ))?;
-
-    let (null_addr, null_seed) = derive_address(
-        &[NULLIFIER_SEED, &issuer_bytes, &nullifier_hash],
-        &address_tree_pubkey,
-        &crate::ID,
-    );
-    let (att_addr, att_seed) = derive_address(
-        &[ATTESTATION_SEED, &issuer_bytes, &nullifier_hash],
-        &address_tree_pubkey,
-        &crate::ID,
-    );
-
-    let null_params =
-        address_tree_info.into_new_address_params_assigned_packed(null_seed, Some(0));
-    let att_params = address_tree_info.into_new_address_params_assigned_packed(att_seed, Some(1));
-
-    let nullifier_account = LightAccount::<CompressedNullifier>::new_init(
-        &crate::ID,
-        Some(null_addr),
-        output_state_tree_index,
-    );
-
-    let mut attestation_account = LightAccount::<CompressedAttestation>::new_init(
-        &crate::ID,
-        Some(att_addr),
-        output_state_tree_index,
-    );
-    attestation_account.issuer = issuer_bytes;
-    attestation_account.nullifier_hash = nullifier_hash;
-    attestation_account.merkle_root = merkle_root;
-    attestation_account.sanctions_root = sanctions_root;
-    attestation_account.jurisdiction_root = jurisdiction_root;
-    attestation_account.mint = sctx.mint_key.to_bytes();
-    attestation_account.recipient = sctx.destination_key.to_bytes();
-    attestation_account.amount = payload_amount;
-    attestation_account.epoch = payload_epoch;
-    attestation_account.timestamp = timestamp;
-    attestation_account.slot = slot;
-    attestation_account.payer = sctx.payer_key.to_bytes();
-
-    LightSystemProgramCpi::new_cpi(crate::LIGHT_CPI_SIGNER, validity_proof)
-        .with_new_addresses(&[null_params, att_params])
-        .with_light_account(nullifier_account)
-        .map_err(crate::map_light_err!(
-            "with_light_account nullifier",
-            ZkSettleError::LightAccountPackFailed
-        ))?
-        .with_light_account(attestation_account)
-        .map_err(crate::map_light_err!(
-            "with_light_account attestation",
-            ZkSettleError::LightAccountPackFailed
-        ))?
-        .invoke(light_cpi_accounts)
-        .map_err(crate::map_light_err!(
-            "Light CPI invoke failed",
-            ZkSettleError::LightInvokeFailed
-        ))?;
-    cu_probe!("post-light-cpi");
-
-    emit!(ProofSettled {
-        issuer: sctx.issuer_key,
-        nullifier_hash,
-        merkle_root,
-        sanctions_root,
-        jurisdiction_root,
+    settle_core(SettlementParams {
+        issuer_key: sctx.issuer_key,
+        issuer_bytes: sctx.issuer_key.to_bytes(),
+        nullifier_hash: sctx.payload.nullifier_hash,
+        merkle_root: sctx.issuer.merkle_root,
+        sanctions_root: sctx.issuer.sanctions_root,
+        jurisdiction_root: sctx.issuer.jurisdiction_root,
         mint: sctx.mint_key,
         recipient: sctx.destination_key,
-        amount: payload_amount,
-        epoch: payload_epoch,
+        amount: sctx.payload.amount,
+        epoch: sctx.payload.epoch,
         timestamp,
-        slot,
-        payer: sctx.payer_key,
-    });
+        slot: clock.slot,
+        payer_key: sctx.payer_key,
+        validity_proof,
+        address_tree_info: light_args.to_tree_info(),
+        output_state_tree_index: light_args.output_state_tree_index,
+        payer_info: sctx.payer_info,
+        remaining_accounts: sctx.remaining,
+    })?;
+    cu_probe!("post-light-cpi");
+
     Ok(())
 }
 
@@ -226,9 +141,6 @@ pub fn settle_hook_handler<'info>(
     })
 }
 
-/// Reject standalone calls to `transfer_hook`. Token-2022 sets the
-/// `TransferHookAccount.transferring` flag on the source token account only
-/// while a transfer CPI is in flight; any direct caller sees it cleared.
 fn enforce_token_2022_cpi_origin(
     source_token: &UncheckedAccount,
     expected_owner: Pubkey,

@@ -11,12 +11,7 @@ use super::handlers::validate_set_hook_inputs;
 use super::settlement::validate_settlement_guards;
 use super::types::{ExtraAccountMetaInput, HookPayload, StagedLightArgs, MAX_HOOK_PROOF_BYTES};
 
-fn err_code<T: std::fmt::Debug>(r: Result<T>) -> u32 {
-    match r {
-        Err(anchor_lang::error::Error::AnchorError(e)) => e.error_code_number,
-        other => panic!("expected AnchorError, got {other:?}"),
-    }
-}
+use crate::test_utils::err_code;
 
 fn nonzero_nullifier() -> [u8; 32] {
     let mut n = [0u8; 32];
