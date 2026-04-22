@@ -7,7 +7,8 @@ mod types;
 use anchor_lang::prelude::*;
 
 use crate::error::ZkSettleError;
-use crate::state::{Issuer, ISSUER_SEED};
+use crate::instructions::bubblegum_mint::{tree_config_pda, MPL_BUBBLEGUM_ID, NOOP_PROGRAM_ID};
+use crate::state::{BubblegumTreeRegistry, Issuer, BUBBLEGUM_REGISTRY_SEED, BUBBLEGUM_TREE_CREATOR_SEED, ISSUER_SEED};
 
 pub use handlers::{init_extra_account_meta_list_handler, set_hook_payload_handler};
 pub use settlement::{execute_hook_handler, settle_hook_handler};
@@ -95,10 +96,41 @@ pub struct SettleHook<'info> {
     )]
     pub hook_payload: Account<'info, HookPayload>,
 
+    /// CHECK: Bubblegum leaf owner; must match staged `recipient` in payload.
+    #[account(address = hook_payload.recipient)]
+    pub leaf_owner: UncheckedAccount<'info>,
+
     #[account(
         constraint = issuer.key() == hook_payload.issuer @ ZkSettleError::IssuerMismatch,
     )]
     pub issuer: Account<'info, Issuer>,
+
+    #[account(seeds = [BUBBLEGUM_REGISTRY_SEED], bump)]
+    pub registry: Account<'info, BubblegumTreeRegistry>,
+
+    #[account(mut, address = registry.merkle_tree)]
+    pub merkle_tree: UncheckedAccount<'info>,
+
+    #[account(
+        mut,
+        constraint = tree_config.key() == tree_config_pda(&registry.merkle_tree).0 @ ZkSettleError::BubblegumCpiFailed
+    )]
+    pub tree_config: UncheckedAccount<'info>,
+
+    #[account(
+        seeds = [BUBBLEGUM_TREE_CREATOR_SEED],
+        bump = registry.tree_creator_bump
+    )]
+    pub tree_creator: AccountInfo<'info>,
+
+    #[account(address = MPL_BUBBLEGUM_ID)]
+    pub bubblegum_program: UncheckedAccount<'info>,
+
+    #[account(address = spl_account_compression::ID)]
+    pub compression_program: UncheckedAccount<'info>,
+
+    #[account(address = NOOP_PROGRAM_ID)]
+    pub log_wrapper: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
 }
@@ -141,4 +173,10 @@ pub struct ExecuteHook<'info> {
         constraint = issuer.key() == hook_payload.issuer @ ZkSettleError::IssuerMismatch,
     )]
     pub issuer: Account<'info, Issuer>,
+
+    #[account(seeds = [BUBBLEGUM_REGISTRY_SEED], bump)]
+    pub registry: Account<'info, BubblegumTreeRegistry>,
+
+    #[account(address = MPL_BUBBLEGUM_ID)]
+    pub bubblegum_program: UncheckedAccount<'info>,
 }

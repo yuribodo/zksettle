@@ -11,28 +11,33 @@ use light_sdk::{
 
 use crate::constants::MAX_ROOT_AGE_SLOTS;
 use crate::error::ZkSettleError;
+use crate::instructions::bubblegum_mint::{
+    cpi_mint_compliance_attestation, cpi_mint_from_remaining_tail, split_light_and_bubblegum,
+    validate_bubblegum_mint_accounts,
+};
 use crate::instructions::verify_proof::{verify_bundle, BindingInputs, ProofSettled};
 use crate::state::{
     compressed::{CompressedAttestation, CompressedNullifier},
-    Issuer, ATTESTATION_SEED, NULLIFIER_SEED,
+    BubblegumTreeRegistry, Issuer, ATTESTATION_SEED, NULLIFIER_SEED,
 };
 
 use super::{types::HookPayload, ExecuteHook, SettleHook};
 
-/// Emit a CU probe when the `hook-cu-probe` feature is on; no-op otherwise.
-/// Used to measure the hook path's CU budget against the ADR-022 250K ceiling.
-macro_rules! cu_probe {
-    ($label:literal) => {
-        #[cfg(feature = "hook-cu-probe")]
-        {
-            msg!(concat!("cu-probe ", $label));
-            anchor_lang::solana_program::log::sol_log_compute_units();
-        }
-    };
+enum BubblegumMintMode<'a, 'info> {
+    None,
+    /// Pre-split suffix accounts for `MintV1` (see `split_light_and_bubblegum`).
+    Tail(&'a [AccountInfo<'info>]),
+    Named {
+        tree_config: &'a AccountInfo<'info>,
+        merkle_tree: &'a AccountInfo<'info>,
+        tree_creator: &'a AccountInfo<'info>,
+        log_wrapper: &'a AccountInfo<'info>,
+        compression: &'a AccountInfo<'info>,
+        system_program: &'a AccountInfo<'info>,
+        leaf_owner: &'a AccountInfo<'info>,
+    },
 }
 
-/// Inputs for the shared verify + Light-CPI path. `payer` is the Light payer
-/// (also the rent-refund target for settle-path closes).
 struct SettlementContext<'a, 'info> {
     payload: &'a HookPayload,
     issuer: &'a Issuer,
@@ -42,7 +47,10 @@ struct SettlementContext<'a, 'info> {
     amount: u64,
     payer_info: &'a AccountInfo<'info>,
     payer_key: Pubkey,
-    remaining: &'a [AccountInfo<'info>],
+    light_remaining: &'a [AccountInfo<'info>],
+    registry: &'a Account<'info, BubblegumTreeRegistry>,
+    bubblegum_program: &'a AccountInfo<'info>,
+    bubblegum_mint: BubblegumMintMode<'a, 'info>,
 }
 
 pub(crate) fn validate_settlement_guards(
@@ -90,7 +98,7 @@ fn run_settlement(sctx: SettlementContext<'_, '_>) -> Result<()> {
     let timestamp = u64::try_from(clock.unix_timestamp)
         .map_err(|_| error!(ZkSettleError::NegativeClock))?;
 
-    cu_probe!("pre-verify_bundle");
+    crate::cu_probe!("pre-verify_bundle");
     verify_bundle(
         &sctx.payload.proof_and_witness,
         &BindingInputs {
@@ -105,7 +113,7 @@ fn run_settlement(sctx: SettlementContext<'_, '_>) -> Result<()> {
             timestamp,
         },
     )?;
-    cu_probe!("post-verify_bundle");
+    crate::cu_probe!("post-verify_bundle");
 
     let nullifier_hash = sctx.payload.nullifier_hash;
     let issuer_bytes = sctx.issuer_key.to_bytes();
@@ -121,7 +129,7 @@ fn run_settlement(sctx: SettlementContext<'_, '_>) -> Result<()> {
     let output_state_tree_index = light_args.output_state_tree_index;
 
     let light_cpi_accounts =
-        CpiAccounts::new(sctx.payer_info, sctx.remaining, crate::LIGHT_CPI_SIGNER);
+        CpiAccounts::new(sctx.payer_info, sctx.light_remaining, crate::LIGHT_CPI_SIGNER);
 
     let address_tree_pubkey = address_tree_info
         .get_tree_pubkey(&light_cpi_accounts)
@@ -186,7 +194,63 @@ fn run_settlement(sctx: SettlementContext<'_, '_>) -> Result<()> {
             "Light CPI invoke failed",
             ZkSettleError::LightInvokeFailed
         ))?;
-    cu_probe!("post-light-cpi");
+    crate::cu_probe!("post-light-cpi");
+
+    match &sctx.bubblegum_mint {
+        BubblegumMintMode::None => {}
+        BubblegumMintMode::Tail(bg) => {
+            if !bg.is_empty() {
+                crate::cu_probe!("pre-bubblegum-mint");
+                cpi_mint_from_remaining_tail(
+                    sctx.bubblegum_program,
+                    bg,
+                    sctx.registry.tree_creator_bump,
+                    sctx.issuer_key,
+                    nullifier_hash,
+                    merkle_root,
+                    slot,
+                )?;
+                crate::cu_probe!("post-bubblegum-mint");
+            }
+        }
+        BubblegumMintMode::Named {
+            tree_config,
+            merkle_tree,
+            tree_creator,
+            log_wrapper,
+            compression,
+            system_program,
+            leaf_owner,
+        } => {
+            validate_bubblegum_mint_accounts(
+                sctx.registry,
+                merkle_tree,
+                tree_config,
+                sctx.bubblegum_program,
+                compression,
+                log_wrapper,
+                system_program,
+            )?;
+            crate::cu_probe!("pre-bubblegum-mint");
+            cpi_mint_compliance_attestation(
+                sctx.bubblegum_program,
+                tree_config,
+                merkle_tree,
+                tree_creator,
+                sctx.registry.tree_creator_bump,
+                compression,
+                log_wrapper,
+                system_program,
+                sctx.payer_info,
+                leaf_owner,
+                sctx.issuer_key,
+                nullifier_hash,
+                merkle_root,
+                slot,
+            )?;
+            crate::cu_probe!("post-bubblegum-mint");
+        }
+    }
 
     emit!(ProofSettled {
         issuer: sctx.issuer_key,
@@ -222,13 +286,21 @@ pub fn settle_hook_handler<'info>(
         amount,
         payer_info: ctx.accounts.authority.as_ref(),
         payer_key,
-        remaining: ctx.remaining_accounts,
+        light_remaining: ctx.remaining_accounts,
+        registry: &ctx.accounts.registry,
+        bubblegum_program: ctx.accounts.bubblegum_program.as_ref(),
+        bubblegum_mint: BubblegumMintMode::Named {
+            tree_config: ctx.accounts.tree_config.as_ref(),
+            merkle_tree: ctx.accounts.merkle_tree.as_ref(),
+            tree_creator: ctx.accounts.tree_creator.as_ref(),
+            log_wrapper: ctx.accounts.log_wrapper.as_ref(),
+            compression: ctx.accounts.compression_program.as_ref(),
+            system_program: ctx.accounts.system_program.as_ref(),
+            leaf_owner: ctx.accounts.leaf_owner.as_ref(),
+        },
     })
 }
 
-/// Reject standalone calls to `transfer_hook`. Token-2022 sets the
-/// `TransferHookAccount.transferring` flag on the source token account only
-/// while a transfer CPI is in flight; any direct caller sees it cleared.
 fn enforce_token_2022_cpi_origin(
     source_token: &UncheckedAccount,
     expected_owner: Pubkey,
@@ -273,6 +345,15 @@ pub fn execute_hook_handler<'info>(
 ) -> Result<()> {
     enforce_token_2022_cpi_origin(&ctx.accounts.source_token, ctx.accounts.owner.key())?;
 
+    let tail = ctx.accounts.hook_payload.light_args.bubblegum_tail;
+    let (light_rem, bg) = split_light_and_bubblegum(ctx.remaining_accounts, tail)?;
+
+    let bubblegum_mint = if bg.is_empty() {
+        BubblegumMintMode::None
+    } else {
+        BubblegumMintMode::Tail(bg)
+    };
+
     let issuer_key = ctx.accounts.issuer.key();
     let payer_key = ctx.accounts.owner.key();
     let mint_key = ctx.accounts.mint.key();
@@ -286,6 +367,9 @@ pub fn execute_hook_handler<'info>(
         amount,
         payer_info: ctx.accounts.owner.as_ref(),
         payer_key,
-        remaining: ctx.remaining_accounts,
+        light_remaining: light_rem,
+        registry: &ctx.accounts.registry,
+        bubblegum_program: ctx.accounts.bubblegum_program.as_ref(),
+        bubblegum_mint,
     })
 }
