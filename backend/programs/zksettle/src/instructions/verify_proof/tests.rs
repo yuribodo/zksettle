@@ -6,8 +6,8 @@ use gnark_verifier_solana::witness::GnarkWitness;
 
 use crate::error::ZkSettleError;
 use crate::state::{
-    AMOUNT_IDX, EPOCH_IDX, MERKLE_ROOT_IDX, MINT_HI_IDX, MINT_LO_IDX, NULLIFIER_IDX,
-    RECIPIENT_HI_IDX, RECIPIENT_LO_IDX,
+    AMOUNT_IDX, EPOCH_IDX, JURISDICTION_ROOT_IDX, MERKLE_ROOT_IDX, MINT_HI_IDX, MINT_LO_IDX,
+    NULLIFIER_IDX, RECIPIENT_HI_IDX, RECIPIENT_LO_IDX, SANCTIONS_ROOT_IDX, TIMESTAMP_IDX,
 };
 
 use super::bindings::{check_bindings, BindingInputs};
@@ -235,6 +235,135 @@ mod bindings {
         );
     }
 
+}
+
+mod bindings_11 {
+    use super::*;
+
+    fn witness_for_11(
+        root: [u8; 32],
+        nullifier: [u8; 32],
+        mint: &Pubkey,
+        epoch: u64,
+        recipient: &Pubkey,
+        amount: u64,
+        sanctions_root: [u8; 32],
+        jurisdiction_root: [u8; 32],
+        timestamp: u64,
+    ) -> GnarkWitness<11> {
+        let (mint_lo, mint_hi) = pubkey_to_limbs(mint);
+        let (rcpt_lo, rcpt_hi) = pubkey_to_limbs(recipient);
+        let mut entries = [[0u8; 32]; 11];
+        entries[MERKLE_ROOT_IDX] = root;
+        entries[NULLIFIER_IDX] = nullifier;
+        entries[MINT_LO_IDX] = mint_lo;
+        entries[MINT_HI_IDX] = mint_hi;
+        entries[EPOCH_IDX] = u64_to_field_bytes(epoch);
+        entries[RECIPIENT_LO_IDX] = rcpt_lo;
+        entries[RECIPIENT_HI_IDX] = rcpt_hi;
+        entries[AMOUNT_IDX] = u64_to_field_bytes(amount);
+        entries[SANCTIONS_ROOT_IDX] = sanctions_root;
+        entries[JURISDICTION_ROOT_IDX] = jurisdiction_root;
+        entries[TIMESTAMP_IDX] = u64_to_field_bytes(timestamp);
+        GnarkWitness { entries }
+    }
+
+    struct Sample {
+        root: [u8; 32],
+        nul: [u8; 32],
+        mint: Pubkey,
+        epoch: u64,
+        rcpt: Pubkey,
+        amt: u64,
+        sanctions_root: [u8; 32],
+        jurisdiction_root: [u8; 32],
+        timestamp: u64,
+    }
+
+    fn sample() -> Sample {
+        Sample {
+            root: [1u8; 32],
+            nul: [2u8; 32],
+            mint: Pubkey::new_unique(),
+            epoch: 42,
+            rcpt: Pubkey::new_unique(),
+            amt: 1_000,
+            sanctions_root: [3u8; 32],
+            jurisdiction_root: [4u8; 32],
+            timestamp: 1_700_000_000,
+        }
+    }
+
+    impl Sample {
+        fn inputs(&self) -> BindingInputs<'_> {
+            BindingInputs {
+                merkle_root: &self.root,
+                nullifier_hash: &self.nul,
+                mint: &self.mint,
+                epoch: self.epoch,
+                recipient: &self.rcpt,
+                amount: self.amt,
+                sanctions_root: &self.sanctions_root,
+                jurisdiction_root: &self.jurisdiction_root,
+                timestamp: self.timestamp,
+            }
+        }
+
+        fn witness(&self) -> GnarkWitness<11> {
+            witness_for_11(
+                self.root,
+                self.nul,
+                &self.mint,
+                self.epoch,
+                &self.rcpt,
+                self.amt,
+                self.sanctions_root,
+                self.jurisdiction_root,
+                self.timestamp,
+            )
+        }
+    }
+
+    #[test]
+    fn accepts_matching_11_tuple() {
+        let s = sample();
+        assert!(check_bindings(&s.witness(), &s.inputs()).is_ok());
+    }
+
+    #[test]
+    fn rejects_sanctions_root_mismatch() {
+        let s = sample();
+        let other = [99u8; 32];
+        let mut inputs = s.inputs();
+        inputs.sanctions_root = &other;
+        assert_eq!(
+            err_code(check_bindings(&s.witness(), &inputs)),
+            ERROR_CODE_OFFSET + ZkSettleError::SanctionsRootMismatch as u32,
+        );
+    }
+
+    #[test]
+    fn rejects_jurisdiction_root_mismatch() {
+        let s = sample();
+        let other = [99u8; 32];
+        let mut inputs = s.inputs();
+        inputs.jurisdiction_root = &other;
+        assert_eq!(
+            err_code(check_bindings(&s.witness(), &inputs)),
+            ERROR_CODE_OFFSET + ZkSettleError::JurisdictionRootMismatch as u32,
+        );
+    }
+
+    #[test]
+    fn rejects_timestamp_mismatch() {
+        let s = sample();
+        let mut inputs = s.inputs();
+        inputs.timestamp += 1;
+        assert_eq!(
+            err_code(check_bindings(&s.witness(), &inputs)),
+            ERROR_CODE_OFFSET + ZkSettleError::TimestampMismatch as u32,
+        );
+    }
 }
 
 mod epoch {

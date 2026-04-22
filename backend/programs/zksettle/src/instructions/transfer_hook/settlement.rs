@@ -329,6 +329,9 @@ fn enforce_token_2022_cpi_origin(
     Ok(())
 }
 
+// TODO: close hook_payload PDA after settlement to reclaim rent and unblock
+// the authority for the next transfer (init constraint prevents re-staging
+// while the PDA exists). settle_hook path closes it; this path does not.
 pub fn execute_hook_handler<'info>(
     ctx: Context<'_, '_, '_, 'info, ExecuteHook<'info>>,
     amount: u64,

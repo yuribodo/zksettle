@@ -27,6 +27,9 @@ pub const EPOCH_IDX: usize = 4;
 pub const RECIPIENT_LO_IDX: usize = 5;
 pub const RECIPIENT_HI_IDX: usize = 6;
 pub const AMOUNT_IDX: usize = 7;
+pub const SANCTIONS_ROOT_IDX: usize = 8;
+pub const JURISDICTION_ROOT_IDX: usize = 9;
+pub const TIMESTAMP_IDX: usize = 10;
 
 #[cfg(test)]
 mod tests {
@@ -49,5 +52,8 @@ mod tests {
         assert_eq!(RECIPIENT_LO_IDX, 5);
         assert_eq!(RECIPIENT_HI_IDX, 6);
         assert_eq!(AMOUNT_IDX, 7);
+        assert_eq!(SANCTIONS_ROOT_IDX, 8);
+        assert_eq!(JURISDICTION_ROOT_IDX, 9);
+        assert_eq!(TIMESTAMP_IDX, 10);
     }
 }

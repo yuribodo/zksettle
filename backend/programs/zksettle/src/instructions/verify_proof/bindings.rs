@@ -4,12 +4,14 @@ use gnark_verifier_solana::{proof::GnarkProof, verifier::GnarkVerifier, witness:
 use crate::error::ZkSettleError;
 use crate::generated_vk::VK;
 use crate::state::{
-    AMOUNT_IDX, EPOCH_IDX, MERKLE_ROOT_IDX, MINT_HI_IDX, MINT_LO_IDX, NULLIFIER_IDX,
-    RECIPIENT_HI_IDX, RECIPIENT_LO_IDX,
+    AMOUNT_IDX, EPOCH_IDX, JURISDICTION_ROOT_IDX, MERKLE_ROOT_IDX, MINT_HI_IDX, MINT_LO_IDX,
+    NULLIFIER_IDX, RECIPIENT_HI_IDX, RECIPIENT_LO_IDX, SANCTIONS_ROOT_IDX, TIMESTAMP_IDX,
 };
 
 use super::helpers::{expected_witness_len, pubkey_to_limbs, split_proof_and_witness, u64_to_field_bytes};
 
+// Current VK has 8 public inputs. Circuit declares 11 (indices 0–10 in
+// pubinputs.rs). Bump to 11 when regenerating VK from the 11-input circuit.
 #[cfg(not(feature = "placeholder-vk"))]
 const _: () = assert!(
     VK.nr_pubinputs == 8,
@@ -69,6 +71,22 @@ pub(crate) fn check_bindings<const N: usize>(
         witness.entries[AMOUNT_IDX] == u64_to_field_bytes(inputs.amount),
         ZkSettleError::AmountMismatch
     );
+
+    // Activate when VK is regenerated with 11 public inputs.
+    if N > TIMESTAMP_IDX {
+        require!(
+            &witness.entries[SANCTIONS_ROOT_IDX] == inputs.sanctions_root,
+            ZkSettleError::SanctionsRootMismatch
+        );
+        require!(
+            &witness.entries[JURISDICTION_ROOT_IDX] == inputs.jurisdiction_root,
+            ZkSettleError::JurisdictionRootMismatch
+        );
+        require!(
+            witness.entries[TIMESTAMP_IDX] == u64_to_field_bytes(inputs.timestamp),
+            ZkSettleError::TimestampMismatch
+        );
+    }
 
     Ok(())
 }
