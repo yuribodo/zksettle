@@ -73,30 +73,36 @@ fn build_update_ix(
     }
 }
 
-pub fn register_issuer(
-    rpc: &RpcClient,
-    keypair: &Keypair,
-    program_id: &Pubkey,
-    merkle_root: [u8; 32],
-    sanctions_root: [u8; 32],
-    jurisdiction_root: [u8; 32],
-) -> Result<u64, ServiceError> {
-    let roots = RootArgs { merkle_root, sanctions_root, jurisdiction_root };
-    let ix = build_register_ix(&keypair.pubkey(), program_id, &roots);
-    send_tx(rpc, keypair, ix)
+pub struct PublishResult {
+    pub slot: u64,
+    pub did_register: bool,
 }
 
-pub fn update_issuer_root(
-    rpc: &RpcClient,
-    keypair: &Keypair,
+pub fn publish_roots(
+    rpc_url: &str,
+    keypair_bytes: &[u8],
     program_id: &Pubkey,
     merkle_root: [u8; 32],
     sanctions_root: [u8; 32],
     jurisdiction_root: [u8; 32],
-) -> Result<u64, ServiceError> {
+    currently_registered: bool,
+) -> Result<PublishResult, ServiceError> {
+    let rpc = RpcClient::new(rpc_url.to_string());
+    let keypair = Keypair::try_from(keypair_bytes)
+        .map_err(|e| ServiceError::Chain(e.to_string()))?;
     let roots = RootArgs { merkle_root, sanctions_root, jurisdiction_root };
-    let ix = build_update_ix(&keypair.pubkey(), program_id, &roots);
-    send_tx(rpc, keypair, ix)
+
+    let ix = if !currently_registered {
+        build_register_ix(&keypair.pubkey(), program_id, &roots)
+    } else {
+        build_update_ix(&keypair.pubkey(), program_id, &roots)
+    };
+
+    let slot = send_tx(&rpc, &keypair, ix)?;
+    Ok(PublishResult {
+        slot,
+        did_register: !currently_registered,
+    })
 }
 
 fn send_tx(

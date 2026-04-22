@@ -18,6 +18,13 @@ use tokio::sync::{watch, RwLock};
 use config::Config;
 use state::IssuerState;
 
+#[derive(Clone)]
+pub struct RpcUrl(pub String);
+#[derive(Clone)]
+pub struct KeypairBytes(pub Vec<u8>);
+#[derive(Clone)]
+pub struct ProgramId(pub Pubkey);
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
@@ -71,9 +78,9 @@ async fn main() {
         .route("/proofs/sanctions/{wallet}", get(handlers::get_sanctions_proof::handler))
         .route("/roots", get(handlers::get_roots::handler))
         .route("/roots/publish", post(handlers::publish::handler))
-        .layer(Extension(cfg.rpc_url))
-        .layer(Extension(keypair_json))
-        .layer(Extension(program_id))
+        .layer(Extension(RpcUrl(cfg.rpc_url)))
+        .layer(Extension(KeypairBytes(keypair_json)))
+        .layer(Extension(ProgramId(program_id)))
         .with_state(shared);
 
     let listener = tokio::net::TcpListener::bind(cfg.listen_addr).await.unwrap();

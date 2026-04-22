@@ -1,13 +1,11 @@
 use axum::extract::State;
 use axum::Json;
 use serde::Serialize;
-use solana_rpc_client::rpc_client::RpcClient;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Keypair;
 
 use crate::chain;
 use crate::error::ServiceError;
 use crate::state::SharedState;
+use crate::{KeypairBytes, ProgramId, RpcUrl};
 
 #[derive(Serialize)]
 pub struct PublishResponse {
@@ -17,35 +15,30 @@ pub struct PublishResponse {
 
 pub async fn handler(
     State(state): State<SharedState>,
-    axum::Extension(rpc_url): axum::Extension<String>,
-    axum::Extension(keypair_bytes): axum::Extension<Vec<u8>>,
-    axum::Extension(program_id): axum::Extension<Pubkey>,
+    axum::Extension(RpcUrl(rpc_url)): axum::Extension<RpcUrl>,
+    axum::Extension(KeypairBytes(keypair_bytes)): axum::Extension<KeypairBytes>,
+    axum::Extension(ProgramId(program_id)): axum::Extension<ProgramId>,
 ) -> Result<Json<PublishResponse>, ServiceError> {
-    let rpc = RpcClient::new(rpc_url);
-    let keypair = Keypair::try_from(keypair_bytes.as_slice())
-        .map_err(|e| ServiceError::Chain(e.to_string()))?;
-
-    let mut st = state.write().await;
-    let (mr, sr, jr) = st.roots_as_bytes();
-
-    let result = if !st.registered {
-        chain::register_issuer(&rpc, &keypair, &program_id, mr, sr, jr)
-    } else {
-        chain::update_issuer_root(&rpc, &keypair, &program_id, mr, sr, jr)
+    let (mr, sr, jr, was_registered) = {
+        let st = state.read().await;
+        let roots = st.roots_as_bytes();
+        (roots.0, roots.1, roots.2, st.registered)
     };
 
-    match result {
-        Ok(slot) => {
-            let was_registered = st.registered;
-            if !was_registered {
-                st.registered = true;
-            }
-            st.last_publish_slot = slot;
-            Ok(Json(PublishResponse {
-                slot,
-                registered: !was_registered,
-            }))
-        }
-        Err(e) => Err(e),
+    let result = tokio::task::spawn_blocking(move || {
+        chain::publish_roots(&rpc_url, &keypair_bytes, &program_id, mr, sr, jr, was_registered)
+    })
+    .await
+    .map_err(|e| ServiceError::Chain(e.to_string()))??;
+
+    let mut st = state.write().await;
+    if result.did_register && !st.registered {
+        st.registered = true;
     }
+    st.last_publish_slot = result.slot;
+
+    Ok(Json(PublishResponse {
+        slot: result.slot,
+        registered: result.did_register,
+    }))
 }

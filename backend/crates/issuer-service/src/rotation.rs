@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use solana_rpc_client::rpc_client::RpcClient;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use tokio::sync::watch;
@@ -18,6 +17,7 @@ pub fn spawn(
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let interval = Duration::from_secs(interval_secs);
+        let keypair_bytes = keypair.to_bytes().to_vec();
         loop {
             tokio::select! {
                 _ = tokio::time::sleep(interval) => {}
@@ -26,7 +26,7 @@ pub fn spawn(
                     return;
                 }
             }
-            publish_roots(&state, &rpc_url, &keypair, &program_id).await;
+            publish_roots(&state, &rpc_url, &keypair_bytes, &program_id).await;
         }
     })
 }
@@ -34,32 +34,40 @@ pub fn spawn(
 async fn publish_roots(
     state: &SharedState,
     rpc_url: &str,
-    keypair: &Keypair,
+    keypair_bytes: &[u8],
     program_id: &Pubkey,
 ) {
-    let rpc = RpcClient::new(rpc_url.to_string());
-    let mut st = state.write().await;
-
-    let (mr, sr, jr) = st.roots_as_bytes();
-
-    let result = if !st.registered {
-        chain::register_issuer(&rpc, keypair, program_id, mr, sr, jr)
-    } else {
-        chain::update_issuer_root(&rpc, keypair, program_id, mr, sr, jr)
+    let (mr, sr, jr, was_registered) = {
+        let st = state.read().await;
+        let roots = st.roots_as_bytes();
+        (roots.0, roots.1, roots.2, st.registered)
     };
 
+    let url = rpc_url.to_string();
+    let kb = keypair_bytes.to_vec();
+    let pid = *program_id;
+
+    let result = tokio::task::spawn_blocking(move || {
+        chain::publish_roots(&url, &kb, &pid, mr, sr, jr, was_registered)
+    })
+    .await;
+
     match result {
-        Ok(slot) => {
-            if !st.registered {
+        Ok(Ok(pr)) => {
+            let mut st = state.write().await;
+            if pr.did_register && !st.registered {
                 st.registered = true;
-                tracing::info!(slot, "issuer registered on-chain");
+                tracing::info!(slot = pr.slot, "issuer registered on-chain");
             } else {
-                tracing::info!(slot, "roots published on-chain");
+                tracing::info!(slot = pr.slot, "roots published on-chain");
             }
-            st.last_publish_slot = slot;
+            st.last_publish_slot = pr.slot;
+        }
+        Ok(Err(e)) => {
+            tracing::error!(%e, "failed to publish roots");
         }
         Err(e) => {
-            tracing::error!(%e, "failed to publish roots");
+            tracing::error!(%e, "publish task panicked");
         }
     }
 }
