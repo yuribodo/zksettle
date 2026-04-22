@@ -31,8 +31,8 @@ impl Issuer {
 )]
 pub struct CompressedNullifier;
 
-/// Persisted compressed account state (LightDiscriminator). Same fields as ProofSettled
-/// but represents account data, not an event payload.
+/// Persisted compressed account state (Light discriminator layout in program).
+/// Field order and sizes match `programs/zksettle/src/state/compressed.rs`.
 #[derive(
     Clone, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize,
 )]
@@ -40,16 +40,19 @@ pub struct CompressedAttestation {
     pub issuer: Pubkey,
     pub nullifier_hash: Hash32,
     pub merkle_root: Hash32,
+    pub sanctions_root: Hash32,
+    pub jurisdiction_root: Hash32,
     pub mint: Pubkey,
     pub recipient: Pubkey,
     pub amount: u64,
     pub epoch: u64,
+    pub timestamp: u64,
     pub slot: u64,
     pub payer: Pubkey,
 }
 
 impl CompressedAttestation {
-    pub const LEN: usize = 32 + 32 + 32 + 32 + 32 + 8 + 8 + 8 + 32;
+    pub const LEN: usize = 32 * 8 + 8 * 4;
 }
 
 #[cfg(test)]
@@ -89,10 +92,13 @@ mod tests {
             issuer: [3u8; 32],
             nullifier_hash: [4u8; 32],
             merkle_root: [5u8; 32],
+            sanctions_root: [9u8; 32],
+            jurisdiction_root: [10u8; 32],
             mint: [6u8; 32],
             recipient: [7u8; 32],
             amount: 1_000_000,
             epoch: 42,
+            timestamp: 1_700_000_000,
             slot: 123_456,
             payer: [8u8; 32],
         };
