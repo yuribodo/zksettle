@@ -17,9 +17,8 @@ impl NullifierStore {
         }
     }
 
-    /// Returns `true` if the nullifier was new, `false` if already seen.
-    pub fn try_insert(&self, nullifier: &[u8; 32]) -> bool {
-        self.seen.insert(*nullifier, ()).is_none()
+    pub fn mark_uploaded(&self, nullifier: &[u8; 32]) {
+        self.seen.insert(*nullifier, ());
     }
 
     pub fn contains(&self, nullifier: &[u8; 32]) -> bool {
@@ -32,24 +31,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn insert_new_returns_true() {
+    fn mark_uploaded_then_contains() {
         let store = NullifierStore::new();
-        assert!(store.try_insert(&[1u8; 32]));
-    }
-
-    #[test]
-    fn insert_duplicate_returns_false() {
-        let store = NullifierStore::new();
-        assert!(store.try_insert(&[2u8; 32]));
-        assert!(!store.try_insert(&[2u8; 32]));
-    }
-
-    #[test]
-    fn contains_after_insert() {
-        let store = NullifierStore::new();
-        let n = [3u8; 32];
+        let n = [1u8; 32];
         assert!(!store.contains(&n));
-        store.try_insert(&n);
+        store.mark_uploaded(&n);
         assert!(store.contains(&n));
+    }
+
+    #[test]
+    fn duplicate_mark_is_idempotent() {
+        let store = NullifierStore::new();
+        store.mark_uploaded(&[2u8; 32]);
+        store.mark_uploaded(&[2u8; 32]);
+        assert!(store.contains(&[2u8; 32]));
     }
 }

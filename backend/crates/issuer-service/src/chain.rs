@@ -78,6 +78,20 @@ pub struct PublishResult {
     pub did_register: bool,
 }
 
+pub fn is_issuer_registered(
+    rpc_url: &str,
+    authority: &Pubkey,
+    program_id: &Pubkey,
+) -> Result<bool, ServiceError> {
+    use solana_sdk::commitment_config::CommitmentConfig;
+    let rpc = RpcClient::new(rpc_url.to_string());
+    let (pda, _) = issuer_pda(authority, program_id);
+    let resp = rpc
+        .get_account_with_commitment(&pda, CommitmentConfig::confirmed())
+        .map_err(|e| ServiceError::Chain(format!("RPC probe for issuer PDA failed: {e}")))?;
+    Ok(resp.value.is_some())
+}
+
 pub fn publish_roots(
     rpc_url: &str,
     keypair_bytes: &[u8],

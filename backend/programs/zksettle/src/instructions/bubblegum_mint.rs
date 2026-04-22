@@ -349,9 +349,8 @@ pub fn cpi_mint_from_remaining_tail<'info>(
     let seeds: &[&[u8]] = &[BUBBLEGUM_TREE_CREATOR_SEED, &[tree_creator_bump]];
     let metadata = build_attestation_metadata(issuer, slot, &nullifier_hash, &merkle_root);
 
-    // tail layout: [0] tree_config, [1] leaf_owner, [2] leaf_delegate (unused —
-    // invoke_mint_v1 passes leaf_owner for both), [3] merkle_tree, [4] payer,
-    // [5] tree_creator, [6] log_wrapper, [7] compression, [8] system_program
+    // tail layout: [0] tree_config, [1] leaf_owner, [2] merkle_tree, [3] payer,
+    // [4] tree_creator, [5] log_wrapper, [6] compression, [7] system_program
     invoke_mint_v1(
         bubblegum_program,
         &tail[0],  // tree_config

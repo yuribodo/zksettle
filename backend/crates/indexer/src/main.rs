@@ -22,7 +22,11 @@ async fn main() -> anyhow::Result<()> {
         .json()
         .init();
 
-    let http = reqwest::Client::new();
+    let http = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .build()
+        .context("building http client")?;
     let irys = IrysClient::new(
         config.irys_node_url.clone(),
         config.irys_wallet_key.as_deref(),

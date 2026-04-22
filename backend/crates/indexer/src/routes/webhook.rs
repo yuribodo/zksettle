@@ -32,7 +32,7 @@ pub async fn handle_webhook(
         };
 
         for event in &events {
-            if !state.dedup.try_insert(&event.nullifier_hash) {
+            if state.dedup.contains(&event.nullifier_hash) {
                 info!(
                     nullifier = hex::encode(event.nullifier_hash),
                     "duplicate nullifier, skipping"
@@ -40,12 +40,17 @@ pub async fn handle_webhook(
                 continue;
             }
 
-            if let Err(e) = state.irys.upload(event).await {
-                error!(
-                    nullifier = hex::encode(event.nullifier_hash),
-                    error = %e,
-                    "irys upload failed"
-                );
+            match state.irys.upload(event).await {
+                Ok(_) => {
+                    state.dedup.mark_uploaded(&event.nullifier_hash);
+                }
+                Err(e) => {
+                    error!(
+                        nullifier = hex::encode(event.nullifier_hash),
+                        error = %e,
+                        "irys upload failed, will retry on next webhook delivery"
+                    );
+                }
             }
         }
     }

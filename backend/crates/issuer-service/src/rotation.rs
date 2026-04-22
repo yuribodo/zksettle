@@ -5,7 +5,7 @@ use solana_sdk::signature::Keypair;
 use tokio::sync::watch;
 
 use crate::chain;
-use crate::state::SharedState;
+use crate::state::{PublishLock, SharedState};
 
 pub fn spawn(
     state: SharedState,
@@ -14,6 +14,7 @@ pub fn spawn(
     program_id: Pubkey,
     interval_secs: u64,
     mut shutdown: watch::Receiver<()>,
+    publish_lock: PublishLock,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let interval = Duration::from_secs(interval_secs);
@@ -26,7 +27,7 @@ pub fn spawn(
                     return;
                 }
             }
-            publish_roots(&state, &rpc_url, &keypair_bytes, &program_id).await;
+            publish_roots(&state, &rpc_url, &keypair_bytes, &program_id, &publish_lock).await;
         }
     })
 }
@@ -36,7 +37,10 @@ async fn publish_roots(
     rpc_url: &str,
     keypair_bytes: &[u8],
     program_id: &Pubkey,
+    publish_lock: &PublishLock,
 ) {
+    let _guard = publish_lock.lock().await;
+
     let (mr, sr, jr, was_registered) = {
         let st = state.read().await;
         let roots = st.roots_as_bytes();

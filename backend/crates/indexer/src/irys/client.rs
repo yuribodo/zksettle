@@ -50,7 +50,12 @@ impl IrysClient {
                 tokio::time::sleep(delay).await;
             }
 
-            match self.http.post(&url).body(body.clone()).send().await {
+            match self.http.post(&url)
+                .header("Content-Type", "application/json")
+                .body(body.clone())
+                .send()
+                .await
+            {
                 Ok(resp) if resp.status().is_success() => {
                     let tx_id = resp
                         .text()
