@@ -7,12 +7,14 @@ use crate::{Hash32, Pubkey};
 pub struct Issuer {
     pub authority: Pubkey,
     pub merkle_root: Hash32,
+    pub sanctions_root: Hash32,
+    pub jurisdiction_root: Hash32,
     pub root_slot: u64,
     pub bump: u8,
 }
 
 impl Issuer {
-    pub const LEN: usize = 32 + 32 + 8 + 1;
+    pub const LEN: usize = 32 + 32 + 32 + 32 + 8 + 1;
 }
 
 /// Discriminator-only marker: presence at the derived compressed address
@@ -56,7 +58,7 @@ impl CompressedAttestation {
 mod tests {
     use super::*;
 
-    const ON_CHAIN_ISSUER_LEN: usize = 73;
+    const ON_CHAIN_ISSUER_LEN: usize = 137;
     #[test]
     fn issuer_len_matches_on_chain() {
         assert_eq!(Issuer::LEN, ON_CHAIN_ISSUER_LEN);
@@ -67,6 +69,8 @@ mod tests {
         let original = Issuer {
             authority: [1u8; 32],
             merkle_root: [2u8; 32],
+            sanctions_root: [3u8; 32],
+            jurisdiction_root: [4u8; 32],
             root_slot: 0x0123_4567_89ab_cdef,
             bump: 255,
         };
