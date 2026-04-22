@@ -17,7 +17,6 @@ const _: () = assert!(
 );
 
 #[cfg_attr(feature = "placeholder-vk", allow(dead_code))]
-#[allow(dead_code)] // sanctions / jurisdiction / timestamp still passed for issuer binding + future VK layouts.
 pub(crate) struct BindingInputs<'a> {
     pub merkle_root: &'a [u8; 32],
     pub nullifier_hash: &'a [u8; 32],
@@ -25,8 +24,12 @@ pub(crate) struct BindingInputs<'a> {
     pub epoch: u64,
     pub recipient: &'a Pubkey,
     pub amount: u64,
+    // TODO: add check_bindings entries when VK expands beyond 8 public inputs.
+    #[allow(dead_code)]
     pub sanctions_root: &'a [u8; 32],
+    #[allow(dead_code)]
     pub jurisdiction_root: &'a [u8; 32],
+    #[allow(dead_code)]
     pub timestamp: u64,
 }
 

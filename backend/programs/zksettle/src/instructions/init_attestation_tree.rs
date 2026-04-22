@@ -6,10 +6,11 @@ use anchor_lang::system_program::{self, CreateAccount};
 use crate::constants::{BUBBLEGUM_MAX_BUFFER_SIZE, BUBBLEGUM_MAX_DEPTH};
 use crate::error::ZkSettleError;
 use crate::instructions::bubblegum_mint::{
-    bubblegum_merkle_tree_account_size, invoke_create_tree_config, tree_config_pda, NOOP_PROGRAM_ID,
+    bubblegum_merkle_tree_account_size, invoke_create_tree_config, tree_config_pda, MPL_BUBBLEGUM_ID,
+    NOOP_PROGRAM_ID,
 };
 use crate::state::{
-    BubblegumTreeRegistry, BUBBLEGUM_REGISTRY_SEED, BUBBLEGUM_TREE_CREATOR_SEED,
+    BubblegumTreeRegistry, Issuer, BUBBLEGUM_REGISTRY_SEED, BUBBLEGUM_TREE_CREATOR_SEED, ISSUER_SEED,
 };
 use spl_account_compression::ID as SPL_ACCOUNT_COMPRESSION_ID;
 
@@ -17,6 +18,13 @@ use spl_account_compression::ID as SPL_ACCOUNT_COMPRESSION_ID;
 pub struct InitAttestationTree<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
+
+    #[account(
+        seeds = [ISSUER_SEED, authority.key().as_ref()],
+        bump = issuer.bump,
+        has_one = authority @ ZkSettleError::UnauthorizedIssuer,
+    )]
+    pub issuer: Account<'info, Issuer>,
 
     #[account(
         init,
@@ -38,7 +46,7 @@ pub struct InitAttestationTree<'info> {
     pub tree_creator: AccountInfo<'info>,
 
     /// CHECK: Metaplex Bubblegum program id.
-    #[account(address = crate::MPL_BUBBLEGUM_ID)]
+    #[account(address = MPL_BUBBLEGUM_ID)]
     pub bubblegum_program: UncheckedAccount<'info>,
 
     /// CHECK: SPL account compression program id.

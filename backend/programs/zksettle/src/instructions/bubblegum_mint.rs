@@ -10,7 +10,7 @@ use anchor_lang::solana_program::{
 
 use crate::constants::{BUBBLEGUM_MINT_V1_ACCOUNT_COUNT, MAX_ROOT_AGE_SLOTS};
 use crate::error::ZkSettleError;
-use crate::state::{BubblegumTreeRegistry, BUBBLEGUM_TREE_CREATOR_SEED};
+use crate::state::BUBBLEGUM_TREE_CREATOR_SEED;
 use spl_account_compression::ID as SPL_ACCOUNT_COMPRESSION_ID;
 
 /// Metaplex Bubblegum program id (mainnet / devnet).
@@ -125,6 +125,7 @@ pub fn attestation_metadata_uri(
         &slot.to_le_bytes(),
         &expiry_slot.to_le_bytes(),
     ]);
+    // TODO: move base URI to registry (follow-up)
     format!(
         "https://zksettle.dev/meta/v1/{}",
         h.to_string().chars().take(44).collect::<String>()
@@ -133,6 +134,33 @@ pub fn attestation_metadata_uri(
 
 pub fn attestation_metadata_name(slot: u64) -> String {
     format!("ZKS-{slot}")
+}
+
+pub fn build_attestation_metadata(
+    issuer: Pubkey,
+    slot: u64,
+    nullifier_hash: &[u8; 32],
+    merkle_root: &[u8; 32],
+) -> BgMetadataArgs {
+    let expiry_slot = slot.saturating_add(MAX_ROOT_AGE_SLOTS);
+    BgMetadataArgs {
+        name: attestation_metadata_name(slot),
+        symbol: "ZKSATT".to_string(),
+        uri: attestation_metadata_uri(&issuer, nullifier_hash, merkle_root, slot, expiry_slot),
+        seller_fee_basis_points: 0,
+        primary_sale_happened: false,
+        is_mutable: true,
+        edition_nonce: None,
+        token_standard: Some(BgTokenStandard::NonFungible),
+        collection: None,
+        uses: None,
+        token_program_version: BgTokenProgramVersion::Original,
+        creators: vec![BgCreator {
+            address: issuer,
+            verified: false,
+            share: 100,
+        }],
+    }
 }
 
 pub fn invoke_create_tree_config<'info>(
@@ -241,45 +269,6 @@ pub fn invoke_mint_v1<'info>(
     Ok(())
 }
 
-pub fn validate_bubblegum_mint_accounts<'info>(
-    registry: &Account<'info, BubblegumTreeRegistry>,
-    merkle_tree: &AccountInfo<'info>,
-    tree_config: &AccountInfo<'info>,
-    bubblegum_program: &AccountInfo<'info>,
-    compression_program: &AccountInfo<'info>,
-    log_wrapper: &AccountInfo<'info>,
-    system_program: &AccountInfo<'info>,
-) -> Result<()> {
-    require_keys_eq!(
-        registry.merkle_tree,
-        merkle_tree.key(),
-        ZkSettleError::BubblegumTreeMismatch
-    );
-    let (expected_cfg, _) = tree_config_pda(&merkle_tree.key());
-    require_keys_eq!(
-        tree_config.key(),
-        expected_cfg,
-        ZkSettleError::BubblegumCpiFailed
-    );
-    require_keys_eq!(
-        bubblegum_program.key(),
-        MPL_BUBBLEGUM_ID,
-        ZkSettleError::BubblegumCpiFailed
-    );
-    require_keys_eq!(
-        compression_program.key(),
-        SPL_ACCOUNT_COMPRESSION_ID,
-        ZkSettleError::BubblegumCpiFailed
-    );
-    require_keys_eq!(log_wrapper.key(), NOOP_PROGRAM_ID, ZkSettleError::BubblegumCpiFailed);
-    require_keys_eq!(
-        system_program.key(),
-        anchor_lang::solana_program::system_program::ID,
-        ZkSettleError::BubblegumCpiFailed
-    );
-    Ok(())
-}
-
 #[allow(clippy::too_many_arguments)]
 pub fn cpi_mint_compliance_attestation<'info>(
     bubblegum_program: &AccountInfo<'info>,
@@ -303,29 +292,7 @@ pub fn cpi_mint_compliance_attestation<'info>(
         ZkSettleError::BubblegumCpiFailed
     );
 
-    let expiry_slot = slot.saturating_add(MAX_ROOT_AGE_SLOTS);
-    let uri = attestation_metadata_uri(&issuer, &nullifier_hash, &merkle_root, slot, expiry_slot);
-    let name = attestation_metadata_name(slot);
-    let symbol = "ZKSATT".to_string();
-
-    let metadata = BgMetadataArgs {
-        name,
-        symbol,
-        uri,
-        seller_fee_basis_points: 0,
-        primary_sale_happened: false,
-        is_mutable: true,
-        edition_nonce: None,
-        token_standard: Some(BgTokenStandard::NonFungible),
-        collection: None,
-        uses: None,
-        token_program_version: BgTokenProgramVersion::Original,
-        creators: vec![BgCreator {
-            address: issuer,
-            verified: false,
-            share: 100,
-        }],
-    };
+    let metadata = build_attestation_metadata(issuer, slot, &nullifier_hash, &merkle_root);
 
     let seeds: &[&[u8]] = &[BUBBLEGUM_TREE_CREATOR_SEED, &[tree_creator_bump]];
     invoke_mint_v1(
@@ -380,41 +347,18 @@ pub fn cpi_mint_from_remaining_tail<'info>(
         ZkSettleError::BubblegumTailInvalid
     );
     let seeds: &[&[u8]] = &[BUBBLEGUM_TREE_CREATOR_SEED, &[tree_creator_bump]];
-    let metadata = BgMetadataArgs {
-        name: attestation_metadata_name(slot),
-        symbol: "ZKSATT".to_string(),
-        uri: attestation_metadata_uri(
-            &issuer,
-            &nullifier_hash,
-            &merkle_root,
-            slot,
-            slot.saturating_add(MAX_ROOT_AGE_SLOTS),
-        ),
-        seller_fee_basis_points: 0,
-        primary_sale_happened: false,
-        is_mutable: true,
-        edition_nonce: None,
-        token_standard: Some(BgTokenStandard::NonFungible),
-        collection: None,
-        uses: None,
-        token_program_version: BgTokenProgramVersion::Original,
-        creators: vec![BgCreator {
-            address: issuer,
-            verified: false,
-            share: 100,
-        }],
-    };
+    let metadata = build_attestation_metadata(issuer, slot, &nullifier_hash, &merkle_root);
 
     invoke_mint_v1(
         bubblegum_program,
-        &tail[0],
-        &tail[1],
-        &tail[3],
-        &tail[4],
-        &tail[5],
-        &tail[6],
-        &tail[7],
-        &tail[8],
+        &tail[0],  // tree_config
+        &tail[1],  // leaf_owner (used as both owner + delegate)
+        &tail[2],  // merkle_tree
+        &tail[3],  // payer
+        &tail[4],  // tree_creator_or_delegate
+        &tail[5],  // log_wrapper
+        &tail[6],  // compression_program
+        &tail[7],  // system_program
         metadata,
         &[seeds],
     )

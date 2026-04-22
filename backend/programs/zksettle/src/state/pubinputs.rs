@@ -6,6 +6,3 @@ pub const EPOCH_IDX: usize = 4;
 pub const RECIPIENT_LO_IDX: usize = 5;
 pub const RECIPIENT_HI_IDX: usize = 6;
 pub const AMOUNT_IDX: usize = 7;
-pub const SANCTIONS_ROOT_IDX: usize = 8;
-pub const JURISDICTION_ROOT_IDX: usize = 9;
-pub const TIMESTAMP_IDX: usize = 10;

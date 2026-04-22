@@ -13,7 +13,6 @@ use crate::constants::MAX_ROOT_AGE_SLOTS;
 use crate::error::ZkSettleError;
 use crate::instructions::bubblegum_mint::{
     cpi_mint_compliance_attestation, cpi_mint_from_remaining_tail, split_light_and_bubblegum,
-    validate_bubblegum_mint_accounts,
 };
 use crate::instructions::verify_proof::{verify_bundle, BindingInputs, ProofSettled};
 use crate::state::{
@@ -222,15 +221,6 @@ fn run_settlement(sctx: SettlementContext<'_, '_>) -> Result<()> {
             system_program,
             leaf_owner,
         } => {
-            validate_bubblegum_mint_accounts(
-                sctx.registry,
-                merkle_tree,
-                tree_config,
-                sctx.bubblegum_program,
-                compression,
-                log_wrapper,
-                system_program,
-            )?;
             crate::cu_probe!("pre-bubblegum-mint");
             cpi_mint_compliance_attestation(
                 sctx.bubblegum_program,

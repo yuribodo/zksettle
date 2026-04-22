@@ -61,6 +61,14 @@ pub struct SetHookPayload<'info> {
 pub struct InitExtraAccountMetaList<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
+
+    #[account(
+        seeds = [ISSUER_SEED, authority.key().as_ref()],
+        bump = issuer.bump,
+        has_one = authority @ ZkSettleError::UnauthorizedIssuer,
+    )]
+    pub issuer: Account<'info, Issuer>,
+
     /// CHECK: mint address is only used as a seed input.
     pub mint: UncheckedAccount<'info>,
     /// CHECK: allocated + populated by this handler via `system_program::create_account`

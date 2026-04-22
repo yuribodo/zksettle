@@ -10,7 +10,7 @@ use light_sdk::{
 };
 
 use crate::error::ZkSettleError;
-use crate::instructions::bubblegum_mint::{cpi_mint_compliance_attestation, validate_bubblegum_mint_accounts};
+use crate::instructions::bubblegum_mint::cpi_mint_compliance_attestation;
 use crate::state::{
     compressed::{CompressedAttestation, CompressedNullifier},
     ATTESTATION_SEED, NULLIFIER_SEED,
@@ -156,16 +156,6 @@ pub fn handler<'info>(
         ))?;
 
     crate::cu_probe!("post-light-cpi");
-
-    validate_bubblegum_mint_accounts(
-        &ctx.accounts.registry,
-        ctx.accounts.merkle_tree.as_ref(),
-        ctx.accounts.tree_config.as_ref(),
-        ctx.accounts.bubblegum_program.as_ref(),
-        ctx.accounts.compression_program.as_ref(),
-        ctx.accounts.log_wrapper.as_ref(),
-        ctx.accounts.system_program.as_ref(),
-    )?;
 
     crate::cu_probe!("pre-bubblegum-mint");
     cpi_mint_compliance_attestation(
