@@ -44,6 +44,14 @@ mutants-file path:
 mutants-list:
     cd backend && cargo mutants -p zksettle --list
 
+# Indexer unit tests
+test-indexer:
+    cd backend && cargo test -p indexer --lib
+
+# Run indexer (needs INDEXER_ env vars)
+run-indexer:
+    cd backend && cargo run -p indexer
+
 # ── Build & Check ──────────────────────────────────────────────────
 
 # Type-check without building

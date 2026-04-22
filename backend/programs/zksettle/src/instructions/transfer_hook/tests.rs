@@ -68,6 +68,7 @@ fn validate_accepts_max_proof_len() {
 #[test]
 fn staged_args_roundtrip_tree_info() {
     let args = StagedLightArgs {
+        bubblegum_tail: 0,
         proof_present: false,
         proof_bytes: [0u8; 128],
         address_mt_index: 7,
@@ -84,6 +85,7 @@ fn staged_args_roundtrip_tree_info() {
 #[test]
 fn staged_args_roundtrip_validity_proof_absent() {
     let args = StagedLightArgs {
+        bubblegum_tail: 0,
         proof_present: false,
         proof_bytes: [0u8; 128],
         address_mt_index: 0,
@@ -101,6 +103,7 @@ fn staged_args_roundtrip_validity_proof_present() {
         *b = i as u8;
     }
     let args = StagedLightArgs {
+        bubblegum_tail: 0,
         proof_present: true,
         proof_bytes,
         address_mt_index: 0,
@@ -312,6 +315,7 @@ mod settlement_guards {
     #[test]
     fn staged_args_validity_proof_present_all_zeros() {
         let args = StagedLightArgs {
+            bubblegum_tail: 0,
             proof_present: true,
             proof_bytes: [0u8; 128],
             address_mt_index: 0,
@@ -326,6 +330,7 @@ mod settlement_guards {
     #[test]
     fn staged_args_validity_proof_absent_ignores_garbage() {
         let args = StagedLightArgs {
+            bubblegum_tail: 0,
             proof_present: false,
             proof_bytes: [0xff; 128],
             address_mt_index: 255,

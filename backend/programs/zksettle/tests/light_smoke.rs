@@ -1,4 +1,4 @@
-#![cfg(feature = "light-tests")]
+#![cfg(all(feature = "light-tests", unix))]
 //! Smoke tests for the Light Protocol migration.
 //!
 //! Boots a `LightProgramTest` harness with the compiled `zksettle.so` and

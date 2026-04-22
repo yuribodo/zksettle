@@ -66,6 +66,15 @@ pub enum ZkSettleError {
     ZeroSanctionsRoot,
     #[msg("Jurisdiction root must be non-zero")]
     ZeroJurisdictionRoot,
+    #[msg("Bubblegum attestation tree is not initialized (run init_attestation_tree)")]
+    BubblegumTreeNotConfigured,
+    // Retained for IDL stability; was used by validate_bubblegum_mint_accounts (removed).
+    #[msg("Merkle tree account does not match global Bubblegum registry")]
+    BubblegumTreeMismatch,
+    #[msg("Bubblegum create_tree_config or mint CPI failed")]
+    BubblegumCpiFailed,
+    #[msg("Trailing Bubblegum account count is invalid for remaining_accounts split")]
+    BubblegumTailInvalid,
 }
 
 /// Map an external Result's Err into a `ZkSettleError`, logging the source via
@@ -122,6 +131,10 @@ mod tests {
             ZkSettleError::EpochStale as u32,
             ZkSettleError::AttestationExpired as u32,
             ZkSettleError::NegativeClock as u32,
+            ZkSettleError::LightTreeLookupFailed as u32,
+            ZkSettleError::LightAccountPackFailed as u32,
+            ZkSettleError::LightInvokeFailed as u32,
+            ZkSettleError::InvalidLightAddress as u32,
             ZkSettleError::HookPayloadInvalid as u32,
             ZkSettleError::InvalidTransferAmount as u32,
             ZkSettleError::IssuerMismatch as u32,
@@ -133,6 +146,10 @@ mod tests {
             ZkSettleError::TimestampMismatch as u32,
             ZkSettleError::ZeroSanctionsRoot as u32,
             ZkSettleError::ZeroJurisdictionRoot as u32,
+            ZkSettleError::BubblegumTreeNotConfigured as u32,
+            ZkSettleError::BubblegumTreeMismatch as u32,
+            ZkSettleError::BubblegumCpiFailed as u32,
+            ZkSettleError::BubblegumTailInvalid as u32,
         ];
         let mut seen = std::collections::HashSet::new();
         for code in &codes {

@@ -135,6 +135,7 @@ pub fn init_extra_meta_ix(
 
 pub fn default_light_args() -> StagedLightArgs {
     StagedLightArgs {
+        bubblegum_tail: 0,
         proof_present: false,
         proof_bytes: [0u8; 128],
         address_mt_index: 0,

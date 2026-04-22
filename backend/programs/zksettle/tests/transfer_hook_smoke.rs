@@ -1,4 +1,4 @@
-#![cfg(feature = "light-tests")]
+#![cfg(all(feature = "light-tests", unix))]
 //! Smoke tests for the Token-2022 transfer-hook path.
 //!
 //! Tests here exercise `set_hook_payload` and `init_extra_account_meta_list`
@@ -11,6 +11,9 @@
 //! ```bash
 //! cargo test --features light-tests --test transfer_hook_smoke -- --nocapture
 //! ```
+//!
+//! **Windows:** `light-program-test` is not linked on non-Unix targets (dev-deps
+//! are Unix-only). Run these tests under WSL or Linux CI.
 
 mod helpers;
 

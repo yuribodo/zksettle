@@ -22,6 +22,9 @@ pub const MAX_HOOK_PROOF_BYTES: usize = 16_384;
 /// otherwise the tree-root index and validity proof go stale.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, InitSpace)]
 pub struct StagedLightArgs {
+    /// Trailing accounts on Token-2022 `Execute` (after Light metas) for Bubblegum `MintV1`
+    /// (`BUBBLEGUM_MINT_V1_ACCOUNT_COUNT`) or `0` when not minting in the hook path.
+    pub bubblegum_tail: u8,
     /// Whether a compressed proof is present; mirrors `ValidityProof(Option<_>)`.
     pub proof_present: bool,
     /// Packed Groth16 proof bytes, only meaningful when `proof_present` is true.
