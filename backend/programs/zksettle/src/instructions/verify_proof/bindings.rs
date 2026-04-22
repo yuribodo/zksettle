@@ -4,9 +4,15 @@ use gnark_verifier_solana::{proof::GnarkProof, verifier::GnarkVerifier, witness:
 use crate::error::ZkSettleError;
 use crate::generated_vk::VK;
 use crate::state::{
-    AMOUNT_IDX, EPOCH_IDX, JURISDICTION_ROOT_IDX, MERKLE_ROOT_IDX, MINT_HI_IDX, MINT_LO_IDX,
-    NULLIFIER_IDX, RECIPIENT_HI_IDX, RECIPIENT_LO_IDX, SANCTIONS_ROOT_IDX, TIMESTAMP_IDX,
+    AMOUNT_IDX, EPOCH_IDX, MERKLE_ROOT_IDX, MINT_HI_IDX, MINT_LO_IDX,
+    NULLIFIER_IDX, RECIPIENT_HI_IDX, RECIPIENT_LO_IDX,
 };
+
+// Future indices — not yet in on-chain pubinputs.rs.
+// Activate when VK is regenerated from the 11-input circuit.
+pub(crate) const SANCTIONS_ROOT_IDX: usize = 8;
+pub(crate) const JURISDICTION_ROOT_IDX: usize = 9;
+pub(crate) const TIMESTAMP_IDX: usize = 10;
 
 use super::helpers::{expected_witness_len, pubkey_to_limbs, split_proof_and_witness, u64_to_field_bytes};
 

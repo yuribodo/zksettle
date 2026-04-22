@@ -7,3 +7,5 @@ node_modules/
 .anchor/
 .DS_Store
 backend/programs/zksettle/src/generated_vk.rs
+.env
+.env.*

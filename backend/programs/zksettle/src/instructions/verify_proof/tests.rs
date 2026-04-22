@@ -6,9 +6,11 @@ use gnark_verifier_solana::witness::GnarkWitness;
 
 use crate::error::ZkSettleError;
 use crate::state::{
-    AMOUNT_IDX, EPOCH_IDX, JURISDICTION_ROOT_IDX, MERKLE_ROOT_IDX, MINT_HI_IDX, MINT_LO_IDX,
-    NULLIFIER_IDX, RECIPIENT_HI_IDX, RECIPIENT_LO_IDX, SANCTIONS_ROOT_IDX, TIMESTAMP_IDX,
+    AMOUNT_IDX, EPOCH_IDX, MERKLE_ROOT_IDX, MINT_HI_IDX, MINT_LO_IDX,
+    NULLIFIER_IDX, RECIPIENT_HI_IDX, RECIPIENT_LO_IDX,
 };
+
+use super::bindings::{SANCTIONS_ROOT_IDX, JURISDICTION_ROOT_IDX, TIMESTAMP_IDX};
 
 use super::bindings::{check_bindings, BindingInputs};
 use super::helpers::{
