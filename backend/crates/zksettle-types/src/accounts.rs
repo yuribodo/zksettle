@@ -72,8 +72,8 @@ mod tests {
         let original = Issuer {
             authority: [1u8; 32],
             merkle_root: [2u8; 32],
-            sanctions_root: [11u8; 32],
-            jurisdiction_root: [12u8; 32],
+            sanctions_root: [3u8; 32],
+            jurisdiction_root: [4u8; 32],
             root_slot: 0x0123_4567_89ab_cdef,
             bump: 255,
         };
