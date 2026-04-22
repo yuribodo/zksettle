@@ -37,6 +37,8 @@ pub(crate) fn validate_attestation(
     nullifier_hash: &[u8; 32],
     issuer_key: &Pubkey,
 ) -> Result<()> {
+    // TODO(post-hackathon): reuses MAX_ROOT_AGE_SLOTS (~2 days). Consider a
+    // separate MAX_ATTESTATION_AGE_SLOTS if attestation lifetime should differ.
     let age = current_slot.saturating_sub(attestation.slot);
     require!(age <= MAX_ROOT_AGE_SLOTS, ZkSettleError::AttestationExpired);
     require!(
