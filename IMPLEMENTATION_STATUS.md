@@ -1,6 +1,6 @@
 # ZKSettle — Implementation Status
 
-**Snapshot date:** 2026-04-20
+**Snapshot date:** 2026-04-22
 **Week:** 2 of 5 (PRD §12)
 **Submission target:** 2026-05-11 (21 days remaining)
 **Branch at snapshot:** `feat/light-compression`
@@ -22,8 +22,8 @@ This document is the ground truth for what exists in the repository today versus
 | On-chain | Token-2022 Transfer Hook | **DONE (partial)** (staging + settle + execute + atomicity gate wired; fixtures pending) |
 | On-chain | `check_attestation` ix | **DONE** |
 | On-chain | Light Protocol compression (real) | **DONE** (write path + read path migrated; integration fixtures TODO) |
-| On-chain | Bubblegum cNFT attestation | **TODO** |
-| Crate | `zksettle-types` | **TODO** |
+| On-chain | Bubblegum cNFT attestation | **DONE** (`init_attestation_tree` + post-Light `MintV1` CPI; ADR-019) |
+| Crate | `zksettle-types` | **PARTIAL** (`CompressedAttestation` / `ProofSettled` aligned to on-chain; broader schema TBD) |
 | Crate | `zksettle-crypto` | **TODO** |
 | Crate | `issuer-service` | **TODO** |
 | Crate | `indexer` | **TODO** |
@@ -100,9 +100,9 @@ ADR-006 / ADR-007 call for Light Protocol ZK Compression. `verify_proof` now wri
 
 What's still missing: **integration-test coverage of the Light-CPI paths**. `tests/light_smoke.rs` only exercises the pure-Anchor instructions (`register_issuer`, `update_issuer_root`) through `LightProgramTest`. `verify_proof` / `check_attestation` need a dedicated fixture crate wiring gnark proof + witness bytes into a compressed-account setup with a running prover server. Tracked as ADR-006 follow-up.
 
-### 2.3 Attestation record = PDA, not cNFT
+### 2.3 Light compressed attestation + Bubblegum cNFT (ADR-019)
 
-`verify_proof` now writes an `Attestation` PDA and emits `ProofSettled` — RF-02 and UC-01.7 satisfied at the Anchor-account level. Bubblegum cNFT form (ADR-019) is still future work. Indexer consumes `ProofSettled` event; no CPI contract yet for consumer programs (see §3.1 `check_attestation`).
+`verify_proof` and the hook settlement path write **Light** compressed nullifier + `CompressedAttestation`, then mint a **Bubblegum** compressed NFT to `recipient` in the same instruction. The cNFT is a wallet-visible supplement (DAS); authoritative replay binding remains the Light nullifier + compressed attestation layout in `state/compressed.rs`. Indexers should treat **DAS / Merkle proofs** as the read model for the cNFT; on-chain programs that need a hard gate continue to use `check_attestation` or policy on supplied proofs.
 
 ---
 
@@ -117,7 +117,7 @@ What's still missing: **integration-test coverage of the Light-CPI paths**. `tes
 - **Token-2022 Transfer Hook** (ADR-005, RF-03). `transfer_hook`, `settle_hook`, `set_hook_payload`, and `init_extra_account_meta_list` instructions wired in `lib.rs`. Two-phase flow: client stages proof + Light args via `set_hook_payload` and Token-2022 Execute (or direct `settle_hook`) consumes the payload, runs `verify_bundle`, and mints compressed nullifier + attestation via Light CPI. Atomicity enforced via `spl_token_2022::extension::transfer_hook::TransferHookAccount.transferring` gate + source-token owner-program + base-owner checks. Known trade-offs: single outstanding payload per authority (TLV resolution only sees `amount: u64` + account keys, so PDAs cannot be nullifier-seeded); hook-path payload PDA is not closed (SPL passes `owner` as `new_readonly`, blocking `close = owner` — rent reclaim deferred, tracked as follow-up). **DONE (partial).** Remaining gap: gnark fixture + Token-2022 mint configured with the hook to lift the `#[ignore]` on `transfer_hook_smoke.rs`; hook-path CU measurement vs ADR-022 ceiling (probe feature `hook-cu-probe` exists, value unrecorded).
 - **`check_attestation(nullifier_hash)`** instruction (PRD §7 Componente 2, RF-02). Validates attestation PDA freshness within `MAX_ROOT_AGE_SLOTS`; emits `AttestationChecked` event. CPI-callable by transfer hooks / other programs. **DONE.**
 - **Light Protocol integration** (ADR-006). Write + read paths migrated; integration fixtures (gnark proof bytes + compressed-account setup + prover server) are the remaining gap — see §2.2.
-- **Bubblegum cNFT attestation** (ADR-019 / README Components row).
+- ~~**Bubblegum cNFT attestation** (ADR-019 / README Components row).~~ **DONE:** `init_attestation_tree`, registry PDA, raw Bubblegum CPI module, `verify_proof` + `settle_hook` + `transfer_hook` (TLV tail) wiring. **Remaining:** end-to-end harness with Bubblegum programs loaded + gnark fixture to assert mint in CI; `cargo test --features light-tests` integration tests are **Unix-only** dev-deps (`light-program-test` pulls OpenSSL; Windows devs use WSL or omit the feature).
 
 ### 3.2 Rust crates — `backend/crates/` (directory does not exist)
 
@@ -222,7 +222,7 @@ For each divergence between the repository and `README.md` / `zksettle_prd.md` /
 | 1 | README L123 warns circuit is `x*x == y` placeholder; actual `main.nr` is Merkle + nullifier slice (commit `ce658e2`). | **Code** | Remove the warning paragraph; keep the VK-regen note. |
 | 2 | `update_issuer_root` instruction shipped (commit `19fddce`) but not listed in PRD RF-02 or README Components row. | **Code** | Add `update_issuer_root` to PRD RF-02 and to the README Components row for the Anchor program. |
 | 3 | Nullifier and attestation use vanilla Anchor PDAs; ADR-006 / ADR-007 mandate Light Protocol ZK Compression. | **Docs (long-term)** | Keep PDA stand-ins through the hackathon demo; open a migration ticket before mainnet. Rent at 50 k proofs/month = ~100 SOL/month, not acceptable at scale. |
-| 4 | ~~`verify_proof` emits no attestation.~~ | **Resolved** | `Attestation` PDA + `ProofSettled` event implemented. Bubblegum cNFT form (ADR-019) still on roadmap. |
+| 4 | ~~`verify_proof` emits no attestation.~~ | **Resolved** | Light compressed nullifier + attestation + `ProofSettled` event. Bubblegum cNFT mint (ADR-019) implemented after Light CPI. |
 | 5 | `scripts/fixture-noir/` ships a fixture generator; not in README repo-layout tree. | **Code** | Add `scripts/fixture-noir/` to the README layout block. |
 | 6 | README §Technology stack + repo layout call the dashboard "Vite + React"; PRD §8 calls it "Next.js + TypeScript". No frontend code yet. | **Doc self-conflict** | Pick **Vite + React** (SPA dashboard, no SSR requirement, smaller bundle, faster dev loop). Update PRD §8 to match README before scaffolding. |
 | 7 | ~~`check_attestation(wallet)` absent from `lib.rs`.~~ | **Resolved** | `check_attestation(nullifier_hash)` implemented. Validates attestation freshness via `MAX_ROOT_AGE_SLOTS`, emits `AttestationChecked`. CPI-ready for transfer hooks. |
