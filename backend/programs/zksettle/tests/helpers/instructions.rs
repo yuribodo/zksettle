@@ -1,6 +1,7 @@
 use anchor_lang::prelude::Pubkey;
 use anchor_lang::{system_program, InstructionData};
 use solana_instruction::{AccountMeta, Instruction};
+use spl_discriminator::SplDiscriminate;
 
 use zksettle::instruction::{
     InitExtraAccountMetaList as InitMetaIx, RegisterIssuer as RegisterIssuerIx,
@@ -186,7 +187,7 @@ pub fn execute_hook_ix(
     let (payload_pda, _) = hook_payload_pda(owner);
 
     let mut data = Vec::with_capacity(16);
-    data.extend_from_slice(&[105, 37, 101, 197, 75, 251, 102, 26]);
+    data.extend_from_slice(spl_transfer_hook_interface::instruction::ExecuteInstruction::SPL_DISCRIMINATOR_SLICE);
     data.extend_from_slice(&amount.to_le_bytes());
 
     Instruction {

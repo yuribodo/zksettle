@@ -162,7 +162,8 @@ pub struct SettleHook<'info> {
 pub struct ExecuteHook<'info> {
     /// CHECK: source token account; Token-2022 enforces ownership + writability.
     pub source_token: UncheckedAccount<'info>,
-    /// CHECK: mint; bound to `hook_payload.mint`.
+    /// CHECK: mint; validated by `enforce_token_2022_hook_accounts` + constraint.
+    #[account(constraint = mint.key() == hook_payload.mint @ ZkSettleError::MintMismatch)]
     pub mint: UncheckedAccount<'info>,
     /// CHECK: destination token; bound to `hook_payload.recipient`.
     pub destination_token: UncheckedAccount<'info>,
