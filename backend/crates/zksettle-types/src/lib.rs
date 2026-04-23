@@ -2,12 +2,14 @@ pub mod accounts;
 pub mod credential;
 pub mod error;
 pub mod events;
+pub mod gateway;
 pub mod policy;
 
 pub use accounts::{CompressedAttestation, CompressedNullifier, Issuer};
 pub use credential::{Credential, CredentialCommitment};
 pub use error::ZksettleError;
 pub use events::{AttestationChecked, ProofSettled};
+pub use gateway::{ApiKeyRecord, Tier, UsageRecord};
 pub use policy::Policy;
 
 pub type Pubkey = [u8; 32];
