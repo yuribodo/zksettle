@@ -1,3 +1,4 @@
+mod auth;
 mod chain;
 mod config;
 mod convert;
@@ -9,6 +10,7 @@ mod state;
 
 use std::sync::Arc;
 
+use axum::middleware;
 use axum::routing::{get, post};
 use axum::{Extension, Router};
 use solana_sdk::pubkey::Pubkey;
@@ -16,6 +18,7 @@ use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
 use tokio::sync::{watch, RwLock};
 
+use auth::ApiToken;
 use config::Config;
 use state::{IssuerState, PublishLock};
 
@@ -50,12 +53,19 @@ async fn main() {
         .parse()
         .unwrap_or_else(|e| panic!("invalid program ID '{}': {e}", cfg.program_id));
 
+    let api_token = cfg.api_token;
+    if api_token.is_none() {
+        tracing::warn!("API_TOKEN not set — all endpoints are unauthenticated");
+    }
+    let auth_enabled = api_token.is_some();
+
     tracing::info!(
         authority = %keypair.pubkey(),
         %program_id,
         rpc = %cfg.rpc_url,
         listen = %cfg.listen_addr,
         rotation_secs = cfg.rotation_interval_secs,
+        auth_enabled,
         "starting issuer service"
     );
 
@@ -101,21 +111,48 @@ async fn main() {
         publish_lock.clone(),
     );
 
-    let app = Router::new()
+    let public_routes = Router::new()
         .route("/health", get(handlers::health::handler))
-        .route("/credentials", post(handlers::issue_credential::handler))
-        .route("/credentials/{wallet}", get(handlers::get_credential::handler).delete(handlers::revoke_credential::handler))
-        .route("/wallets", post(handlers::add_wallet::handler))
-        .route("/proofs/membership/{wallet}", get(handlers::get_proof::handler))
-        .route("/proofs/sanctions/{wallet}", get(handlers::get_sanctions_proof::handler))
         .route("/roots", get(handlers::get_roots::handler))
-        .route("/roots/publish", post(handlers::publish::handler))
+        .route(
+            "/credentials/{wallet}",
+            get(handlers::get_credential::handler),
+        )
+        .route(
+            "/proofs/membership/{wallet}",
+            get(handlers::get_proof::handler),
+        )
+        .route(
+            "/proofs/sanctions/{wallet}",
+            get(handlers::get_sanctions_proof::handler),
+        );
+
+    let mut protected_routes = Router::new()
+        .route("/credentials", post(handlers::issue_credential::handler))
+        .route(
+            "/credentials/{wallet}",
+            axum::routing::delete(handlers::revoke_credential::handler),
+        )
+        .route("/wallets", post(handlers::add_wallet::handler))
+        .route("/roots/publish", post(handlers::publish::handler));
+
+    if api_token.is_some() {
+        protected_routes =
+            protected_routes.layer(middleware::from_fn(auth::require_bearer));
+    }
+
+    let mut app = public_routes
+        .merge(protected_routes)
         .layer(Extension(RpcUrl(cfg.rpc_url)))
         .layer(Extension(KeypairBytes(keypair_json)))
         .layer(Extension(ProgramId(program_id)))
         .layer(Extension(publish_lock))
         .layer(Extension(StatePath(cfg.state_path)))
         .with_state(shared);
+
+    if let Some(token) = api_token {
+        app = app.layer(Extension(ApiToken(token)));
+    }
 
     let listener = tokio::net::TcpListener::bind(cfg.listen_addr).await.unwrap();
     tracing::info!("listening on {}", cfg.listen_addr);
