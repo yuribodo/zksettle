@@ -73,7 +73,7 @@ Proof generation no browser via `@noir-lang/backend_barretenberg` + `@noir-lang/
 
 ---
 
-## ADR-004 · Função hash em circuits: Poseidon
+## ADR-004 · Função hash em circuits: Poseidon2
 
 **Status:** Aceito
 
@@ -81,7 +81,7 @@ Proof generation no browser via `@noir-lang/backend_barretenberg` + `@noir-lang/
 Merkle trees, commitments, e nullifiers dentro de circuits ZK precisam de funções hash. A escolha afeta diretamente o número de constraints e a performance do circuit.
 
 ### Decisão
-**Poseidon hash** — ZK-friendly, nativo no Noir.
+**Poseidon2 hash** — ZK-friendly, usado via `poseidon2_permutation` no Noir. O circuit implementa um sponge sobre a permutação pública (`std::hash::poseidon2_permutation`) porque `Poseidon2::hash` é `pub(crate)` no Noir 1.0.0-beta.18.
 
 ### Por quê
 Poseidon foi projetado especificamente para ser eficiente em arithmetic circuits. Um hash Poseidon custa ~220 constraints vs ~25.000 constraints para SHA-256 dentro de um circuit ZK. Para uma Merkle tree de profundidade 20, isso significa a diferença entre ~4.400 e ~500.000 constraints — impacto direto no tempo de proof generation no browser.
@@ -193,7 +193,7 @@ Billing via Stripe ou similar off-chain inicialmente. On-chain billing via x402 
 | ADR-001 | Curva BN254 | BLS12-381 (sem syscalls) |
 | ADR-002 | Groth16 via Sunspot | halo2 (sem syscalls dedicadas) |
 | ADR-003 | Noir para circuits | circom (DX inferior) |
-| ADR-004 | Poseidon hash | SHA-256 (100× mais constraints) |
+| ADR-004 | Poseidon2 hash | SHA-256 (100× mais constraints) |
 | ADR-005 | Token Extensions + Transfer Hooks | SPL legacy + wrapper (bypassável) |
 | ADR-006 | Light Protocol compression | Manual compressed accounts |
 | ADR-007 | Nullifier on-chain | Timestamp expiry only (inseguro) |
@@ -280,7 +280,7 @@ Anti-replay preservado via nullifier por session. Requer UI no SDK para gerencia
 
 ## ADR-013 · Jurisdiction set como Merkle root
 
-**Status:** Proposto (PRD §15.5, substitui implicitamente decisão do PRD §7)
+**Status:** Decidido / implementado (circuit + issuer account; PRD §15.5)
 
 ### Contexto
 `jurisdiction_set_hash` como public input invalida todas proofs antigas quando issuer muda conjunto. Adicionar país = força re-prove global.
@@ -466,13 +466,13 @@ O mesmo `verify_bundle` roda sob o hook do Token-2022, mas o path adiciona: (a) 
 | ADR-010 | Schema versioning | Alta (produção) |
 | ADR-011 | Revocation SMT | Crítica (sanctions) |
 | ADR-012 | Session proofs | Média (UX) |
-| ADR-013 | Jurisdiction Merkle | Alta (produção) |
+| ADR-013 | Jurisdiction Merkle | Decidido (implementado) |
 | ADR-014 | Policy engine | Alta (pitch) |
 | ADR-015 | Witness caching | Baixa (DX) |
 | ADR-016 | Circuit split | Contingente (S1 bench) |
 | ADR-017 | Audit epoch merkleizado | Alta (produção) |
 | ADR-018 | W3C VC + BBS+ | Alta (pitch) |
-| ADR-019 | cNFT attestation | Média (UC-03/04) |
+| ADR-019 | cNFT attestation | Decidido (implementado) |
 | ADR-020 | Nullifier context explícito | Decidido (security) |
 | ADR-021 | Janela de frescor da Merkle root | Decidido (security) |
 | ADR-022 | Orçamento de CU pós-ADR-020 | Decidido (perf) |
