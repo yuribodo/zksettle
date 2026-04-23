@@ -4,8 +4,9 @@ use solana_instruction::{AccountMeta, Instruction};
 use spl_discriminator::SplDiscriminate;
 
 use zksettle::instruction::{
-    InitExtraAccountMetaList as InitMetaIx, RegisterIssuer as RegisterIssuerIx,
-    SetHookPayload as SetPayloadIx, UpdateIssuerRoot as UpdateIssuerRootIx,
+    CloseHookPayload as ClosePayloadIx, InitExtraAccountMetaList as InitMetaIx,
+    RegisterIssuer as RegisterIssuerIx, SetHookPayload as SetPayloadIx,
+    UpdateIssuerRoot as UpdateIssuerRootIx,
 };
 use zksettle::instructions::transfer_hook::{
     ExtraAccountMetaInput, StagedLightArgs, EXTRA_ACCOUNT_META_LIST_SEED, HOOK_PAYLOAD_SEED,
@@ -204,6 +205,18 @@ pub fn execute_hook_ix(
             AccountMeta::new_readonly(*bubblegum_program, false),
         ],
         data,
+    }
+}
+
+pub fn close_hook_payload_ix(authority: &Pubkey) -> Instruction {
+    let (payload_pda, _) = hook_payload_pda(authority);
+    Instruction {
+        program_id: zksettle::ID,
+        accounts: vec![
+            AccountMeta::new(*authority, true),
+            AccountMeta::new(payload_pda, false),
+        ],
+        data: ClosePayloadIx {}.data(),
     }
 }
 
