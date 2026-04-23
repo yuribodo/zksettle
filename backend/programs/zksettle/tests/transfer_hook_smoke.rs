@@ -26,31 +26,18 @@ use zksettle::instructions::transfer_hook::{ExtraAccountMetaInput, MAX_HOOK_PROO
 
 use helpers::{
     boot_harness, create_token2022_mint_with_hook_ixs, default_light_args, execute_hook_ix,
-    extra_meta_pda, funded_authority, hook_payload_pda, init_extra_meta_ix, issuer_pda,
-    register_ix, set_hook_payload_ix, ANCHOR_ERROR_CODE_OFFSET,
+    extra_meta_pda, hook_payload_pda, init_extra_meta_ix, nonzero_nullifier, registered_issuer,
+    set_hook_payload_ix, ANCHOR_ERROR_CODE_OFFSET,
 };
 
 #[tokio::test]
 async fn set_hook_payload_stores_fields() {
     let mut rpc = boot_harness().await;
-    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+    let (authority, issuer_key) = registered_issuer(&mut rpc).await;
 
-    rpc.create_and_send_transaction(
-        &[register_ix(&authority.pubkey(), [1u8; 32])],
-        &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("register should succeed");
-
-    let issuer_key = issuer_pda(&authority.pubkey());
     let mint = Pubkey::new_unique();
     let recipient = Pubkey::new_unique();
-    let nullifier = {
-        let mut n = [0u8; 32];
-        n[0] = 1;
-        n
-    };
+    let nullifier = nonzero_nullifier();
 
     rpc.create_and_send_transaction(
         &[set_hook_payload_ix(
@@ -89,17 +76,8 @@ async fn set_hook_payload_stores_fields() {
 #[tokio::test]
 async fn set_hook_payload_rejects_zero_nullifier() {
     let mut rpc = boot_harness().await;
-    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+    let (authority, issuer_key) = registered_issuer(&mut rpc).await;
 
-    rpc.create_and_send_transaction(
-        &[register_ix(&authority.pubkey(), [1u8; 32])],
-        &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("register");
-
-    let issuer_key = issuer_pda(&authority.pubkey());
     let result = rpc
         .create_and_send_transaction(
             &[set_hook_payload_ix(
@@ -129,19 +107,7 @@ async fn set_hook_payload_rejects_zero_nullifier() {
 #[tokio::test]
 async fn set_hook_payload_rejects_zero_amount() {
     let mut rpc = boot_harness().await;
-    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
-
-    rpc.create_and_send_transaction(
-        &[register_ix(&authority.pubkey(), [1u8; 32])],
-        &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("register");
-
-    let issuer_key = issuer_pda(&authority.pubkey());
-    let mut nullifier = [0u8; 32];
-    nullifier[0] = 1;
+    let (authority, issuer_key) = registered_issuer(&mut rpc).await;
 
     let result = rpc
         .create_and_send_transaction(
@@ -149,7 +115,7 @@ async fn set_hook_payload_rejects_zero_amount() {
                 &authority.pubkey(),
                 &issuer_key,
                 vec![0xaa; 256],
-                nullifier,
+                nonzero_nullifier(),
                 Pubkey::new_unique(),
                 10,
                 Pubkey::new_unique(),
@@ -174,18 +140,8 @@ async fn init_extra_account_meta_list_succeeds() {
     use solana_keypair::Keypair;
 
     let mut rpc = boot_harness().await;
-    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+    let (authority, _) = registered_issuer(&mut rpc).await;
 
-    // Register issuer (required by InitExtraAccountMetaList struct constraint)
-    rpc.create_and_send_transaction(
-        &[register_ix(&authority.pubkey(), [1u8; 32])],
-        &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("register should succeed");
-
-    // Create a Token-2022 mint with TransferHook pointing to zksettle
     let mint_kp = Keypair::new();
     let mint_ixs = create_token2022_mint_with_hook_ixs(&authority.pubkey(), &mint_kp.pubkey(), 6);
     rpc.create_and_send_transaction(&mint_ixs, &authority.pubkey(), &[&authority, &mint_kp])
@@ -223,19 +179,7 @@ async fn init_extra_account_meta_list_succeeds() {
 #[tokio::test]
 async fn set_hook_payload_rejects_oversized_proof() {
     let mut rpc = boot_harness().await;
-    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
-
-    rpc.create_and_send_transaction(
-        &[register_ix(&authority.pubkey(), [1u8; 32])],
-        &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("register");
-
-    let issuer_key = issuer_pda(&authority.pubkey());
-    let mut nullifier = [0u8; 32];
-    nullifier[0] = 1;
+    let (authority, issuer_key) = registered_issuer(&mut rpc).await;
 
     let result = rpc
         .create_and_send_transaction(
@@ -243,7 +187,7 @@ async fn set_hook_payload_rejects_oversized_proof() {
                 &authority.pubkey(),
                 &issuer_key,
                 vec![0xaa; MAX_HOOK_PROOF_BYTES + 1],
-                nullifier,
+                nonzero_nullifier(),
                 Pubkey::new_unique(),
                 10,
                 Pubkey::new_unique(),
@@ -266,24 +210,14 @@ async fn set_hook_payload_rejects_oversized_proof() {
 #[tokio::test]
 async fn execute_hook_rejects_missing_payload() {
     let mut rpc = boot_harness().await;
-    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+    let (authority, issuer_key) = registered_issuer(&mut rpc).await;
 
-    rpc.create_and_send_transaction(
-        &[register_ix(&authority.pubkey(), [1u8; 32])],
-        &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("register");
-
-    let issuer_key = issuer_pda(&authority.pubkey());
     let fake_mint = Pubkey::new_unique();
     let fake_source = Pubkey::new_unique();
     let fake_dest = Pubkey::new_unique();
     let registry = Pubkey::new_unique();
     let bubblegum = Pubkey::new_unique();
 
-    // No hook_payload has been staged — the PDA account is uninitialized.
     let result = rpc
         .create_and_send_transaction(
             &[execute_hook_ix(
