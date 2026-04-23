@@ -1,0 +1,16 @@
+{
+  "name": "zksettle-devnet-hook",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Devnet wiring script for Token-2022 transfer hook end-to-end test",
+  "scripts": {
+    "setup": "ts-node setup.ts"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.31.1",
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.95.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
+  }
+}

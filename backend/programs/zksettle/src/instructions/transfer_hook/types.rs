@@ -74,8 +74,7 @@ pub struct HookPayload {
     pub bump: u8,
 }
 
-/// Anchor-serializable mirror of `spl_tlv_account_resolution::account::ExtraAccountMeta`.
-/// Clients submit an ordered list; the program converts and writes the TLV.
+/// Anchor-serializable mirror of `ExtraAccountMeta` (which lacks Anchor derives).
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug)]
 pub struct ExtraAccountMetaInput {
     pub discriminator: u8,

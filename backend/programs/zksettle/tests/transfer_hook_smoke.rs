@@ -22,34 +22,22 @@ use light_program_test::{utils::assert::assert_rpc_error, Rpc};
 use solana_signer::Signer;
 
 use zksettle::error::ZkSettleError;
-use zksettle::instructions::transfer_hook::ExtraAccountMetaInput;
+use zksettle::instructions::transfer_hook::{ExtraAccountMetaInput, MAX_HOOK_PROOF_BYTES};
 
 use helpers::{
-    boot_harness, default_light_args, extra_meta_pda, funded_authority, hook_payload_pda,
-    init_extra_meta_ix, issuer_pda, register_ix, set_hook_payload_ix, ANCHOR_ERROR_CODE_OFFSET,
+    boot_harness, create_token2022_mint_with_hook_ixs, default_light_args, execute_hook_ix,
+    extra_meta_pda, hook_payload_pda, init_extra_meta_ix, nonzero_nullifier, registered_issuer,
+    set_hook_payload_ix, ANCHOR_ERROR_CODE_OFFSET,
 };
 
 #[tokio::test]
 async fn set_hook_payload_stores_fields() {
     let mut rpc = boot_harness().await;
-    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+    let (authority, issuer_key) = registered_issuer(&mut rpc).await;
 
-    rpc.create_and_send_transaction(
-        &[register_ix(&authority.pubkey(), [1u8; 32])],
-        &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("register should succeed");
-
-    let issuer_key = issuer_pda(&authority.pubkey());
     let mint = Pubkey::new_unique();
     let recipient = Pubkey::new_unique();
-    let nullifier = {
-        let mut n = [0u8; 32];
-        n[0] = 1;
-        n
-    };
+    let nullifier = nonzero_nullifier();
 
     rpc.create_and_send_transaction(
         &[set_hook_payload_ix(
@@ -88,17 +76,8 @@ async fn set_hook_payload_stores_fields() {
 #[tokio::test]
 async fn set_hook_payload_rejects_zero_nullifier() {
     let mut rpc = boot_harness().await;
-    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+    let (authority, issuer_key) = registered_issuer(&mut rpc).await;
 
-    rpc.create_and_send_transaction(
-        &[register_ix(&authority.pubkey(), [1u8; 32])],
-        &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("register");
-
-    let issuer_key = issuer_pda(&authority.pubkey());
     let result = rpc
         .create_and_send_transaction(
             &[set_hook_payload_ix(
@@ -128,19 +107,7 @@ async fn set_hook_payload_rejects_zero_nullifier() {
 #[tokio::test]
 async fn set_hook_payload_rejects_zero_amount() {
     let mut rpc = boot_harness().await;
-    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
-
-    rpc.create_and_send_transaction(
-        &[register_ix(&authority.pubkey(), [1u8; 32])],
-        &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("register");
-
-    let issuer_key = issuer_pda(&authority.pubkey());
-    let mut nullifier = [0u8; 32];
-    nullifier[0] = 1;
+    let (authority, issuer_key) = registered_issuer(&mut rpc).await;
 
     let result = rpc
         .create_and_send_transaction(
@@ -148,7 +115,7 @@ async fn set_hook_payload_rejects_zero_amount() {
                 &authority.pubkey(),
                 &issuer_key,
                 vec![0xaa; 256],
-                nullifier,
+                nonzero_nullifier(),
                 Pubkey::new_unique(),
                 10,
                 Pubkey::new_unique(),
@@ -170,9 +137,16 @@ async fn set_hook_payload_rejects_zero_amount() {
 
 #[tokio::test]
 async fn init_extra_account_meta_list_succeeds() {
+    use solana_keypair::Keypair;
+
     let mut rpc = boot_harness().await;
-    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
-    let mint = Pubkey::new_unique();
+    let (authority, _) = registered_issuer(&mut rpc).await;
+
+    let mint_kp = Keypair::new();
+    let mint_ixs = create_token2022_mint_with_hook_ixs(&authority.pubkey(), &mint_kp.pubkey(), 6);
+    rpc.create_and_send_transaction(&mint_ixs, &authority.pubkey(), &[&authority, &mint_kp])
+        .await
+        .expect("create Token-2022 mint should succeed");
 
     let meta = ExtraAccountMetaInput {
         discriminator: 0,
@@ -182,14 +156,18 @@ async fn init_extra_account_meta_list_succeeds() {
     };
 
     rpc.create_and_send_transaction(
-        &[init_extra_meta_ix(&authority.pubkey(), &mint, vec![meta])],
+        &[init_extra_meta_ix(
+            &authority.pubkey(),
+            &mint_kp.pubkey(),
+            vec![meta],
+        )],
         &authority.pubkey(),
         &[&authority],
     )
     .await
     .expect("init_extra_account_meta_list should succeed");
 
-    let (meta_pda, _) = extra_meta_pda(&mint);
+    let (meta_pda, _) = extra_meta_pda(&mint_kp.pubkey());
     let info = rpc
         .get_account(meta_pda)
         .await
@@ -199,13 +177,85 @@ async fn init_extra_account_meta_list_succeeds() {
 }
 
 #[tokio::test]
-#[ignore = "requires gnark fixture + Token-2022 mint with hook configured"]
+async fn set_hook_payload_rejects_oversized_proof() {
+    let mut rpc = boot_harness().await;
+    let (authority, issuer_key) = registered_issuer(&mut rpc).await;
+
+    let result = rpc
+        .create_and_send_transaction(
+            &[set_hook_payload_ix(
+                &authority.pubkey(),
+                &issuer_key,
+                vec![0xaa; MAX_HOOK_PROOF_BYTES + 1],
+                nonzero_nullifier(),
+                Pubkey::new_unique(),
+                10,
+                Pubkey::new_unique(),
+                500,
+                default_light_args(),
+            )],
+            &authority.pubkey(),
+            &[&authority],
+        )
+        .await;
+
+    assert_rpc_error(
+        result,
+        0,
+        ANCHOR_ERROR_CODE_OFFSET + ZkSettleError::HookPayloadInvalid as u32,
+    )
+    .expect("expected HookPayloadInvalid for oversized proof");
+}
+
+#[tokio::test]
+async fn execute_hook_rejects_missing_payload() {
+    let mut rpc = boot_harness().await;
+    let (authority, issuer_key) = registered_issuer(&mut rpc).await;
+
+    let fake_mint = Pubkey::new_unique();
+    let fake_source = Pubkey::new_unique();
+    let fake_dest = Pubkey::new_unique();
+    let registry = Pubkey::new_unique();
+    let bubblegum = Pubkey::new_unique();
+
+    let result = rpc
+        .create_and_send_transaction(
+            &[execute_hook_ix(
+                &fake_source,
+                &fake_mint,
+                &fake_dest,
+                &authority.pubkey(),
+                &issuer_key,
+                &registry,
+                &bubblegum,
+                500,
+            )],
+            &authority.pubkey(),
+            &[&authority],
+        )
+        .await;
+
+    // Anchor AccountNotInitialized = 3012
+    assert_rpc_error(result, 0, 3012).expect("expected AccountNotInitialized for missing payload");
+}
+
+#[tokio::test]
+#[ignore = "requires gnark fixture + bubblegum tree + Token-2022 mint infrastructure"]
 async fn transfer_hook_settles_and_blocks_replay() {
     let _rpc = boot_harness().await;
-    // TODO(ADR-006 follow-up):
-    // - build Token-2022 mint with TransferHook extension pointing at zksettle
-    // - load gnark proof + witness fixture for (mint, epoch, recipient, amount)
-    // - run set_hook_payload then a Token-2022 transfer that triggers the hook
-    // - assert Light attestation account + ProofSettled event (9 fields)
-    // - replay same payload, assert address-collision error from Light CPI
+    // Blocked on:
+    //   1. Bubblegum tree registry + merkle tree init (init_attestation_tree)
+    //   2. Token-2022 mint with TransferHook extension (create_token2022_mint_with_hook_ixs helper exists)
+    //   3. gnark proof fixture for (mint, epoch, recipient, amount)
+    //
+    // Partial test plan (once bubblegum infra lands):
+    //   - register_issuer, init_attestation_tree, create Token-2022 mint
+    //   - set_hook_payload with dummy proof
+    //   - call settle_hook → expect MalformedProof from verify_bundle
+    //   - proves full account wiring up to the gnark boundary
+    //
+    // Full test:
+    //   - load valid gnark proof fixture
+    //   - Token-2022 transferChecked triggers hook → asserts Light attestation + ProofSettled event
+    //   - replay same payload → assert address-collision from Light CPI
 }

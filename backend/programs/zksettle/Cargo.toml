@@ -51,7 +51,9 @@ gnark-verifier-solana = { git = "https://github.com/reilabs/sunspot.git", rev = 
 [dev-dependencies]
 solana-signer = "2.2"
 solana-keypair = "2.2"
+spl-token-2022 = "6.0"
 solana-instruction = "2.3"
+spl-discriminator = "0.5"
 
 [target.'cfg(unix)'.dev-dependencies]
 light-program-test = "=0.23.0"
