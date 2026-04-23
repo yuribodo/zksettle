@@ -53,11 +53,9 @@ async fn main() {
         .parse()
         .unwrap_or_else(|e| panic!("invalid program ID '{}': {e}", cfg.program_id));
 
-    let api_token = cfg.api_token;
-    if api_token.is_none() {
+    if cfg.api_token.is_none() {
         tracing::warn!("API_TOKEN not set — all endpoints are unauthenticated");
     }
-    let auth_enabled = api_token.is_some();
 
     tracing::info!(
         authority = %keypair.pubkey(),
@@ -65,7 +63,7 @@ async fn main() {
         rpc = %cfg.rpc_url,
         listen = %cfg.listen_addr,
         rotation_secs = cfg.rotation_interval_secs,
-        auth_enabled,
+        auth_enabled = cfg.api_token.is_some(),
         "starting issuer service"
     );
 
@@ -136,12 +134,13 @@ async fn main() {
         .route("/wallets", post(handlers::add_wallet::handler))
         .route("/roots/publish", post(handlers::publish::handler));
 
-    if api_token.is_some() {
-        protected_routes =
-            protected_routes.layer(middleware::from_fn(auth::require_bearer));
+    if let Some(ref token) = cfg.api_token {
+        protected_routes = protected_routes
+            .layer(middleware::from_fn(auth::require_bearer))
+            .layer(Extension(ApiToken::new(token.clone())));
     }
 
-    let mut app = public_routes
+    let app = public_routes
         .merge(protected_routes)
         .layer(Extension(RpcUrl(cfg.rpc_url)))
         .layer(Extension(KeypairBytes(keypair_json)))
@@ -149,10 +148,6 @@ async fn main() {
         .layer(Extension(publish_lock))
         .layer(Extension(StatePath(cfg.state_path)))
         .with_state(shared);
-
-    if let Some(token) = api_token {
-        app = app.layer(Extension(ApiToken(token)));
-    }
 
     let listener = tokio::net::TcpListener::bind(cfg.listen_addr).await.unwrap();
     tracing::info!("listening on {}", cfg.listen_addr);

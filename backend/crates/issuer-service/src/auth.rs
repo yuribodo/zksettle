@@ -7,7 +7,23 @@ use serde_json::json;
 use subtle::ConstantTimeEq;
 
 #[derive(Clone)]
-pub struct ApiToken(pub String);
+pub struct ApiToken(String);
+
+impl ApiToken {
+    pub fn new(s: String) -> Self {
+        Self(s)
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+
+impl std::fmt::Debug for ApiToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ApiToken(***)")
+    }
+}
 
 pub async fn require_bearer(
     Extension(token): Extension<ApiToken>,
@@ -20,7 +36,7 @@ pub async fn require_bearer(
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
         .map(|bearer| {
-            bearer.as_bytes().ct_eq(token.0.as_bytes()).into()
+            bearer.as_bytes().ct_eq(token.as_bytes()).into()
         })
         .unwrap_or(false);
 
@@ -47,7 +63,7 @@ mod tests {
         Router::new()
             .route("/protected", get(|| async { "ok" }))
             .layer(middleware::from_fn(require_bearer))
-            .layer(Extension(ApiToken(token.to_string())))
+            .layer(Extension(ApiToken::new(token.to_string())))
     }
 
     async fn status(app: &mut Router, req: Request<Body>) -> StatusCode {

@@ -36,7 +36,9 @@ pub async fn handler(
         .zero_leaf(leaf_index)
         .map_err(ServiceError::from)?;
 
-    st.sanctions_tree.remove(wallet_fr);
+    if !st.sanctions_tree.remove(wallet_fr) {
+        tracing::debug!(%wallet, "wallet was not in sanctions tree");
+    }
 
     st.credentials
         .get_mut(&wallet_bytes)
