@@ -3,22 +3,22 @@ use ark_ff::{BigInteger, PrimeField};
 
 use crate::error::UpdaterError;
 
+fn reverse_bytes(src: &[u8; 32]) -> [u8; 32] {
+    let mut out = [0u8; 32];
+    for (i, b) in src.iter().enumerate() {
+        out[31 - i] = *b;
+    }
+    out
+}
+
 pub fn fr_to_bytes_be(f: &Fr) -> [u8; 32] {
     let repr = f.into_bigint();
-    let le = repr.to_bytes_le();
-    let mut be = [0u8; 32];
-    for (i, b) in le.iter().enumerate() {
-        be[31 - i] = *b;
-    }
-    be
+    let le: [u8; 32] = repr.to_bytes_le().try_into().expect("Fr is 32 bytes");
+    reverse_bytes(&le)
 }
 
 pub fn bytes_be_to_fr(bytes: &[u8; 32]) -> Fr {
-    let mut le = [0u8; 32];
-    for (i, b) in bytes.iter().enumerate() {
-        le[31 - i] = *b;
-    }
-    Fr::from_le_bytes_mod_order(&le)
+    Fr::from_le_bytes_mod_order(&reverse_bytes(bytes))
 }
 
 pub fn wallet_to_fr(hex_str: &str) -> Result<Fr, UpdaterError> {

@@ -33,44 +33,33 @@ fn discriminator(name: &str) -> [u8; 8] {
     disc
 }
 
-fn build_register_ix(
+fn build_ix(
     authority: &Pubkey,
     program_id: &Pubkey,
     roots: &RootArgs,
+    register: bool,
 ) -> Instruction {
     let (pda, _) = issuer_pda(authority, program_id);
-    let disc = discriminator("register_issuer");
-    let mut data = disc.to_vec();
+    let name = if register { "register_issuer" } else { "update_issuer_root" };
+    let mut data = discriminator(name).to_vec();
     roots.serialize(&mut data).unwrap();
 
-    Instruction {
-        program_id: *program_id,
-        accounts: vec![
-            AccountMeta::new(*authority, true),
-            AccountMeta::new(pda, false),
-            #[allow(deprecated)]
-            AccountMeta::new_readonly(solana_sdk::system_program::ID, false),
-        ],
-        data,
+    let mut accounts = vec![
+        if register {
+            AccountMeta::new(*authority, true)
+        } else {
+            AccountMeta::new_readonly(*authority, true)
+        },
+        AccountMeta::new(pda, false),
+    ];
+    if register {
+        #[allow(deprecated)]
+        accounts.push(AccountMeta::new_readonly(solana_sdk::system_program::ID, false));
     }
-}
-
-fn build_update_ix(
-    authority: &Pubkey,
-    program_id: &Pubkey,
-    roots: &RootArgs,
-) -> Instruction {
-    let (pda, _) = issuer_pda(authority, program_id);
-    let disc = discriminator("update_issuer_root");
-    let mut data = disc.to_vec();
-    roots.serialize(&mut data).unwrap();
 
     Instruction {
         program_id: *program_id,
-        accounts: vec![
-            AccountMeta::new_readonly(*authority, true),
-            AccountMeta::new(pda, false),
-        ],
+        accounts,
         data,
     }
 }
@@ -171,11 +160,7 @@ pub fn publish_sanctions_root(
         jurisdiction_root,
     };
 
-    let ix = if !currently_registered {
-        build_register_ix(&keypair.pubkey(), program_id, &roots)
-    } else {
-        build_update_ix(&keypair.pubkey(), program_id, &roots)
-    };
+    let ix = build_ix(&keypair.pubkey(), program_id, &roots, !currently_registered);
 
     let slot = send_tx(&rpc, &keypair, ix)?;
     Ok(PublishResult {
