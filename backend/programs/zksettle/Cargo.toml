@@ -41,6 +41,7 @@ spl-account-compression = { version = "1.0.0", features = ["cpi"] }
 gnark-verifier-solana = { git = "https://github.com/reilabs/sunspot.git", rev = "ce4765ccdf050507874bbb544be992a11dc48ffc" }
 light-sdk = { version = "=0.23.0", default-features = false, features = ["v2", "anchor"] }
 borsh = "0.10.4"
+zksettle-types = { path = "../../crates/zksettle-types", default-features = false }
 spl-tlv-account-resolution = "0.11.1"
 spl-transfer-hook-interface = "2.1.0"
 

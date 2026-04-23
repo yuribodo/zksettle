@@ -1,9 +1,13 @@
+#[cfg(feature = "borsh")]
 use borsh::{BorshDeserialize, BorshSerialize};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::{Hash32, Pubkey};
 
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "borsh", derive(BorshSerialize, BorshDeserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Issuer {
     pub authority: Pubkey,
     pub merkle_root: Hash32,
@@ -19,25 +23,16 @@ impl Issuer {
 
 /// Discriminator-only marker: presence at the derived compressed address
 /// proves the nullifier was spent for the bound issuer.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Default,
-    PartialEq,
-    Eq,
-    BorshSerialize,
-    BorshDeserialize,
-    Serialize,
-    Deserialize,
-)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "borsh", derive(BorshSerialize, BorshDeserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CompressedNullifier;
 
 /// Persisted compressed account state (Light discriminator layout in program).
 /// Field order and sizes match `programs/zksettle/src/state/compressed.rs`.
-#[derive(
-    Clone, Debug, Default, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize,
-)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "borsh", derive(BorshSerialize, BorshDeserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CompressedAttestation {
     pub issuer: Pubkey,
     pub nullifier_hash: Hash32,
@@ -67,6 +62,7 @@ mod tests {
         assert_eq!(Issuer::LEN, ON_CHAIN_ISSUER_LEN);
     }
 
+    #[cfg(feature = "borsh")]
     #[test]
     fn issuer_borsh_roundtrip_preserves_layout() {
         let original = Issuer {
@@ -83,6 +79,7 @@ mod tests {
         assert_eq!(decoded, original);
     }
 
+    #[cfg(feature = "borsh")]
     #[test]
     fn compressed_nullifier_borsh_roundtrip_is_zero_bytes() {
         let bytes = borsh::to_vec(&CompressedNullifier).expect("serialize");
@@ -90,6 +87,7 @@ mod tests {
         CompressedNullifier::try_from_slice(&bytes).expect("deserialize");
     }
 
+    #[cfg(feature = "borsh")]
     #[test]
     fn compressed_attestation_borsh_roundtrip_preserves_layout() {
         let original = CompressedAttestation {

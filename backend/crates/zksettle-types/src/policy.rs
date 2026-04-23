@@ -1,8 +1,10 @@
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::Pubkey;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[non_exhaustive]
 pub struct Policy {
     pub issuer: Pubkey,

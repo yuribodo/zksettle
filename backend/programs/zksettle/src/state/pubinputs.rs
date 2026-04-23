@@ -1,8 +1,7 @@
-pub const MERKLE_ROOT_IDX: usize = 0;
-pub const NULLIFIER_IDX: usize = 1;
-pub const MINT_LO_IDX: usize = 2;
-pub const MINT_HI_IDX: usize = 3;
-pub const EPOCH_IDX: usize = 4;
-pub const RECIPIENT_LO_IDX: usize = 5;
-pub const RECIPIENT_HI_IDX: usize = 6;
-pub const AMOUNT_IDX: usize = 7;
+pub use zksettle_types::{
+    AMOUNT_IDX, EPOCH_IDX, MERKLE_ROOT_IDX, MINT_HI_IDX, MINT_LO_IDX, NULLIFIER_IDX,
+    RECIPIENT_HI_IDX, RECIPIENT_LO_IDX,
+};
+
+// Provisional — activate as pub when VK expands to 11 public inputs.
+pub(crate) use zksettle_types::{JURISDICTION_ROOT_IDX, SANCTIONS_ROOT_IDX, TIMESTAMP_IDX};

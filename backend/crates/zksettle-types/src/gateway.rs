@@ -1,7 +1,9 @@
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum Tier {
     Developer,
     Startup,
@@ -40,7 +42,8 @@ impl std::fmt::Display for Tier {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ApiKeyRecord {
     pub key_hash: String,
     pub tier: Tier,
@@ -48,7 +51,8 @@ pub struct ApiKeyRecord {
     pub created_at: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UsageRecord {
     pub request_count: u64,
     pub period_start: u64,

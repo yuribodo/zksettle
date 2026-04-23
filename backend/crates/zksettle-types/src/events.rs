@@ -1,4 +1,6 @@
+#[cfg(feature = "borsh")]
 use borsh::{BorshDeserialize, BorshSerialize};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::{Hash32, Pubkey};
@@ -6,7 +8,9 @@ use crate::{Hash32, Pubkey};
 /// Event payload emitted on-chain (`#[event]` in `verify_proof` / hook settlement).
 /// Field order matches the program `ProofSettled` event (same binding tuple as
 /// `CompressedAttestation` in `zksettle-types` / on-chain compressed layout).
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "borsh", derive(BorshSerialize, BorshDeserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ProofSettled {
     pub issuer: Pubkey,
     pub nullifier_hash: Hash32,
@@ -26,7 +30,9 @@ impl ProofSettled {
     pub const LEN: usize = 32 * 8 + 8 * 4;
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "borsh", derive(BorshSerialize, BorshDeserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AttestationChecked {
     pub issuer: Pubkey,
     pub nullifier_hash: Hash32,
@@ -40,6 +46,7 @@ mod tests {
     const PROOF_SETTLED_PAYLOAD_LEN: usize = ProofSettled::LEN;
     const ATTESTATION_CHECKED_PAYLOAD_LEN: usize = 32 + 32 + 8;
 
+    #[cfg(feature = "borsh")]
     #[test]
     fn proof_settled_borsh_roundtrip() {
         let original = ProofSettled {
@@ -62,6 +69,7 @@ mod tests {
         assert_eq!(decoded, original);
     }
 
+    #[cfg(feature = "borsh")]
     #[test]
     fn attestation_checked_borsh_roundtrip() {
         let original = AttestationChecked {

@@ -10711,6 +10711,7 @@ dependencies = [
  "spl-tlv-account-resolution 0.11.1",
  "spl-transfer-hook-interface 2.1.0",
  "tokio",
+ "zksettle-types",
 ]
 
 [[package]]
