@@ -176,13 +176,19 @@ pub fn invoke_create_tree_config<'info>(
     max_buffer_size: u32,
     signer_seeds: &[&[&[u8]]],
 ) -> Result<()> {
-    let mut data = CreateTreeConfigDisc::new().try_to_vec().unwrap();
+    let mut data = CreateTreeConfigDisc::new()
+        .try_to_vec()
+        .map_err(|_| error!(ZkSettleError::BubblegumCpiFailed))?;
     let args = CreateTreeConfigArgs {
         max_depth,
         max_buffer_size,
         public: Some(false),
     };
-    data.extend_from_slice(&args.try_to_vec().unwrap());
+    data.extend_from_slice(
+        &args
+            .try_to_vec()
+            .map_err(|_| error!(ZkSettleError::BubblegumCpiFailed))?,
+    );
 
     let ix = Instruction {
         program_id: MPL_BUBBLEGUM_ID,
@@ -229,9 +235,15 @@ pub fn invoke_mint_v1<'info>(
     metadata: BgMetadataArgs,
     signer_seeds: &[&[&[u8]]],
 ) -> Result<()> {
-    let mut data = MintV1Disc::new().try_to_vec().unwrap();
+    let mut data = MintV1Disc::new()
+        .try_to_vec()
+        .map_err(|_| error!(ZkSettleError::BubblegumCpiFailed))?;
     let args = MintV1Args { metadata };
-    data.extend_from_slice(&args.try_to_vec().unwrap());
+    data.extend_from_slice(
+        &args
+            .try_to_vec()
+            .map_err(|_| error!(ZkSettleError::BubblegumCpiFailed))?,
+    );
 
     let ix = Instruction {
         program_id: MPL_BUBBLEGUM_ID,
@@ -337,6 +349,8 @@ pub fn cpi_mint_from_remaining_tail<'info>(
     bubblegum_program: &AccountInfo<'info>,
     tail: &[AccountInfo<'info>],
     tree_creator_bump: u8,
+    registry_merkle_tree: &Pubkey,
+    expected_leaf_owner: &Pubkey,
     issuer: Pubkey,
     nullifier_hash: [u8; 32],
     merkle_root: [u8; 32],
@@ -346,21 +360,45 @@ pub fn cpi_mint_from_remaining_tail<'info>(
         tail.len() == BUBBLEGUM_MINT_V1_ACCOUNT_COUNT,
         ZkSettleError::BubblegumTailInvalid
     );
-    let seeds: &[&[u8]] = &[BUBBLEGUM_TREE_CREATOR_SEED, &[tree_creator_bump]];
-    let metadata = build_attestation_metadata(issuer, slot, &nullifier_hash, &merkle_root);
 
     // tail layout: [0] tree_config, [1] leaf_owner, [2] merkle_tree, [3] payer,
     // [4] tree_creator, [5] log_wrapper, [6] compression, [7] system_program
+
+    require_keys_eq!(
+        tail[2].key(),
+        *registry_merkle_tree,
+        ZkSettleError::BubblegumTreeMismatch
+    );
+    require_keys_eq!(
+        *tail[2].owner,
+        SPL_ACCOUNT_COMPRESSION_ID,
+        ZkSettleError::BubblegumCpiFailed
+    );
+    let (expected_cfg, _) = tree_config_pda(registry_merkle_tree);
+    require_keys_eq!(
+        tail[0].key(),
+        expected_cfg,
+        ZkSettleError::BubblegumCpiFailed
+    );
+    require_keys_eq!(
+        tail[1].key(),
+        *expected_leaf_owner,
+        ZkSettleError::BubblegumLeafOwnerMismatch
+    );
+
+    let seeds: &[&[u8]] = &[BUBBLEGUM_TREE_CREATOR_SEED, &[tree_creator_bump]];
+    let metadata = build_attestation_metadata(issuer, slot, &nullifier_hash, &merkle_root);
+
     invoke_mint_v1(
         bubblegum_program,
-        &tail[0],  // tree_config
-        &tail[1],  // leaf_owner (used as both owner + delegate)
-        &tail[2],  // merkle_tree
-        &tail[3],  // payer
-        &tail[4],  // tree_creator_or_delegate
-        &tail[5],  // log_wrapper
-        &tail[6],  // compression_program
-        &tail[7],  // system_program
+        &tail[0],
+        &tail[1],
+        &tail[2],
+        &tail[3],
+        &tail[4],
+        &tail[5],
+        &tail[6],
+        &tail[7],
         metadata,
         &[seeds],
     )

@@ -133,19 +133,19 @@ fn run_settlement(sctx: SettlementContext<'_, '_>) -> Result<()> {
     match &sctx.bubblegum_mint {
         BubblegumMintMode::None => {}
         BubblegumMintMode::Tail(bg) => {
-            if !bg.is_empty() {
-                crate::cu_probe!("pre-bubblegum-mint");
-                cpi_mint_from_remaining_tail(
-                    sctx.bubblegum_program,
-                    bg,
-                    sctx.registry.tree_creator_bump,
-                    sctx.issuer_key,
-                    nullifier_hash,
-                    merkle_root,
-                    slot,
-                )?;
-                crate::cu_probe!("post-bubblegum-mint");
-            }
+            crate::cu_probe!("pre-bubblegum-mint");
+            cpi_mint_from_remaining_tail(
+                sctx.bubblegum_program,
+                bg,
+                sctx.registry.tree_creator_bump,
+                &sctx.registry.merkle_tree,
+                &sctx.payload.recipient,
+                sctx.issuer_key,
+                nullifier_hash,
+                merkle_root,
+                slot,
+            )?;
+            crate::cu_probe!("post-bubblegum-mint");
         }
         BubblegumMintMode::Named {
             tree_config,
