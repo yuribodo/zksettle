@@ -27,8 +27,10 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 moka = { version = "0.12", features = ["sync"] }
+rocksdb = "0.24"
 sha2 = "0.10"
 
 [dev-dependencies]
 axum-test = "16"
+tempfile = "3"
 tower = { version = "0.5", features = ["util"] }

@@ -8,6 +8,7 @@ pub struct Config {
     pub irys_wallet_key: Option<String>,
     pub program_id: String,
     pub log_level: String,
+    pub dedup_path: String,
     pub dedup_capacity: u64,
     pub dedup_ttl_secs: u64,
 }
@@ -21,6 +22,7 @@ impl std::fmt::Debug for Config {
             .field("irys_wallet_key", &self.irys_wallet_key.as_ref().map(|_| "[REDACTED]"))
             .field("program_id", &self.program_id)
             .field("log_level", &self.log_level)
+            .field("dedup_path", &self.dedup_path)
             .field("dedup_capacity", &self.dedup_capacity)
             .field("dedup_ttl_secs", &self.dedup_ttl_secs)
             .finish()
@@ -40,6 +42,8 @@ impl Config {
             irys_wallet_key: read_var("INDEXER_IRYS_WALLET_KEY").ok(),
             program_id: read_var("INDEXER_PROGRAM_ID")?,
             log_level: read_var("INDEXER_LOG_LEVEL").unwrap_or_else(|_| "info".into()),
+            dedup_path: read_var("INDEXER_DEDUP_PATH")
+                .unwrap_or_else(|_| "./data/dedup".into()),
             dedup_capacity: read_var("INDEXER_DEDUP_CAPACITY")
                 .unwrap_or_else(|_| "1000000".into())
                 .parse()
@@ -83,6 +87,7 @@ mod tests {
             irys_wallet_key: None,
             program_id: "test".into(),
             log_level: "info".into(),
+            dedup_path: "./data/dedup".into(),
             dedup_capacity: 1_000_000,
             dedup_ttl_secs: 86400,
         };
@@ -98,6 +103,7 @@ mod tests {
             irys_wallet_key: Some("key".into()),
             program_id: "test".into(),
             log_level: "info".into(),
+            dedup_path: "./data/dedup".into(),
             dedup_capacity: 1_000_000,
             dedup_ttl_secs: 86400,
         };
