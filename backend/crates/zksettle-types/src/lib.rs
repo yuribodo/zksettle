@@ -31,3 +31,42 @@ pub const AMOUNT_IDX: usize = 7;
 pub const SANCTIONS_ROOT_IDX: usize = 8;
 pub const JURISDICTION_ROOT_IDX: usize = 9;
 pub const TIMESTAMP_IDX: usize = 10;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pubinput_indices_are_contiguous() {
+        let indices = [
+            MERKLE_ROOT_IDX,
+            NULLIFIER_IDX,
+            MINT_LO_IDX,
+            MINT_HI_IDX,
+            EPOCH_IDX,
+            RECIPIENT_LO_IDX,
+            RECIPIENT_HI_IDX,
+            AMOUNT_IDX,
+            SANCTIONS_ROOT_IDX,
+            JURISDICTION_ROOT_IDX,
+            TIMESTAMP_IDX,
+        ];
+        for (i, &idx) in indices.iter().enumerate() {
+            assert_eq!(idx, i, "index {i} is not contiguous");
+        }
+    }
+
+    #[test]
+    fn seeds_are_non_empty() {
+        assert!(!ISSUER_SEED.is_empty());
+        assert!(!NULLIFIER_SEED.is_empty());
+        assert!(!ATTESTATION_SEED.is_empty());
+    }
+
+    #[test]
+    fn struct_sizes_available_without_serde_or_borsh() {
+        assert_eq!(Issuer::LEN, 137);
+        assert_eq!(CompressedAttestation::LEN, 288);
+        assert_eq!(ProofSettled::LEN, 288);
+    }
+}
