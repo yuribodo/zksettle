@@ -212,8 +212,10 @@ pub fn settle_hook_handler<'info>(
     })
 }
 
-fn enforce_token_2022_cpi_origin(
+fn enforce_token_2022_hook_accounts(
     source_token: &UncheckedAccount,
+    mint: &UncheckedAccount,
+    destination_token: &UncheckedAccount,
     expected_owner: Pubkey,
 ) -> Result<()> {
     use anchor_spl::token_2022::spl_token_2022::{
@@ -226,6 +228,16 @@ fn enforce_token_2022_cpi_origin(
 
     require_keys_eq!(
         *source_token.owner,
+        spl_token_2022::ID,
+        ZkSettleError::NotToken2022
+    );
+    require_keys_eq!(
+        *mint.owner,
+        spl_token_2022::ID,
+        ZkSettleError::NotToken2022
+    );
+    require_keys_eq!(
+        *destination_token.owner,
         spl_token_2022::ID,
         ZkSettleError::NotToken2022
     );
@@ -257,7 +269,12 @@ pub fn execute_hook_handler<'info>(
     ctx: Context<'_, '_, '_, 'info, ExecuteHook<'info>>,
     amount: u64,
 ) -> Result<()> {
-    enforce_token_2022_cpi_origin(&ctx.accounts.source_token, ctx.accounts.owner.key())?;
+    enforce_token_2022_hook_accounts(
+        &ctx.accounts.source_token,
+        &ctx.accounts.mint,
+        &ctx.accounts.destination_token,
+        ctx.accounts.owner.key(),
+    )?;
 
     let tail = ctx.accounts.hook_payload.light_args.bubblegum_tail;
     let (light_rem, bg) = split_light_and_bubblegum(ctx.remaining_accounts, tail)?;

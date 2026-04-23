@@ -5,6 +5,7 @@ mod tests;
 mod types;
 
 use anchor_lang::prelude::*;
+use anchor_spl::token_interface;
 
 use crate::error::ZkSettleError;
 use crate::instructions::bubblegum_mint::{tree_config_pda, MPL_BUBBLEGUM_ID, NOOP_PROGRAM_ID};
@@ -69,7 +70,10 @@ pub struct InitExtraAccountMetaList<'info> {
     )]
     pub issuer: Account<'info, Issuer>,
 
-    /// CHECK: mint address is only used as a seed input.
+    /// CHECK: validated by `validate_mint_has_hook()` at the start of the handler —
+    /// unpacks as Token-2022 Mint and asserts the TransferHook extension points to
+    /// this program. Kept as UncheckedAccount to avoid Anchor Mint deser overhead
+    /// on a one-time setup instruction.
     pub mint: UncheckedAccount<'info>,
     /// CHECK: allocated + populated by this handler via `system_program::create_account`
     /// and `ExtraAccountMetaList::init`. PDA seed matches the SPL transfer-hook
@@ -91,9 +95,12 @@ pub struct SettleHook<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
 
-    /// CHECK: bound to `hook_payload.mint`.
-    pub mint: UncheckedAccount<'info>,
-    /// CHECK: bound to `hook_payload.recipient`.
+    #[account(constraint = mint.key() == hook_payload.mint @ ZkSettleError::MintMismatch)]
+    pub mint: InterfaceAccount<'info, token_interface::Mint>,
+    /// CHECK: bound to `hook_payload.recipient` via constraint. Kept as
+    /// UncheckedAccount because in the direct-call path `recipient` may be a
+    /// wallet address (matching `leaf_owner`) rather than a token account.
+    #[account(constraint = destination_token.key() == hook_payload.recipient @ ZkSettleError::RecipientMismatch)]
     pub destination_token: UncheckedAccount<'info>,
 
     #[account(

@@ -66,6 +66,11 @@ fn validate_accepts_max_proof_len() {
 }
 
 #[test]
+fn validate_accepts_minimal_proof() {
+    assert!(validate_set_hook_inputs(1, &nonzero_nullifier(), 1).is_ok());
+}
+
+#[test]
 fn staged_args_roundtrip_tree_info() {
     let args = StagedLightArgs {
         bubblegum_tail: 0,

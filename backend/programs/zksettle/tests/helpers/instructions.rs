@@ -98,8 +98,8 @@ pub fn set_hook_payload_ix(
         program_id: zksettle::ID,
         accounts: vec![
             AccountMeta::new(*owner, true),
-            AccountMeta::new(payload_pda, false),
             AccountMeta::new_readonly(*issuer_key, false),
+            AccountMeta::new(payload_pda, false),
             AccountMeta::new_readonly(system_program::ID, false),
         ],
         data: SetPayloadIx {
@@ -121,15 +121,88 @@ pub fn init_extra_meta_ix(
     extras: Vec<ExtraAccountMetaInput>,
 ) -> Instruction {
     let (meta_pda, _) = extra_meta_pda(mint);
+    let issuer = issuer_pda(authority);
     Instruction {
         program_id: zksettle::ID,
         accounts: vec![
             AccountMeta::new(*authority, true),
-            AccountMeta::new(meta_pda, false),
+            AccountMeta::new_readonly(issuer, false),
             AccountMeta::new_readonly(*mint, false),
+            AccountMeta::new(meta_pda, false),
             AccountMeta::new_readonly(system_program::ID, false),
         ],
         data: InitMetaIx { extras }.data(),
+    }
+}
+
+/// Build instructions to create a Token-2022 mint with TransferHook extension
+/// pointing to the zksettle program.
+pub fn create_token2022_mint_with_hook_ixs(
+    payer: &Pubkey,
+    mint_key: &Pubkey,
+    decimals: u8,
+) -> Vec<Instruction> {
+    use spl_token_2022::{
+        extension::{transfer_hook::instruction::initialize as init_hook, ExtensionType},
+        instruction::initialize_mint2,
+        state::Mint as SplMint,
+    };
+
+    let extensions = &[ExtensionType::TransferHook];
+    let space = ExtensionType::try_calculate_account_len::<SplMint>(extensions).unwrap();
+
+    let rent = anchor_lang::solana_program::rent::Rent::default();
+    let create_ix = anchor_lang::solana_program::system_instruction::create_account(
+        payer,
+        mint_key,
+        rent.minimum_balance(space),
+        space as u64,
+        &spl_token_2022::ID,
+    );
+
+    let init_hook_ix =
+        init_hook(&spl_token_2022::ID, mint_key, Some(*payer), Some(zksettle::ID)).unwrap();
+
+    let init_mint_ix =
+        initialize_mint2(&spl_token_2022::ID, mint_key, payer, None, decimals).unwrap();
+
+    vec![create_ix, init_hook_ix, init_mint_ix]
+}
+
+/// Build a raw `transfer_hook` (ExecuteHook) instruction.
+/// Uses the SPL transfer-hook discriminator `[105, 37, 101, 197, 75, 251, 102, 26]`.
+#[allow(clippy::too_many_arguments)]
+pub fn execute_hook_ix(
+    source_token: &Pubkey,
+    mint: &Pubkey,
+    destination_token: &Pubkey,
+    owner: &Pubkey,
+    issuer: &Pubkey,
+    registry: &Pubkey,
+    bubblegum_program: &Pubkey,
+    amount: u64,
+) -> Instruction {
+    let (meta_pda, _) = extra_meta_pda(mint);
+    let (payload_pda, _) = hook_payload_pda(owner);
+
+    let mut data = Vec::with_capacity(16);
+    data.extend_from_slice(&[105, 37, 101, 197, 75, 251, 102, 26]);
+    data.extend_from_slice(&amount.to_le_bytes());
+
+    Instruction {
+        program_id: zksettle::ID,
+        accounts: vec![
+            AccountMeta::new_readonly(*source_token, false),
+            AccountMeta::new_readonly(*mint, false),
+            AccountMeta::new_readonly(*destination_token, false),
+            AccountMeta::new_readonly(*owner, false),
+            AccountMeta::new_readonly(meta_pda, false),
+            AccountMeta::new(payload_pda, false),
+            AccountMeta::new_readonly(*issuer, false),
+            AccountMeta::new_readonly(*registry, false),
+            AccountMeta::new_readonly(*bubblegum_program, false),
+        ],
+        data,
     }
 }
 

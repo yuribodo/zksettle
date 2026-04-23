@@ -1,4 +1,8 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token_2022::spl_token_2022::{
+    extension::{transfer_hook::TransferHook, BaseStateWithExtensions, StateWithExtensions},
+    state::Mint as SplMint,
+};
 use spl_tlv_account_resolution::{account::ExtraAccountMeta, state::ExtraAccountMetaList};
 use spl_transfer_hook_interface::instruction::ExecuteInstruction;
 
@@ -51,6 +55,21 @@ pub fn set_hook_payload_handler(
     Ok(())
 }
 
+pub(crate) fn validate_mint_has_hook(mint_info: &AccountInfo) -> Result<()> {
+    let data = mint_info.data.borrow();
+    let mint_state = StateWithExtensions::<SplMint>::unpack(&data)
+        .map_err(|_| error!(ZkSettleError::MintHookMismatch))?;
+    let hook = mint_state
+        .get_extension::<TransferHook>()
+        .map_err(|_| error!(ZkSettleError::MintHookMismatch))?;
+    let hook_program_id = Option::<Pubkey>::from(hook.program_id);
+    require!(
+        hook_program_id == Some(crate::ID),
+        ZkSettleError::MintHookMismatch
+    );
+    Ok(())
+}
+
 // TODO: companion `update_extra_account_meta_list_handler`. TLV is write-once
 // today; evolving metas (e.g., new address-tree pubkey indices) requires a
 // re-init path. Tracked post-hackathon.
@@ -58,6 +77,7 @@ pub fn init_extra_account_meta_list_handler(
     ctx: Context<InitExtraAccountMetaList>,
     extras: Vec<ExtraAccountMetaInput>,
 ) -> Result<()> {
+    validate_mint_has_hook(&ctx.accounts.mint.to_account_info())?;
     let metas: Vec<ExtraAccountMeta> = extras.into_iter().map(Into::into).collect();
     let size = ExtraAccountMetaList::size_of(metas.len())
         .map_err(|_| error!(ZkSettleError::HookPayloadInvalid))?;

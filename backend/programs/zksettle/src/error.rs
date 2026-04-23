@@ -77,6 +77,8 @@ pub enum ZkSettleError {
     BubblegumTailInvalid,
     #[msg("Bubblegum leaf owner does not match settlement recipient")]
     BubblegumLeafOwnerMismatch,
+    #[msg("Mint's TransferHook extension does not point to this program")]
+    MintHookMismatch,
 }
 
 /// Map an external Result's Err into a `ZkSettleError`, logging the source via
@@ -153,6 +155,7 @@ mod tests {
             ZkSettleError::BubblegumCpiFailed as u32,
             ZkSettleError::BubblegumTailInvalid as u32,
             ZkSettleError::BubblegumLeafOwnerMismatch as u32,
+            ZkSettleError::MintHookMismatch as u32,
         ];
         let mut seen = std::collections::HashSet::new();
         for code in &codes {
