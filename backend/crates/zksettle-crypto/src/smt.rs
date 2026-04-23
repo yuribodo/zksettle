@@ -48,6 +48,12 @@ impl SparseMerkleTree {
         self.leaves.insert(bits, Fr::from(1u64));
     }
 
+    pub fn remove(&mut self, wallet: Fr) -> bool {
+        let leaf_hash = poseidon2_hash(&[wallet]);
+        let bits = key_bits(leaf_hash);
+        self.leaves.remove(&bits).is_some()
+    }
+
     pub fn root(&self) -> Fr {
         self.subtree_hash_at_level(MERKLE_DEPTH, &[])
     }

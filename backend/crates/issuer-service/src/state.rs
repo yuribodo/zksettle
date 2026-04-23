@@ -15,6 +15,8 @@ pub struct CredentialRecord {
     pub leaf_index: usize,
     pub jurisdiction: String,
     pub issued_at: u64,
+    #[serde(default)]
+    pub revoked: bool,
 }
 
 pub struct IssuerState {

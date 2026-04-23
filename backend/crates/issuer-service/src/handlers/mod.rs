@@ -6,3 +6,4 @@ pub mod get_sanctions_proof;
 pub mod health;
 pub mod issue_credential;
 pub mod publish;
+pub mod revoke_credential;

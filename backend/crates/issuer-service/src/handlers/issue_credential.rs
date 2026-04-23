@@ -52,6 +52,7 @@ pub async fn handler(
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs(),
+            revoked: false,
         },
     );
 
