@@ -42,7 +42,16 @@ pub async fn handle_webhook(
 
             match state.irys.upload(event).await {
                 Ok(_) => {
-                    state.dedup.mark_uploaded(&event.nullifier_hash);
+                    // Upload succeeded but if dedup write fails, this nullifier won't
+                    // be deduplicated on restart — may cause a duplicate Irys upload.
+                    // Acceptable: Irys uploads are idempotent by content hash.
+                    if let Err(e) = state.dedup.mark_uploaded(&event.nullifier_hash) {
+                        error!(
+                            nullifier = hex::encode(event.nullifier_hash),
+                            error = %e,
+                            "failed to persist nullifier after successful upload"
+                        );
+                    }
                 }
                 Err(e) => {
                     error!(
@@ -76,7 +85,7 @@ mod tests {
 
     #[tokio::test]
     async fn missing_auth_returns_401() {
-        let app = test_app();
+        let (app, _tmp) = test_app();
         let resp = app
             .oneshot(
                 Request::builder()
@@ -93,7 +102,7 @@ mod tests {
 
     #[tokio::test]
     async fn valid_empty_batch_returns_200() {
-        let app = test_app();
+        let (app, _tmp) = test_app();
         let resp = app
             .oneshot(
                 Request::builder()
@@ -111,7 +120,7 @@ mod tests {
 
     #[tokio::test]
     async fn malformed_json_returns_422() {
-        let app = test_app();
+        let (app, _tmp) = test_app();
         let resp = app
             .oneshot(
                 Request::builder()
@@ -130,7 +139,7 @@ mod tests {
 
     #[tokio::test]
     async fn health_returns_200() {
-        let app = test_app();
+        let (app, _tmp) = test_app();
         let resp = app
             .oneshot(
                 Request::builder()
@@ -146,7 +155,7 @@ mod tests {
 
     #[tokio::test]
     async fn webhook_with_no_events_returns_200() {
-        let app = test_app();
+        let (app, _tmp) = test_app();
         let payload = serde_json::json!([{
             "signature": "abc123",
             "slot": 100,
@@ -208,7 +217,7 @@ mod tests {
         }]);
         let body = serde_json::to_string(&payload).unwrap();
 
-        let app = test_app();
+        let (app, _tmp) = test_app();
 
         // First request
         let resp = app
