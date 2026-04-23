@@ -33,19 +33,36 @@ async fn main() -> anyhow::Result<()> {
         http,
     );
 
+    let dedup_path = std::path::Path::new(&config.dedup_path);
+    std::fs::create_dir_all(dedup_path).context("creating dedup directory")?;
+    let dedup = NullifierStore::open(
+        dedup_path,
+        config.dedup_capacity,
+        std::time::Duration::from_secs(config.dedup_ttl_secs),
+    )
+    .context("opening dedup store")?;
+
     let state = Arc::new(AppState {
         config: config.clone(),
         irys,
-        dedup: NullifierStore::new(
-            config.dedup_capacity,
-            std::time::Duration::from_secs(config.dedup_ttl_secs),
-        ),
+        dedup,
     });
 
     let addr = format!("0.0.0.0:{}", config.port);
     let listener = TcpListener::bind(&addr).await?;
     info!(%addr, dry_run = config.is_dry_run(), "indexer starting");
 
-    axum::serve(listener, build_router(state)).await?;
+    let server = axum::serve(listener, build_router(state.clone()));
+
+    tokio::select! {
+        result = server => { result?; }
+        _ = tokio::signal::ctrl_c() => {
+            info!("shutdown signal received, flushing dedup store");
+            if let Err(e) = state.dedup.flush() {
+                tracing::error!(error = %e, "failed to flush dedup store on shutdown");
+            }
+        }
+    }
+
     Ok(())
 }
