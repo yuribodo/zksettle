@@ -1,0 +1,32 @@
+[package]
+name = "api-gateway"
+version = "0.1.0"
+edition = "2021"
+description = "API gateway: auth, rate limiting, metering, and proxy to issuer-service"
+license = "Apache-2.0 OR MIT"
+
+[[bin]]
+name = "api-gateway"
+path = "src/main.rs"
+
+[dependencies]
+zksettle-types = { path = "../zksettle-types" }
+axum = { version = "0.8", features = ["macros"] }
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["trace"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+hex = "0.4"
+governor = "0.8"
+dashmap = "6"
+rand = "0.9"
+sha2 = "0.10"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
