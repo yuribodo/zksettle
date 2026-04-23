@@ -235,8 +235,12 @@ async fn execute_hook_rejects_missing_payload() {
         )
         .await;
 
-    // Anchor AccountNotInitialized = 3012
-    assert_rpc_error(result, 0, 3012).expect("expected AccountNotInitialized for missing payload");
+    assert_rpc_error(
+        result,
+        0,
+        anchor_lang::error::ErrorCode::AccountNotInitialized as u32,
+    )
+    .expect("expected AccountNotInitialized for missing payload");
 }
 
 #[tokio::test]

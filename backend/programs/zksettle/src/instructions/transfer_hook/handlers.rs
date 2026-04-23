@@ -56,6 +56,11 @@ pub fn set_hook_payload_handler(
 }
 
 pub(crate) fn validate_mint_has_hook(mint_info: &AccountInfo) -> Result<()> {
+    require_keys_eq!(
+        *mint_info.owner,
+        anchor_spl::token_2022::ID,
+        ZkSettleError::MintHookMismatch
+    );
     let data = mint_info.data.borrow();
     let mint_state = StateWithExtensions::<SplMint>::unpack(&data)
         .map_err(|_| error!(ZkSettleError::MintHookMismatch))?;

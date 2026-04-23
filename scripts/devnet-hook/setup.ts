@@ -16,7 +16,6 @@
  *   ANCHOR_WALLET=~/.config/solana/id.json npx ts-node setup.ts
  */
 
-import * as anchor from "@coral-xyz/anchor";
 import {
   createInitializeTransferHookInstruction,
   createInitializeMintInstruction,
@@ -37,6 +36,7 @@ import {
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 
 const ZKSETTLE_PROGRAM_ID = new PublicKey(
@@ -51,7 +51,7 @@ const BUBBLEGUM_REGISTRY_SEED = Buffer.from("bubblegum-registry");
 function loadWallet(): Keypair {
   const walletPath =
     process.env.ANCHOR_WALLET ||
-    path.join(process.env.HOME || "~", ".config/solana/id.json");
+    path.join(os.homedir(), ".config/solana/id.json");
   const raw = JSON.parse(fs.readFileSync(walletPath, "utf-8"));
   return Keypair.fromSecretKey(Uint8Array.from(raw));
 }
@@ -115,10 +115,10 @@ async function main() {
   console.log(`Mint created: ${mintKeypair.publicKey.toBase58()}`);
   console.log(`  tx: ${mintSig}`);
 
-  // --- Steps 3-8: zksettle program instructions (NOT YET IMPLEMENTED) ---
+  // --- Steps 3, 4, 7, 8: zksettle program instructions (NOT YET IMPLEMENTED) ---
   // TODO: register_issuer, init_extra_account_meta_list, set_hook_payload,
   //       and transferChecked require the deployed program IDL to build
-  //       Anchor discriminators. Use `anchor-client` or generate from IDL.
+  //       Anchor discriminators. Steps 5-6 (ATAs + mint) are done below.
   const [issuerPda] = findPda(
     [ISSUER_SEED, wallet.publicKey.toBuffer()],
     ZKSETTLE_PROGRAM_ID
@@ -129,7 +129,7 @@ async function main() {
     "\nNote: This script only creates the Token-2022 mint and ATAs."
   );
   console.log(
-    "Steps 3-8 (register_issuer, init_extra_account_meta_list, set_hook_payload,"
+    "Steps 3, 4, 7, 8 (register_issuer, init_extra_account_meta_list, set_hook_payload,"
   );
   console.log(
     "transferChecked) are NOT implemented yet — they need IDL-based instruction building."
@@ -138,7 +138,7 @@ async function main() {
     "Deploy program first: anchor deploy --provider.cluster devnet --program-name zksettle"
   );
 
-  // --- Step 4: init_extra_account_meta_list ---
+  // --- Derive extra_account_meta_list PDA (instruction call pending step 4) ---
   const [extraMetaPda] = findPda(
     [EXTRA_ACCOUNT_META_LIST_SEED, mintKeypair.publicKey.toBuffer()],
     ZKSETTLE_PROGRAM_ID
