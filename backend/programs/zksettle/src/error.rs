@@ -75,6 +75,8 @@ pub enum ZkSettleError {
     BubblegumCpiFailed,
     #[msg("Trailing Bubblegum account count is invalid for remaining_accounts split")]
     BubblegumTailInvalid,
+    #[msg("Bubblegum leaf owner does not match settlement recipient")]
+    BubblegumLeafOwnerMismatch,
 }
 
 /// Map an external Result's Err into a `ZkSettleError`, logging the source via
@@ -150,6 +152,7 @@ mod tests {
             ZkSettleError::BubblegumTreeMismatch as u32,
             ZkSettleError::BubblegumCpiFailed as u32,
             ZkSettleError::BubblegumTailInvalid as u32,
+            ZkSettleError::BubblegumLeafOwnerMismatch as u32,
         ];
         let mut seen = std::collections::HashSet::new();
         for code in &codes {
