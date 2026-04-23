@@ -15,12 +15,11 @@ pub use policy::Policy;
 pub type Pubkey = [u8; 32];
 pub type Hash32 = [u8; 32];
 
-// Must match `programs/zksettle/src/state/seeds.rs`.
+// Canonical constants — re-exported by programs/zksettle.
 pub const ISSUER_SEED: &[u8] = b"issuer";
 pub const NULLIFIER_SEED: &[u8] = b"nullifier";
 pub const ATTESTATION_SEED: &[u8] = b"attestation";
 
-// Must match `programs/zksettle/src/state/pubinputs.rs`.
 pub const MERKLE_ROOT_IDX: usize = 0;
 pub const NULLIFIER_IDX: usize = 1;
 pub const MINT_LO_IDX: usize = 2;
@@ -38,24 +37,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn seed_constants_match_on_chain() {
-        assert_eq!(ISSUER_SEED, b"issuer");
-        assert_eq!(NULLIFIER_SEED, b"nullifier");
-        assert_eq!(ATTESTATION_SEED, b"attestation");
+    fn pubinput_indices_are_contiguous() {
+        let indices = [
+            MERKLE_ROOT_IDX,
+            NULLIFIER_IDX,
+            MINT_LO_IDX,
+            MINT_HI_IDX,
+            EPOCH_IDX,
+            RECIPIENT_LO_IDX,
+            RECIPIENT_HI_IDX,
+            AMOUNT_IDX,
+            SANCTIONS_ROOT_IDX,
+            JURISDICTION_ROOT_IDX,
+            TIMESTAMP_IDX,
+        ];
+        for (i, &idx) in indices.iter().enumerate() {
+            assert_eq!(idx, i, "index {i} is not contiguous");
+        }
     }
 
     #[test]
-    fn pubinput_indices_match_on_chain() {
-        assert_eq!(MERKLE_ROOT_IDX, 0);
-        assert_eq!(NULLIFIER_IDX, 1);
-        assert_eq!(MINT_LO_IDX, 2);
-        assert_eq!(MINT_HI_IDX, 3);
-        assert_eq!(EPOCH_IDX, 4);
-        assert_eq!(RECIPIENT_LO_IDX, 5);
-        assert_eq!(RECIPIENT_HI_IDX, 6);
-        assert_eq!(AMOUNT_IDX, 7);
-        assert_eq!(SANCTIONS_ROOT_IDX, 8);
-        assert_eq!(JURISDICTION_ROOT_IDX, 9);
-        assert_eq!(TIMESTAMP_IDX, 10);
+    fn seeds_are_non_empty() {
+        assert!(!ISSUER_SEED.is_empty());
+        assert!(!NULLIFIER_SEED.is_empty());
+        assert!(!ATTESTATION_SEED.is_empty());
+    }
+
+    #[test]
+    fn struct_sizes_available_without_serde_or_borsh() {
+        assert_eq!(Issuer::LEN, 137);
+        assert_eq!(CompressedAttestation::LEN, 288);
+        assert_eq!(ProofSettled::LEN, 288);
     }
 }

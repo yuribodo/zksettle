@@ -10708,9 +10708,12 @@ dependencies = [
  "solana-keypair",
  "solana-signer 2.2.1",
  "spl-account-compression",
+ "spl-discriminator 0.5.2",
  "spl-tlv-account-resolution 0.11.1",
+ "spl-token-2022 6.0.0",
  "spl-transfer-hook-interface 2.1.0",
  "tokio",
+ "zksettle-types",
 ]
 
 [[package]]
