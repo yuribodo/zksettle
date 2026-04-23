@@ -7,6 +7,7 @@ pub struct Config {
     pub rotation_interval_secs: u64,
     pub listen_addr: SocketAddr,
     pub state_path: Option<String>,
+    pub api_token: Option<String>,
 }
 
 impl Config {
@@ -22,6 +23,7 @@ impl Config {
                 .parse()
                 .expect("LISTEN_ADDR must be valid socket addr"),
             state_path: std::env::var("STATE_PATH").ok(),
+            api_token: std::env::var("API_TOKEN").ok().filter(|s| !s.is_empty()),
         }
     }
 }
