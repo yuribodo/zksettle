@@ -26,6 +26,21 @@ impl MerkleTree {
         self.leaves.push(leaf);
     }
 
+    pub fn set_leaf(&mut self, index: usize, value: Fr) -> Result<(), CryptoError> {
+        if index >= self.leaves.len() {
+            return Err(CryptoError::IndexOutOfBounds {
+                index,
+                size: self.leaves.len(),
+            });
+        }
+        self.leaves[index] = value;
+        Ok(())
+    }
+
+    pub fn zero_leaf(&mut self, index: usize) -> Result<(), CryptoError> {
+        self.set_leaf(index, Fr::ZERO)
+    }
+
     pub fn root(&self) -> Fr {
         self.compute_root_from_leaves()
     }

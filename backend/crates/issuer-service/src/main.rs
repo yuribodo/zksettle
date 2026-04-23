@@ -104,7 +104,7 @@ async fn main() {
     let app = Router::new()
         .route("/health", get(handlers::health::handler))
         .route("/credentials", post(handlers::issue_credential::handler))
-        .route("/credentials/{wallet}", get(handlers::get_credential::handler))
+        .route("/credentials/{wallet}", get(handlers::get_credential::handler).delete(handlers::revoke_credential::handler))
         .route("/wallets", post(handlers::add_wallet::handler))
         .route("/proofs/membership/{wallet}", get(handlers::get_proof::handler))
         .route("/proofs/sanctions/{wallet}", get(handlers::get_sanctions_proof::handler))
