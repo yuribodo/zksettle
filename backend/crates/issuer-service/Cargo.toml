@@ -14,6 +14,7 @@ solana-sdk = "2.3"
 solana-rpc-client = "2.3"
 ark-bn254 = "0.5"
 ark-ff = "0.5"
+zksettle-config = { path = "../zksettle-config" }
 zksettle-crypto = { path = "../zksettle-crypto" }
 zksettle-types = { path = "../zksettle-types", features = ["borsh", "serde"] }
 serde = { version = "1", features = ["derive"] }

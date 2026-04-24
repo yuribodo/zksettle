@@ -1,3 +1,5 @@
+use zksettle_config::{env_or, expand_tilde};
+
 pub struct Config {
     pub rpc_url: String,
     pub keypair_path: String,
@@ -27,17 +29,4 @@ impl Config {
             log_level: env_or("LOG_LEVEL", "info"),
         }
     }
-}
-
-fn env_or(key: &str, default: &str) -> String {
-    std::env::var(key).unwrap_or_else(|_| default.to_string())
-}
-
-fn expand_tilde(path: &str) -> String {
-    if let Some(rest) = path.strip_prefix("~/") {
-        if let Ok(home) = std::env::var("HOME") {
-            return format!("{home}/{rest}");
-        }
-    }
-    path.to_string()
 }

@@ -2919,6 +2919,7 @@ dependencies = [
  "tower",
  "tracing",
  "tracing-subscriber",
+ "zksettle-config",
  "zksettle-crypto",
  "zksettle-types",
 ]
@@ -5278,6 +5279,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "zksettle-config",
  "zksettle-crypto",
 ]
 
@@ -10718,6 +10720,10 @@ dependencies = [
  "tokio",
  "zksettle-types",
 ]
+
+[[package]]
+name = "zksettle-config"
+version = "0.1.0"
 
 [[package]]
 name = "zksettle-crypto"
