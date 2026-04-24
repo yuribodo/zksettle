@@ -119,7 +119,7 @@ mod tests {
             keys: KeyStore::new(),
             metering: Metering::new(),
             rate_limiter: RateLimitStore::new(),
-            http: reqwest::Client::new(),
+            upstream: Arc::new(crate::upstream::ReqwestUpstream::new(reqwest::Client::new())),
         });
         build_router(state)
     }

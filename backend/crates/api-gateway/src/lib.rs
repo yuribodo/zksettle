@@ -12,18 +12,20 @@ pub mod metering;
 pub mod proxy;
 pub mod rate_limit;
 pub mod routes;
+pub mod upstream;
 
 use config::Config;
 use key_store::KeyStore;
 use metering::Metering;
 use rate_limit::RateLimitStore;
+use upstream::HttpUpstream;
 
 pub struct AppState {
     pub config: Config,
     pub keys: KeyStore,
     pub metering: Metering,
     pub rate_limiter: RateLimitStore,
-    pub http: reqwest::Client,
+    pub upstream: Arc<dyn HttpUpstream>,
 }
 
 pub fn build_router(state: Arc<AppState>) -> Router {
@@ -50,7 +52,7 @@ pub fn test_state() -> Arc<AppState> {
         keys: KeyStore::new(),
         metering: Metering::new(),
         rate_limiter: RateLimitStore::new(),
-        http: reqwest::Client::new(),
+        upstream: Arc::new(upstream::ReqwestUpstream::new(reqwest::Client::new())),
     })
 }
 
