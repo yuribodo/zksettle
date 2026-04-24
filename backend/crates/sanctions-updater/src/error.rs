@@ -17,3 +17,9 @@ pub enum UpdaterError {
     #[error("invalid hex: {0}")]
     InvalidHex(String),
 }
+
+impl From<zksettle_rpc::RpcError> for UpdaterError {
+    fn from(e: zksettle_rpc::RpcError) -> Self {
+        UpdaterError::Chain(e.to_string())
+    }
+}

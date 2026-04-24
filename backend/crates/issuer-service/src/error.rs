@@ -33,6 +33,12 @@ pub enum ServiceError {
     Persist(String),
 }
 
+impl From<zksettle_rpc::RpcError> for ServiceError {
+    fn from(e: zksettle_rpc::RpcError) -> Self {
+        ServiceError::Chain(e.to_string())
+    }
+}
+
 impl From<zksettle_crypto::error::CryptoError> for ServiceError {
     fn from(e: zksettle_crypto::error::CryptoError) -> Self {
         match e {

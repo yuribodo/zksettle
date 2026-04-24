@@ -9,6 +9,7 @@ use api_gateway::config::Config;
 use api_gateway::key_store::KeyStore;
 use api_gateway::metering::Metering;
 use api_gateway::rate_limit::RateLimitStore;
+use api_gateway::upstream::ReqwestUpstream;
 use api_gateway::{build_router, AppState};
 
 #[tokio::main]
@@ -34,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
         keys: KeyStore::new(),
         metering: Metering::new(),
         rate_limiter: RateLimitStore::new(),
-        http,
+        upstream: Arc::new(ReqwestUpstream::new(http)),
     });
 
     if config.admin_key.is_none() {

@@ -16,6 +16,7 @@ ark-bn254 = "0.5"
 ark-ff = "0.5"
 zksettle-config = { path = "../zksettle-config" }
 zksettle-crypto = { path = "../zksettle-crypto" }
+zksettle-rpc = { path = "../zksettle-rpc" }
 zksettle-types = { path = "../zksettle-types", features = ["borsh", "serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

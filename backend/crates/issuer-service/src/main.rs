@@ -17,13 +17,16 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
 use tokio::sync::{watch, RwLock};
+use zksettle_rpc::{RealSolanaRpc, SolanaRpc};
 
 use auth::ApiToken;
 use config::Config;
 use state::{IssuerState, PublishLock};
 
+/// Shared Solana RPC handle for handlers + rotation task.
+/// `Arc<dyn SolanaRpc>` is `Send + Sync` because the trait requires both.
 #[derive(Clone)]
-pub struct RpcUrl(pub String);
+pub struct SharedRpc(pub Arc<dyn SolanaRpc>);
 #[derive(Clone)]
 pub struct KeypairBytes(pub Vec<u8>);
 #[derive(Clone)]
@@ -67,7 +70,9 @@ async fn main() {
         "starting issuer service"
     );
 
-    let already_registered = match chain::is_issuer_registered(&cfg.rpc_url, &keypair.pubkey(), &program_id) {
+    let rpc: Arc<dyn SolanaRpc> = Arc::new(RealSolanaRpc::new(cfg.rpc_url.clone()));
+
+    let already_registered = match chain::is_issuer_registered(rpc.as_ref(), &keypair.pubkey(), &program_id) {
         Ok(true) => {
             tracing::info!("issuer PDA exists on-chain, resuming as registered");
             true
@@ -101,7 +106,7 @@ async fn main() {
     let rotation_keypair = Keypair::try_from(keypair_json.as_slice()).unwrap();
     let _rotation_handle = rotation::spawn(
         shared.clone(),
-        cfg.rpc_url.clone(),
+        rpc.clone(),
         rotation_keypair,
         program_id,
         cfg.rotation_interval_secs,
@@ -142,7 +147,7 @@ async fn main() {
 
     let app = public_routes
         .merge(protected_routes)
-        .layer(Extension(RpcUrl(cfg.rpc_url)))
+        .layer(Extension(SharedRpc(rpc)))
         .layer(Extension(KeypairBytes(keypair_json)))
         .layer(Extension(ProgramId(program_id)))
         .layer(Extension(publish_lock))

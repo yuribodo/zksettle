@@ -378,6 +378,7 @@ name = "api-gateway"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum 0.8.9",
  "dashmap",
  "governor",
@@ -2825,6 +2826,7 @@ name = "indexer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum 0.8.9",
  "axum-test",
  "base64 0.22.1",
@@ -2921,6 +2923,7 @@ dependencies = [
  "tracing-subscriber",
  "zksettle-config",
  "zksettle-crypto",
+ "zksettle-rpc",
  "zksettle-types",
 ]
 
@@ -5267,6 +5270,7 @@ version = "0.1.0"
 dependencies = [
  "ark-bn254 0.5.0",
  "ark-ff 0.5.0",
+ "async-trait",
  "borsh 1.6.1",
  "csv",
  "hex",
@@ -5281,6 +5285,7 @@ dependencies = [
  "tracing-subscriber",
  "zksettle-config",
  "zksettle-crypto",
+ "zksettle-rpc",
 ]
 
 [[package]]
@@ -10733,6 +10738,16 @@ dependencies = [
  "ark-ff 0.5.0",
  "hex",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "zksettle-rpc"
+version = "0.1.0"
+dependencies = [
+ "solana-rpc-client",
+ "solana-sdk",
+ "thiserror 2.0.18",
+ "tracing",
 ]
 
 [[package]]
