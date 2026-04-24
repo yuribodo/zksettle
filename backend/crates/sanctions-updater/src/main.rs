@@ -14,6 +14,7 @@ use solana_sdk::signer::Signer;
 use zksettle_rpc::{RealSolanaRpc, SolanaRpc};
 
 use config::Config;
+use fetch::{HttpOfacFetcher, MockOfacFetcher, OfacFetcher};
 
 #[tokio::main]
 async fn main() {
@@ -48,6 +49,12 @@ async fn main() {
 
     let rpc: Arc<dyn SolanaRpc> = Arc::new(RealSolanaRpc::new(cfg.rpc_url.clone()));
 
+    let fetcher: Arc<dyn OfacFetcher> = if cfg.mock_sanctions {
+        Arc::new(MockOfacFetcher::with_default_fixture())
+    } else {
+        Arc::new(HttpOfacFetcher::new(cfg.ofac_sdn_url.clone()))
+    };
+
     let mut registered = match chain::is_issuer_registered(rpc.as_ref(), &keypair.pubkey(), &program_id) {
         Ok(r) => r,
         Err(e) => {
@@ -60,7 +67,7 @@ async fn main() {
     let keypair_bytes = keypair_json;
 
     loop {
-        match run_tick(&cfg, rpc.clone(), &keypair_bytes, &program_id, registered).await {
+        match run_tick(rpc.clone(), fetcher.clone(), &keypair_bytes, &program_id, registered).await {
             Ok(result) => {
                 if result.did_register {
                     registered = true;
@@ -85,13 +92,13 @@ async fn main() {
 }
 
 async fn run_tick(
-    cfg: &Config,
     rpc: Arc<dyn SolanaRpc>,
+    fetcher: Arc<dyn OfacFetcher>,
     keypair_bytes: &[u8],
     program_id: &Pubkey,
     registered: bool,
 ) -> Result<chain::PublishResult, error::UpdaterError> {
-    let wallets = fetch::fetch_sanctioned_wallets(cfg).await?;
+    let wallets = fetcher.fetch_wallets().await?;
     tracing::info!(count = wallets.len(), "fetched sanctioned wallets");
 
     let (_tree, root_bytes) = build::build_sanctions_tree(&wallets)?;
