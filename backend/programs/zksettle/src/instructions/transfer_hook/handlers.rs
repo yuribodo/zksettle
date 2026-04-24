@@ -10,7 +10,7 @@ use crate::error::ZkSettleError;
 
 use super::{
     types::{ExtraAccountMetaInput, StagedLightArgs, EXTRA_ACCOUNT_META_LIST_SEED, MAX_HOOK_PROOF_BYTES},
-    InitExtraAccountMetaList, SetHookPayload,
+    CloseHookPayload, InitExtraAccountMetaList, SetHookPayload,
 };
 
 /// Pure guard for `set_hook_payload`. Extracted so unit tests can cover the
@@ -72,6 +72,10 @@ pub(crate) fn validate_mint_has_hook(mint_info: &AccountInfo) -> Result<()> {
         hook_program_id == Some(crate::ID),
         ZkSettleError::MintHookMismatch
     );
+    Ok(())
+}
+
+pub fn close_hook_payload_handler(_ctx: Context<CloseHookPayload>) -> Result<()> {
     Ok(())
 }
 

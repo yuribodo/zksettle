@@ -9,13 +9,13 @@ use crate::convert::bytes_be_to_fr;
 use crate::error::ServiceError;
 use crate::state::{CredentialRecord, IssuerState};
 
-// sanctions_tree is intentionally not persisted — it's re-populated from an external source on startup.
 #[derive(Serialize, Deserialize)]
 struct PersistedState {
     credentials: Vec<CredentialRecord>,
     registered: bool,
 }
 
+// sanctions_tree intentionally not persisted — re-populated from external source on startup.
 pub fn save(path: &str, state: &IssuerState) -> Result<(), ServiceError> {
     let mut creds: Vec<_> = state.credentials.values().cloned().collect();
     creds.sort_by_key(|c| c.leaf_index);

@@ -25,10 +25,37 @@ use zksettle::error::ZkSettleError;
 use zksettle::instructions::transfer_hook::{ExtraAccountMetaInput, MAX_HOOK_PROOF_BYTES};
 
 use helpers::{
-    boot_harness, create_token2022_mint_with_hook_ixs, default_light_args, execute_hook_ix,
-    extra_meta_pda, hook_payload_pda, init_extra_meta_ix, nonzero_nullifier, registered_issuer,
-    set_hook_payload_ix, ANCHOR_ERROR_CODE_OFFSET,
+    boot_harness, close_hook_payload_ix, create_token2022_mint_with_hook_ixs, default_light_args,
+    execute_hook_ix, extra_meta_pda, hook_payload_pda, init_extra_meta_ix, nonzero_nullifier,
+    registered_issuer, set_hook_payload_ix, ANCHOR_ERROR_CODE_OFFSET, CONSTRAINT_SEEDS,
 };
+
+async fn stage_default_payload(
+    rpc: &mut light_program_test::ProgramTestRpc,
+    authority: &impl Signer,
+    issuer_key: &Pubkey,
+    proof_byte: u8,
+    proof_len: usize,
+    amount: u64,
+) {
+    rpc.create_and_send_transaction(
+        &[set_hook_payload_ix(
+            &authority.pubkey(),
+            issuer_key,
+            vec![proof_byte; proof_len],
+            nonzero_nullifier(),
+            Pubkey::new_unique(),
+            10,
+            Pubkey::new_unique(),
+            amount,
+            default_light_args(),
+        )],
+        &authority.pubkey(),
+        &[authority],
+    )
+    .await
+    .expect("stage_default_payload");
+}
 
 #[tokio::test]
 async fn set_hook_payload_stores_fields() {
@@ -241,6 +268,108 @@ async fn execute_hook_rejects_missing_payload() {
         anchor_lang::error::ErrorCode::AccountNotInitialized as u32,
     )
     .expect("expected AccountNotInitialized for missing payload");
+}
+
+#[tokio::test]
+async fn close_hook_payload_reclaims_rent() {
+    let mut rpc = boot_harness().await;
+    let (authority, issuer_key) = registered_issuer(&mut rpc).await;
+
+    stage_default_payload(&mut rpc, &authority, &issuer_key, 0xaa, 256, 500).await;
+
+    let (payload_key, _) = hook_payload_pda(&authority.pubkey());
+    let pre_balance = rpc
+        .get_account(authority.pubkey())
+        .await
+        .expect("fetch")
+        .expect("authority exists")
+        .lamports;
+
+    rpc.create_and_send_transaction(
+        &[close_hook_payload_ix(&authority.pubkey())],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("close_hook_payload should succeed");
+
+    let account = rpc.get_account(payload_key).await.expect("fetch");
+    assert!(account.is_none(), "PDA should be closed");
+
+    let post_balance = rpc
+        .get_account(authority.pubkey())
+        .await
+        .expect("fetch")
+        .expect("authority exists")
+        .lamports;
+    assert!(post_balance > pre_balance, "rent should be returned");
+}
+
+#[tokio::test]
+async fn close_hook_payload_then_restage() {
+    let mut rpc = boot_harness().await;
+    let (authority, issuer_key) = registered_issuer(&mut rpc).await;
+
+    stage_default_payload(&mut rpc, &authority, &issuer_key, 0xbb, 128, 1000).await;
+
+    rpc.create_and_send_transaction(
+        &[close_hook_payload_ix(&authority.pubkey())],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("close");
+
+    stage_default_payload(&mut rpc, &authority, &issuer_key, 0xcc, 128, 2000).await;
+
+    let (payload_key, _) = hook_payload_pda(&authority.pubkey());
+    let payload: zksettle::instructions::transfer_hook::HookPayload = rpc
+        .get_anchor_account(&payload_key)
+        .await
+        .expect("fetch")
+        .expect("payload must exist after re-stage");
+    assert_eq!(payload.amount, 2000);
+}
+
+#[tokio::test]
+async fn close_hook_payload_wrong_authority_fails() {
+    let mut rpc = boot_harness().await;
+    let (authority, issuer_key) = registered_issuer(&mut rpc).await;
+
+    stage_default_payload(&mut rpc, &authority, &issuer_key, 0xaa, 256, 500).await;
+
+    let wrong = helpers::funded_authority(&mut rpc, 10_000_000_000).await;
+
+    let result = rpc
+        .create_and_send_transaction(
+            &[close_hook_payload_ix(&wrong.pubkey())],
+            &wrong.pubkey(),
+            &[&wrong],
+        )
+        .await;
+
+    assert_rpc_error(result, 0, CONSTRAINT_SEEDS).expect("expected ConstraintSeeds");
+}
+
+#[tokio::test]
+async fn close_hook_payload_nonexistent_fails() {
+    let mut rpc = boot_harness().await;
+    let (authority, _) = registered_issuer(&mut rpc).await;
+
+    let result = rpc
+        .create_and_send_transaction(
+            &[close_hook_payload_ix(&authority.pubkey())],
+            &authority.pubkey(),
+            &[&authority],
+        )
+        .await;
+
+    assert_rpc_error(
+        result,
+        0,
+        anchor_lang::error::ErrorCode::AccountNotInitialized as u32,
+    )
+    .expect("expected AccountNotInitialized");
 }
 
 #[tokio::test]

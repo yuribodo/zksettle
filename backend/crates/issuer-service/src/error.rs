@@ -49,8 +49,8 @@ impl IntoResponse for ServiceError {
         let (status, msg) = match &self {
             ServiceError::WalletNotFound => (StatusCode::NOT_FOUND, self.to_string()),
             ServiceError::DuplicateWallet => (StatusCode::CONFLICT, self.to_string()),
-            ServiceError::AlreadyRevoked => (StatusCode::GONE, self.to_string()),
-            ServiceError::WalletRevoked => (StatusCode::GONE, self.to_string()),
+            ServiceError::AlreadyRevoked => (StatusCode::CONFLICT, self.to_string()),
+            ServiceError::WalletRevoked => (StatusCode::FORBIDDEN, self.to_string()),
             ServiceError::InvalidHex(_) => (StatusCode::BAD_REQUEST, self.to_string()),
             ServiceError::WalletIsSanctioned => (StatusCode::FORBIDDEN, self.to_string()),
             ServiceError::Tree(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
