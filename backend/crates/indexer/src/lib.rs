@@ -13,11 +13,11 @@ pub mod routes;
 
 use config::Config;
 use dedup::NullifierStore;
-use irys::client::IrysClient;
+use irys::IrysUploader;
 
 pub struct AppState {
     pub config: Config,
-    pub irys: IrysClient,
+    pub irys: Arc<dyn IrysUploader>,
     pub dedup: NullifierStore,
 }
 
@@ -44,7 +44,8 @@ pub fn test_app() -> (Router, tempfile::TempDir) {
         dedup_ttl_secs: 86400,
     };
     let http = reqwest::Client::new();
-    let irys = IrysClient::new(config.irys_node_url.clone(), None, http);
+    let irys: Arc<dyn IrysUploader> =
+        Arc::new(irys::client::IrysClient::new(config.irys_node_url.clone(), None, http));
     let dedup = NullifierStore::open(tmp.path(), 1_000_000, std::time::Duration::from_secs(86400))
         .expect("failed to open test dedup store");
     let state = Arc::new(AppState {

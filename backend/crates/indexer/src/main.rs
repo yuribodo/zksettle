@@ -8,6 +8,7 @@ use tracing_subscriber::EnvFilter;
 use indexer::config::Config;
 use indexer::dedup::NullifierStore;
 use indexer::irys::client::IrysClient;
+use indexer::irys::IrysUploader;
 use indexer::{build_router, AppState};
 
 #[tokio::main]
@@ -27,11 +28,11 @@ async fn main() -> anyhow::Result<()> {
         .connect_timeout(std::time::Duration::from_secs(10))
         .build()
         .context("building http client")?;
-    let irys = IrysClient::new(
+    let irys: Arc<dyn IrysUploader> = Arc::new(IrysClient::new(
         config.irys_node_url.clone(),
         config.irys_wallet_key.as_deref(),
         http,
-    );
+    ));
 
     let dedup_path = std::path::Path::new(&config.dedup_path);
     std::fs::create_dir_all(dedup_path).context("creating dedup directory")?;
