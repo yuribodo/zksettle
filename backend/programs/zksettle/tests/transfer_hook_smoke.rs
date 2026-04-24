@@ -30,6 +30,33 @@ use helpers::{
     registered_issuer, set_hook_payload_ix, ANCHOR_ERROR_CODE_OFFSET, CONSTRAINT_SEEDS,
 };
 
+async fn stage_default_payload(
+    rpc: &mut light_program_test::ProgramTestRpc,
+    authority: &impl Signer,
+    issuer_key: &Pubkey,
+    proof_byte: u8,
+    proof_len: usize,
+    amount: u64,
+) {
+    rpc.create_and_send_transaction(
+        &[set_hook_payload_ix(
+            &authority.pubkey(),
+            issuer_key,
+            vec![proof_byte; proof_len],
+            nonzero_nullifier(),
+            Pubkey::new_unique(),
+            10,
+            Pubkey::new_unique(),
+            amount,
+            default_light_args(),
+        )],
+        &authority.pubkey(),
+        &[authority],
+    )
+    .await
+    .expect("stage_default_payload");
+}
+
 #[tokio::test]
 async fn set_hook_payload_stores_fields() {
     let mut rpc = boot_harness().await;
@@ -248,23 +275,7 @@ async fn close_hook_payload_reclaims_rent() {
     let mut rpc = boot_harness().await;
     let (authority, issuer_key) = registered_issuer(&mut rpc).await;
 
-    rpc.create_and_send_transaction(
-        &[set_hook_payload_ix(
-            &authority.pubkey(),
-            &issuer_key,
-            vec![0xaa; 256],
-            nonzero_nullifier(),
-            Pubkey::new_unique(),
-            10,
-            Pubkey::new_unique(),
-            500,
-            default_light_args(),
-        )],
-        &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("set_hook_payload should succeed");
+    stage_default_payload(&mut rpc, &authority, &issuer_key, 0xaa, 256, 500).await;
 
     let (payload_key, _) = hook_payload_pda(&authority.pubkey());
     let pre_balance = rpc
@@ -299,23 +310,7 @@ async fn close_hook_payload_then_restage() {
     let mut rpc = boot_harness().await;
     let (authority, issuer_key) = registered_issuer(&mut rpc).await;
 
-    rpc.create_and_send_transaction(
-        &[set_hook_payload_ix(
-            &authority.pubkey(),
-            &issuer_key,
-            vec![0xbb; 128],
-            nonzero_nullifier(),
-            Pubkey::new_unique(),
-            20,
-            Pubkey::new_unique(),
-            1000,
-            default_light_args(),
-        )],
-        &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("first stage");
+    stage_default_payload(&mut rpc, &authority, &issuer_key, 0xbb, 128, 1000).await;
 
     rpc.create_and_send_transaction(
         &[close_hook_payload_ix(&authority.pubkey())],
@@ -325,23 +320,7 @@ async fn close_hook_payload_then_restage() {
     .await
     .expect("close");
 
-    rpc.create_and_send_transaction(
-        &[set_hook_payload_ix(
-            &authority.pubkey(),
-            &issuer_key,
-            vec![0xcc; 128],
-            nonzero_nullifier(),
-            Pubkey::new_unique(),
-            30,
-            Pubkey::new_unique(),
-            2000,
-            default_light_args(),
-        )],
-        &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("re-stage after close should succeed");
+    stage_default_payload(&mut rpc, &authority, &issuer_key, 0xcc, 128, 2000).await;
 
     let (payload_key, _) = hook_payload_pda(&authority.pubkey());
     let payload: zksettle::instructions::transfer_hook::HookPayload = rpc
@@ -354,28 +333,10 @@ async fn close_hook_payload_then_restage() {
 
 #[tokio::test]
 async fn close_hook_payload_wrong_authority_fails() {
-    use solana_keypair::Keypair;
-
     let mut rpc = boot_harness().await;
     let (authority, issuer_key) = registered_issuer(&mut rpc).await;
 
-    rpc.create_and_send_transaction(
-        &[set_hook_payload_ix(
-            &authority.pubkey(),
-            &issuer_key,
-            vec![0xaa; 256],
-            nonzero_nullifier(),
-            Pubkey::new_unique(),
-            10,
-            Pubkey::new_unique(),
-            500,
-            default_light_args(),
-        )],
-        &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("set_hook_payload should succeed");
+    stage_default_payload(&mut rpc, &authority, &issuer_key, 0xaa, 256, 500).await;
 
     let wrong = helpers::funded_authority(&mut rpc, 10_000_000_000).await;
 
