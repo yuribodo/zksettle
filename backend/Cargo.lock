@@ -10730,6 +10730,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "zksettle-rpc"
+version = "0.1.0"
+dependencies = [
+ "solana-rpc-client",
+ "solana-sdk",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
 name = "zksettle-types"
 version = "0.1.0"
 dependencies = [
