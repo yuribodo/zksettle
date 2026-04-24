@@ -54,6 +54,7 @@ impl HttpUpstream for ReqwestUpstream {
 
         let status = StatusCode::from_u16(resp.status().as_u16())
             .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        // reqwest and axum both re-export http 1.x HeaderMap; breaks if either bumps to http 2.x.
         let headers = resp.headers().clone();
         let body = resp
             .bytes()

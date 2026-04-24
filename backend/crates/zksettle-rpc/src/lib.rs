@@ -1,9 +1,4 @@
 //! SolanaRpc trait + real + mock impls.
-//!
-//! Goal: let off-chain services (`issuer-service`, `sanctions-updater`) call
-//! into a narrow, mockable interface instead of constructing
-//! `solana_rpc_client::RpcClient` inline. The trait surface is intentionally
-//! small — two methods cover every call site in the current callers.
 
 use solana_sdk::instruction::Instruction;
 use solana_sdk::pubkey::Pubkey;

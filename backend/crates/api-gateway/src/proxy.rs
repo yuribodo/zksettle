@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::body::Body;
 use axum::extract::{Request, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Response};
 
 use crate::auth::AuthenticatedKey;
@@ -88,8 +88,7 @@ pub async fn proxy_to_upstream(
         state.metering.increment(&record.key_hash, now);
     }
 
-    let status = StatusCode::from_u16(upstream_resp.status.as_u16())
-        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    let status = upstream_resp.status;
     let resp_headers = filter_hop_by_hop(&upstream_resp.headers);
 
     Ok((status, resp_headers, Body::from(upstream_resp.body)).into_response())

@@ -16,7 +16,6 @@ pub trait IrysUploader: Send + Sync {
 #[async_trait]
 impl IrysUploader for client::IrysClient {
     async fn upload(&self, event: &ProofSettled) -> Result<String, IndexerError> {
-        // Delegate to the inherent impl (retry logic, dry-run branch, tracing).
         client::IrysClient::upload(self, event).await
     }
 }

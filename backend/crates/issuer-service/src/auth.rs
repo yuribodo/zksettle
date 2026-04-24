@@ -4,6 +4,7 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::Extension;
 use serde_json::json;
+use sha2::{Sha256, Digest};
 use subtle::ConstantTimeEq;
 
 #[derive(Clone)]
@@ -30,15 +31,16 @@ pub async fn require_bearer(
     req: Request,
     next: Next,
 ) -> Response {
-    let authorized = req
+    let bearer = req
         .headers()
         .get("authorization")
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
-        .map(|bearer| {
-            bearer.as_bytes().ct_eq(token.as_bytes()).into()
-        })
-        .unwrap_or(false);
+        .unwrap_or("");
+
+    let input_hash = Sha256::digest(bearer.as_bytes());
+    let token_hash = Sha256::digest(token.as_bytes());
+    let authorized: bool = input_hash.ct_eq(&token_hash).into();
 
     if !authorized {
         let body = axum::Json(json!({ "error": "unauthorized" }));
