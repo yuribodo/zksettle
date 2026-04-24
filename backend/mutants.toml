@@ -1,0 +1,12 @@
+timeout_multiplier = 5
+minimum_timeout = 20
+
+# On-chain BPF program can't compile for host target
+exclude_globs = ["programs/**"]
+
+# Poseidon2 round constants (~1300 LOC of constant arrays) generate hundreds
+# of mutants all caught by the same fixture test. main() not unit-testable.
+exclude_re = [
+    "poseidon2/params\\.rs",
+    "fn main\\(",
+]
