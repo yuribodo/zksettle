@@ -30,6 +30,7 @@ function formatTime(iso: string): string {
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
+    timeZone: "UTC",
   }).format(date);
 }
 
@@ -84,8 +85,8 @@ export interface TransactionTableProps {
 
 export function TransactionTable({ transactions, issuerName }: TransactionTableProps) {
   return (
-    <div className="overflow-hidden rounded-[var(--radius-6)] border border-border-subtle bg-surface">
-      <table className="w-full border-collapse text-left">
+    <div className="overflow-x-auto rounded-[var(--radius-6)] border border-border-subtle bg-surface">
+      <table className="w-full min-w-[880px] border-collapse text-left">
         <thead>
           <tr className="border-b border-border-subtle text-[11px] font-medium tracking-[0.08em] text-muted uppercase">
             <th className="py-2.5 pr-3 pl-5 font-medium">Time</th>

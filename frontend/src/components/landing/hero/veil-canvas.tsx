@@ -105,6 +105,7 @@ export function VeilCanvas({ className }: VeilCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [webglUnavailable, setWebglUnavailable] = useState(false);
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
@@ -128,11 +129,17 @@ export function VeilCanvas({ className }: VeilCanvasProps) {
     const camera = new OrthographicCamera(-1, 1, 1, -1, 0.01, 100);
     camera.position.z = 5;
 
-    const renderer = new WebGLRenderer({
-      antialias: false,
-      alpha: true,
-      powerPreference: "low-power",
-    });
+    let renderer: WebGLRenderer;
+    try {
+      renderer = new WebGLRenderer({
+        antialias: false,
+        alpha: true,
+        powerPreference: "low-power",
+      });
+    } catch {
+      setWebglUnavailable(true);
+      return;
+    }
     const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
     renderer.setPixelRatio(pixelRatio);
     renderer.setSize(initialWidth, initialHeight);
@@ -258,7 +265,7 @@ export function VeilCanvas({ className }: VeilCanvasProps) {
 
   if (!mounted) return null;
 
-  if (isMobile) {
+  if (isMobile || webglUnavailable) {
     return <VeilStaticFallback className={className} />;
   }
 

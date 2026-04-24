@@ -28,6 +28,9 @@ export interface ProofConsoleProps {
 export function ProofConsole({ initial, lines, className }: ProofConsoleProps) {
   return (
     <div
+      role="log"
+      aria-live="polite"
+      aria-atomic="false"
       aria-label="Proof console"
       className={cn(
         "min-h-[280px] rounded-[var(--radius-6)] border border-border-subtle bg-surface-deep p-6 font-mono text-sm leading-relaxed",

@@ -9,10 +9,19 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const FALLBACK_SITE_URL = "http://localhost:3000";
+
+function resolveMetadataBase(): URL {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL;
+  try {
+    return new URL(raw || FALLBACK_SITE_URL);
+  } catch {
+    return new URL(FALLBACK_SITE_URL);
+  }
+}
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: resolveMetadataBase(),
   title: {
     default: "ZKSettle — Compliance-grade rails for stablecoin settlement",
     template: "%s · ZKSettle",

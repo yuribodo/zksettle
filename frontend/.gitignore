@@ -38,3 +38,6 @@ next-env.d.ts
 
 # vercel
 .vercel
+
+# ralph workflow local state
+ralph/.last-branch

@@ -8,7 +8,7 @@ export const USE_CASES: readonly UseCase[] = [
   {
     name: "Travel rule",
     tagline: "$9T stablecoin volume",
-    footnote: "GENIUS Act · MiCA Q3",
+    footnote: "GENIUS Act (US, 2025) · MiCA (EU, in force)",
   },
   {
     name: "Proof of solvency",

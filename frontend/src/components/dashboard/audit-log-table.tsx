@@ -20,8 +20,23 @@ type JurisdictionFilter = "all" | Jurisdiction;
 type IssuerFilter = "all" | (typeof ISSUERS)[number]["id"];
 
 const ROWS_PER_PAGE = 10;
-const TOTAL_CLAIMED = 23_481;
-const TOTAL_PAGES = Math.ceil(TOTAL_CLAIMED / 50);
+
+const RANGE_MS = {
+  "24h": 24 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
+  "30d": 30 * 24 * 60 * 60 * 1000,
+} as const;
+
+const RANGE_LABEL = {
+  "24h": "Last 24h",
+  "7d": "Last 7 days",
+  "30d": "Last 30 days",
+} as const;
+
+const LATEST_AUDIT_TIME = AUDIT_EVENTS.reduce(
+  (max, event) => Math.max(max, Date.parse(event.time)),
+  0,
+);
 
 const PILL_BY_STATUS: Record<Transaction["status"], { kind: StatusKind; label: string }> = {
   verified: { kind: "verified", label: "Verified" },
@@ -40,6 +55,7 @@ function formatDateTime(iso: string): string {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
+    timeZone: "UTC",
   }).format(date);
 }
 
@@ -68,17 +84,24 @@ export function AuditLogTable() {
   const [toast, setToast] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
+    const cutoff = LATEST_AUDIT_TIME - RANGE_MS[range];
     return AUDIT_EVENTS.filter((event) => {
+      if (Date.parse(event.time) < cutoff) return false;
       if (status !== "all" && event.status !== status) return false;
       if (issuer !== "all" && event.issuerId !== issuer) return false;
       if (jurisdiction !== "all" && event.jurisdiction !== jurisdiction) return false;
       return true;
     });
-  }, [status, issuer, jurisdiction]);
+  }, [status, issuer, jurisdiction, range]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ROWS_PER_PAGE));
+  const safePage = Math.min(page, totalPages);
+  const visibleStart = filtered.length === 0 ? 0 : (safePage - 1) * ROWS_PER_PAGE + 1;
+  const visibleEnd = Math.min(safePage * ROWS_PER_PAGE, filtered.length);
 
   const pageRows = useMemo(
-    () => filtered.slice((page - 1) * ROWS_PER_PAGE, page * ROWS_PER_PAGE),
-    [filtered, page],
+    () => filtered.slice((safePage - 1) * ROWS_PER_PAGE, safePage * ROWS_PER_PAGE),
+    [filtered, safePage],
   );
 
   const exportToast = (label: string) => {
@@ -212,12 +235,12 @@ export function AuditLogTable() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-4 font-mono text-xs text-muted">
         <span>
-          Showing {(page - 1) * ROWS_PER_PAGE + 1}–{Math.min(page * ROWS_PER_PAGE, filtered.length)} of {fmtCompact(TOTAL_CLAIMED)} attestations · Last 30 days
+          Showing {visibleStart}–{visibleEnd} of {fmtCompact(filtered.length)} attestations · {RANGE_LABEL[range]}
         </span>
         <Pagination
-          current={page}
-          total={TOTAL_PAGES}
-          onChange={(next) => setPage(Math.max(1, Math.min(TOTAL_PAGES, next)))}
+          current={safePage}
+          total={totalPages}
+          onChange={(next) => setPage(Math.max(1, Math.min(totalPages, next)))}
         />
       </div>
 

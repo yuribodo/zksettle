@@ -36,8 +36,10 @@ void main() {
   gl_Position = projectionMatrix * mv;
 
   // particles shrink slightly as they converge — tighter commitment glyph
-  float size = aSize * mix(1.0, 0.65, p) * uPixelRatio;
-  gl_PointSize = size;
+  // aSize is negative for ambient particles (sign encodes glyph membership) —
+  // take abs() here so gl_PointSize stays > 0.
+  float size = abs(aSize) * mix(1.0, 0.65, p) * uPixelRatio;
+  gl_PointSize = max(size, 1.0);
 
   // vGlyph is 1.0 for particles whose target lies on the glyph silhouette,
   // 0.0 for ambient particles that never participate in the glyph.

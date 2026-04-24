@@ -27,8 +27,8 @@ export default function CounterpartiesPage() {
     <div className="flex flex-col gap-8">
       <PageHeader title={META.label} subtitle={META.subtitle} actions={<RegisterIssuerModal />} />
 
-      <div className="overflow-hidden rounded-[var(--radius-6)] border border-border-subtle bg-surface">
-        <table className="w-full border-collapse text-left">
+      <div className="overflow-x-auto rounded-[var(--radius-6)] border border-border-subtle bg-surface">
+        <table className="w-full min-w-[760px] border-collapse text-left">
           <thead>
             <tr className="border-b border-border-subtle text-[11px] font-medium tracking-[0.08em] text-muted uppercase">
               <th className="py-3 pr-3 pl-5 font-medium">Name</th>

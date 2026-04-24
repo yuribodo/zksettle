@@ -24,7 +24,7 @@ export interface BreakpointConditions {
 
 const BREAKPOINT_QUERIES = {
   isDesktop: "(min-width: 768px) and (prefers-reduced-motion: no-preference)",
-  isMobile: "(max-width: 767px)",
+  isMobile: "(max-width: 767px) and (prefers-reduced-motion: no-preference)",
   isReduced: "(prefers-reduced-motion: reduce)",
 } as const;
 
