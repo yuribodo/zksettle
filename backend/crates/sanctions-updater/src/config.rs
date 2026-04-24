@@ -1,3 +1,5 @@
+use zksettle_config::{env_or, expand_tilde};
+
 pub struct Config {
     pub rpc_url: String,
     pub keypair_path: String,
@@ -25,45 +27,6 @@ impl Config {
                 "https://www.treasury.gov/ofac/downloads/sdn.csv",
             ),
             log_level: env_or("LOG_LEVEL", "info"),
-        }
-    }
-}
-
-fn env_or(key: &str, default: &str) -> String {
-    std::env::var(key).unwrap_or_else(|_| default.to_string())
-}
-
-fn expand_tilde(path: &str) -> String {
-    if let Some(rest) = path.strip_prefix("~/") {
-        if let Ok(home) = std::env::var("HOME") {
-            return format!("{home}/{rest}");
-        }
-    }
-    path.to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn env_or_returns_default_when_var_unset() {
-        let value = env_or("SANCTIONS_UPDATER_ENV_OR_UNSET_TEST", "fallback");
-        assert_eq!(value, "fallback");
-    }
-
-    #[test]
-    fn expand_tilde_passes_through_non_tilde_paths() {
-        assert_eq!(expand_tilde("/abs/path/key.json"), "/abs/path/key.json");
-        assert_eq!(expand_tilde("relative/path"), "relative/path");
-        assert_eq!(expand_tilde(""), "");
-    }
-
-    #[test]
-    fn expand_tilde_expands_when_home_is_set() {
-        if let Ok(home) = std::env::var("HOME") {
-            let expanded = expand_tilde("~/foo/bar");
-            assert_eq!(expanded, format!("{home}/foo/bar"));
         }
     }
 }
