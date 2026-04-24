@@ -1,8 +1,8 @@
 use ark_bn254::Fr;
 use ark_ff::AdditiveGroup;
 
-use crate::poseidon2_hash;
 use crate::error::CryptoError;
+use crate::poseidon2_hash;
 
 pub const MERKLE_DEPTH: usize = 20;
 
@@ -17,9 +17,7 @@ pub struct MerkleProof {
 
 impl MerkleTree {
     pub fn new() -> Self {
-        Self {
-            leaves: Vec::new(),
-        }
+        Self { leaves: Vec::new() }
     }
 
     pub fn insert(&mut self, leaf: Fr) {
@@ -111,11 +109,7 @@ impl MerkleTree {
     }
 }
 
-pub fn verify_merkle_proof(
-    leaf: Fr,
-    proof: &MerkleProof,
-    root: Fr,
-) -> bool {
+pub fn verify_merkle_proof(leaf: Fr, proof: &MerkleProof, root: Fr) -> bool {
     let mut cur = leaf;
     for i in 0..MERKLE_DEPTH {
         let (l, r) = if proof.path_indices[i] == 0 {
@@ -131,5 +125,73 @@ pub fn verify_merkle_proof(
 impl Default for MerkleTree {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn empty_tree_root_is_deterministic() {
+        // depth-20 zero chain must be stable across independent instances
+        assert_eq!(MerkleTree::new().root(), MerkleTree::new().root());
+    }
+
+    #[test]
+    fn default_root_matches_new_root() {
+        assert_eq!(MerkleTree::default().root(), MerkleTree::new().root());
+    }
+
+    #[test]
+    fn last_index_proof_verifies_with_odd_leaf_count() {
+        // odd leaf count exercises the sibling-padding branch in proof()
+        let mut tree = MerkleTree::new();
+        for i in 1..=3u64 {
+            tree.insert(poseidon2_hash(&[Fr::from(i)]));
+        }
+        let last_leaf = poseidon2_hash(&[Fr::from(3u64)]);
+        let proof = tree.proof(2).expect("proof at last index");
+        assert!(verify_merkle_proof(last_leaf, &proof, tree.root()));
+    }
+
+    #[test]
+    fn proof_rejects_out_of_bounds_index() {
+        let mut tree = MerkleTree::new();
+        tree.insert(Fr::from(1u64));
+        assert!(matches!(
+            tree.proof(1),
+            Err(CryptoError::IndexOutOfBounds { index: 1, size: 1 })
+        ));
+    }
+
+    #[test]
+    fn set_leaf_rejects_out_of_bounds_index() {
+        let mut tree = MerkleTree::new();
+        tree.insert(Fr::from(1u64));
+        assert!(matches!(
+            tree.set_leaf(5, Fr::ZERO),
+            Err(CryptoError::IndexOutOfBounds { index: 5, size: 1 })
+        ));
+    }
+
+    #[test]
+    fn verify_rejects_tampered_leaf() {
+        let leaf = poseidon2_hash(&[Fr::from(1u64)]);
+        let mut tree = MerkleTree::new();
+        tree.insert(leaf);
+        let proof = tree.proof(0).expect("proof");
+        let tampered = poseidon2_hash(&[Fr::from(99u64)]);
+        assert!(!verify_merkle_proof(tampered, &proof, tree.root()));
+    }
+
+    #[test]
+    fn zero_leaf_is_idempotent() {
+        let mut tree = MerkleTree::new();
+        tree.insert(poseidon2_hash(&[Fr::from(1u64)]));
+        tree.zero_leaf(0).expect("first zero");
+        let root_once = tree.root();
+        tree.zero_leaf(0).expect("second zero");
+        assert_eq!(tree.root(), root_once);
     }
 }

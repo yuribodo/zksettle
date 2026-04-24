@@ -99,7 +99,7 @@ mod tests {
         save(path_str, &state).unwrap();
         let loaded = load(path_str).unwrap();
 
-        assert_eq!(loaded.registered, true);
+        assert!(loaded.registered);
         assert_eq!(loaded.credentials.len(), 1);
         assert!(loaded.credentials.contains_key(&wallet));
         assert_eq!(
@@ -117,7 +117,8 @@ mod tests {
 
     #[test]
     fn roundtrip_with_revoked() {
-        let dir = std::env::temp_dir().join(format!("issuer_persist_revoke_test_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("issuer_persist_revoke_test_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("state.json");
         let path_str = path.to_str().unwrap();
@@ -154,11 +155,7 @@ mod tests {
         );
 
         state.membership_tree.zero_leaf(0).unwrap();
-        state
-            .credentials
-            .get_mut(&wallet_a)
-            .unwrap()
-            .revoked = true;
+        state.credentials.get_mut(&wallet_a).unwrap().revoked = true;
 
         save(path_str, &state).unwrap();
         let loaded = load(path_str).unwrap();

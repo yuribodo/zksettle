@@ -57,10 +57,12 @@ mod tests {
     }
 
     #[test]
-    fn seeds_are_non_empty() {
-        assert!(!ISSUER_SEED.is_empty());
-        assert!(!NULLIFIER_SEED.is_empty());
-        assert!(!ATTESTATION_SEED.is_empty());
+    fn seeds_match_canonical_byte_strings() {
+        // seed byte strings are load-bearing for PDA derivation; changing any
+        // of these silently reroutes every account and must be an intentional break
+        assert_eq!(ISSUER_SEED, b"issuer");
+        assert_eq!(NULLIFIER_SEED, b"nullifier");
+        assert_eq!(ATTESTATION_SEED, b"attestation");
     }
 
     #[test]
