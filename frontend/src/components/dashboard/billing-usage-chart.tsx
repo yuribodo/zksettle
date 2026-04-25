@@ -1,12 +1,23 @@
-import { BILLING_USAGE } from "@/lib/mock-data";
+import type { DailyUsage } from "@/lib/api/schemas";
 
 const WIDTH = 720;
 const HEIGHT = 200;
 const PADDING = { top: 12, right: 16, bottom: 26, left: 40 };
 
-export function BillingUsageChart() {
-  const days = BILLING_USAGE;
-  const values = days.map((d) => d.proofs);
+export interface BillingUsageChartProps {
+  data: readonly DailyUsage[];
+}
+
+export function BillingUsageChart({ data }: BillingUsageChartProps) {
+  if (data.length === 0) {
+    return (
+      <div className="flex h-[200px] items-center justify-center font-mono text-xs text-muted">
+        No usage data yet.
+      </div>
+    );
+  }
+
+  const values = data.map((d) => d.count);
   const max = Math.max(...values);
   const min = Math.min(...values);
   const range = max - min;
@@ -15,33 +26,41 @@ export function BillingUsageChart() {
   const innerHeight = HEIGHT - PADDING.top - PADDING.bottom;
 
   const scaleX = (index: number) =>
-    PADDING.left + (index / Math.max(1, days.length - 1)) * innerWidth;
+    PADDING.left + (index / Math.max(1, data.length - 1)) * innerWidth;
   const scaleY = (value: number) =>
     PADDING.top + innerHeight - ((value - min) / Math.max(1, range)) * innerHeight;
 
-  const pathD = days
-    .map((d, i) => `${i === 0 ? "M" : "L"} ${scaleX(i).toFixed(2)} ${scaleY(d.proofs).toFixed(2)}`)
+  const pathD = data
+    .map(
+      (d, i) =>
+        `${i === 0 ? "M" : "L"} ${scaleX(i).toFixed(2)} ${scaleY(d.count).toFixed(2)}`,
+    )
     .join(" ");
 
   const gridLines = 4;
-  const gridYs = Array.from({ length: gridLines + 1 }, (_, i) =>
-    PADDING.top + (innerHeight / gridLines) * i,
+  const gridYs = Array.from(
+    { length: gridLines + 1 },
+    (_, i) => PADDING.top + (innerHeight / gridLines) * i,
   );
-  const gridValues = gridYs.map((y) => Math.round(max - ((y - PADDING.top) / innerHeight) * range));
+  const gridValues = gridYs.map((y) =>
+    Math.round(max - ((y - PADDING.top) / innerHeight) * range),
+  );
 
-  const labelIndices = [0, Math.floor(days.length / 2), days.length - 1];
-  const firstDay = days[0]!;
-  const midDay = days[labelIndices[1]!]!;
-  const lastDay = days[days.length - 1]!;
+  const labelIndices = [0, Math.floor(data.length / 2), data.length - 1];
+  const firstDay = data[0]!;
+  const midDay = data[labelIndices[1]!]!;
+  const lastDay = data[data.length - 1]!;
 
   const monthLabel = (iso: string) =>
-    new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit" }).format(new Date(iso));
+    new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit" }).format(
+      new Date(iso),
+    );
 
   return (
     <svg
       viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
       role="img"
-      aria-label={`30-day usage chart, peaking at ${max.toLocaleString("en-US")} proofs`}
+      aria-label={`${data.length}-day usage chart, peaking at ${max.toLocaleString("en-US")} requests`}
       className="w-full"
     >
       {gridYs.map((y, i) => (
@@ -68,12 +87,18 @@ export function BillingUsageChart() {
           {value.toLocaleString("en-US")}
         </text>
       ))}
-      <path d={pathD} fill="none" stroke="var(--color-forest)" strokeWidth="1.75" strokeLinejoin="round" />
-      {days.map((d, i) => (
+      <path
+        d={pathD}
+        fill="none"
+        stroke="var(--color-forest)"
+        strokeWidth="1.75"
+        strokeLinejoin="round"
+      />
+      {data.map((d, i) => (
         <circle
           key={d.date}
           cx={scaleX(i)}
-          cy={scaleY(d.proofs)}
+          cy={scaleY(d.count)}
           r="1.5"
           fill="var(--color-forest)"
         />
@@ -98,7 +123,7 @@ export function BillingUsageChart() {
         {monthLabel(midDay.date)}
       </text>
       <text
-        x={scaleX(days.length - 1)}
+        x={scaleX(data.length - 1)}
         y={HEIGHT - 8}
         textAnchor="end"
         fontFamily='var(--font-mono, "JetBrains Mono", monospace)'

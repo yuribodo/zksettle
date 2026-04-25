@@ -33,12 +33,12 @@ export const NAV_GROUPS: readonly NavGroupMeta[] = [
 
 export const NAV_ITEMS: readonly NavItem[] = [
   {
-    label: "Transactions",
+    label: "Wallets & credentials",
     href: "/dashboard/transactions",
     icon: Activity,
     group: "overview",
     subtitle:
-      "Live feed of settlement events. Every row carries a proof; every proof is replayable six months from now.",
+      "Look up a wallet to inspect its issuer credential, or issue/revoke one against the live merkle tree.",
   },
   {
     label: "Attestations",
@@ -49,11 +49,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
       "Filter, search, and inspect every ComplianceAttestation. Available to private-beta participants.",
   },
   {
-    label: "Counterparties",
+    label: "Issuer status",
     href: "/dashboard/counterparties",
     icon: Community,
     group: "overview",
-    subtitle: "Issuers that have published a Merkle root your policies trust.",
+    subtitle:
+      "Live merkle roots, wallet count, and last on-chain publish for the issuer behind this workspace.",
   },
   {
     label: "Policies",

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { Providers } from "./providers";
 
 const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
@@ -65,7 +66,7 @@ export default function RootLayout({
         >
           Skip to content
         </a>
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
