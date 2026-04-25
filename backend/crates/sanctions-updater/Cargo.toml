@@ -27,3 +27,6 @@ borsh = "1"
 sha2 = "0.10"
 serde_json = "1"
 mutants = "0.0.3"
+
+[dev-dependencies]
+zksettle-rpc = { path = "../zksettle-rpc", features = ["test-util"] }

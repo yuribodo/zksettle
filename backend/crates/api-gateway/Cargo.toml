@@ -9,6 +9,11 @@ license = "Apache-2.0 OR MIT"
 name = "api-gateway"
 path = "src/main.rs"
 
+[features]
+default = []
+# Expose MockHttpUpstream to downstream dev-dependencies + own tests.
+test-util = []
+
 [dependencies]
 zksettle-types = { path = "../zksettle-types", features = ["borsh", "serde"] }
 async-trait = "0.1"
