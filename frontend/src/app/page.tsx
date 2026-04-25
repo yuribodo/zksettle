@@ -2,7 +2,7 @@ import { ClosingCta } from "@/components/landing/closing-cta";
 import { DemoSection } from "@/components/landing/demo-section";
 import { DevelopersSection } from "@/components/landing/developers-section";
 import { Footer } from "@/components/landing/footer";
-import { ActOneHero } from "@/components/landing/acts";
+import { ActOneHero, ActTwoParadox } from "@/components/landing/acts";
 import { HowItWorksSection } from "@/components/landing/how-it-works-section";
 import { MomentumSection } from "@/components/landing/momentum-section";
 import { Nav } from "@/components/landing/nav";
@@ -18,6 +18,7 @@ export default function Home() {
       <Nav />
       <main id="main-content">
         <ActOneHero />
+        <ActTwoParadox />
         <ParadoxSection />
         <TwoRealitiesSection />
         <HowItWorksSection />
