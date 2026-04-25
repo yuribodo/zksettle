@@ -134,6 +134,51 @@ export interface ClosingCtaCopy {
   };
 }
 
+// ── Act 2 ────────────────────────────────────────────────────────────────────
+export interface ParadoxActCopy {
+  readonly eyebrow: string;
+  readonly headline: readonly [string, string];
+  readonly closer: string;
+  readonly leftLabel: string;
+  readonly rightLabel: string;
+}
+
+// ── Act 3 ────────────────────────────────────────────────────────────────────
+export interface EngineChapter {
+  readonly title: string;
+  readonly body: string;
+}
+
+export interface EngineBenchmark {
+  readonly value: string;
+  readonly label: string;
+}
+
+export interface EngineCopy {
+  readonly eyebrow: string;
+  readonly headline: string;
+  readonly chapters: readonly EngineChapter[];
+  readonly benchmarks: readonly EngineBenchmark[];
+  readonly demoCta: string;
+}
+
+// ── Act 4 ────────────────────────────────────────────────────────────────────
+export interface MoveCopy {
+  readonly code: {
+    readonly label: string;
+    readonly lines: readonly [string, string, string];
+  };
+  readonly useCases: readonly string[];
+  readonly closer: {
+    readonly headline: string;
+    readonly sub: string;
+    readonly ctas: {
+      readonly primary: HeroCta;
+      readonly secondary: HeroCta;
+    };
+  };
+}
+
 export interface FooterCopy {
   readonly wordmark: string;
   readonly tagline: string;
@@ -153,6 +198,10 @@ export interface LandingCopy {
   readonly momentum: MomentumCopy;
   readonly closingCta: ClosingCtaCopy;
   readonly footer: FooterCopy;
+  // ── New 4-act blocks (Tasks 3.x / 4.x / 5.x) ─────────────────────────────
+  readonly paradoxAct: ParadoxActCopy;
+  readonly engine: EngineCopy;
+  readonly move: MoveCopy;
 }
 
 export const COPY: LandingCopy = {
@@ -339,5 +388,71 @@ export const COPY: LandingCopy = {
       { label: "Privacy", href: "#" },
     ],
     bottomLine: "SOL devnet · v0.1.0 · MIT",
+  },
+
+  // ── Act 2: Paradox ────────────────────────────────────────────────────────
+  paradoxAct: {
+    eyebrow: "$9T moved in 2025. Until now, only one option.",
+    headline: ["Same transaction.", "Two realities."] as const,
+    closer:
+      "Compliance e privacidade — impossível até 2025. Agora é só uma proof.",
+    leftLabel: "Without ZK",
+    rightLabel: "With ZK",
+    // recap.leftFields / recap.rightFields ficam pra Task 3.3 (migra do TwoRealitiesSection)
+  },
+
+  // ── Act 3: Engine ─────────────────────────────────────────────────────────
+  engine: {
+    eyebrow: "How it works",
+    headline: "Verify once. Prove anywhere. Settle forever.",
+    chapters: [
+      {
+        title: "Verify once.",
+        body: "KYC issuer signs once. The Merkle tree root goes on-chain. You never expose a document again.",
+      },
+      {
+        title: "Prove anywhere.",
+        body: "The browser generates a Groth16 proof in <5s. No server. No trust assumption.",
+      },
+      {
+        title: "Settle forever.",
+        body: "The Transfer Hook verifies in $0.001 of compute. Audit trail lives forever.",
+      },
+    ] as const,
+    benchmarks: [
+      { value: "181ms", label: "Settlement" },
+      { value: "<5s", label: "Proof generation" },
+      { value: "$0.001", label: "Verify cost" },
+      { value: "0", label: "PII leaked" },
+    ] as const,
+    demoCta: "Try it →",
+  },
+
+  // ── Act 4: Move ───────────────────────────────────────────────────────────
+  move: {
+    code: {
+      label: "Three lines.",
+      lines: [
+        "$ npm i @zksettle/sdk",
+        "→ zksettle.prove(credential)",
+        "→ zksettle.wrap(transferIx, proof)",
+      ] as const,
+    },
+    useCases: [
+      "Remittances",
+      "Payroll",
+      "DEX",
+      "Bridges",
+      "Institutional",
+      "Settlements",
+    ] as const,
+    closer: {
+      headline: "Compliance is no longer a six-month moat.",
+      sub: "It's an SDK. Integrate in an afternoon.",
+      ctas: {
+        primary: { label: "Read the docs →", href: "/docs" },
+        secondary: { label: "Talk to founders", href: "mailto:hello@zksettle.dev" },
+      },
+    },
   },
 };
