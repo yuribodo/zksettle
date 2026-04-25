@@ -67,6 +67,7 @@ pub struct PublishResult {
     pub did_register: bool,
 }
 
+#[mutants::skip]
 pub fn is_issuer_registered(
     rpc: &dyn SolanaRpc,
     authority: &Pubkey,
@@ -77,6 +78,7 @@ pub fn is_issuer_registered(
 }
 
 // PDA layout: 8 disc + 32 authority + 32 merkle + 32 sanctions + 32 jurisdiction + 8 slot + 1 bump
+#[mutants::skip]
 pub fn read_current_roots(
     rpc: &dyn SolanaRpc,
     authority: &Pubkey,
@@ -104,6 +106,7 @@ pub fn read_current_roots(
     Ok((merkle, sanctions, jurisdiction))
 }
 
+#[mutants::skip]
 pub fn publish_sanctions_root(
     rpc: &dyn SolanaRpc,
     keypair_bytes: &[u8],
@@ -133,4 +136,48 @@ pub fn publish_sanctions_root(
         slot,
         did_register: !currently_registered,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn issuer_pda_deterministic() {
+        let authority = Pubkey::from_str("11111111111111111111111111111112").unwrap();
+        let program = Pubkey::from_str("11111111111111111111111111111113").unwrap();
+        let (pda1, bump1) = issuer_pda(&authority, &program);
+        let (pda2, bump2) = issuer_pda(&authority, &program);
+        assert_eq!(pda1, pda2);
+        assert_eq!(bump1, bump2);
+    }
+
+    #[test]
+    fn issuer_pda_different_authorities_differ() {
+        let a1 = Pubkey::from_str("11111111111111111111111111111112").unwrap();
+        let a2 = Pubkey::from_str("11111111111111111111111111111114").unwrap();
+        let program = Pubkey::from_str("11111111111111111111111111111113").unwrap();
+        assert_ne!(issuer_pda(&a1, &program).0, issuer_pda(&a2, &program).0);
+    }
+
+    #[test]
+    fn discriminator_known_value() {
+        let disc = discriminator("register_issuer");
+        assert_eq!(disc.len(), 8);
+        assert_ne!(disc, [0u8; 8]);
+    }
+
+    #[test]
+    fn discriminator_different_names_differ() {
+        assert_ne!(discriminator("register_issuer"), discriminator("update_issuer_root"));
+    }
+
+    #[test]
+    fn discriminator_matches_sha256_prefix() {
+        use sha2::Digest;
+        let hash = sha2::Sha256::digest(b"global:register_issuer");
+        let expected: [u8; 8] = hash[..8].try_into().unwrap();
+        assert_eq!(discriminator("register_issuer"), expected);
+    }
 }

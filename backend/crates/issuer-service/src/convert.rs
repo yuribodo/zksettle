@@ -80,4 +80,49 @@ mod tests {
     fn wallet_to_fr_rejects_short() {
         assert!(wallet_to_fr("0xabcd").is_err());
     }
+
+    #[test]
+    fn wallet_to_fr_without_prefix() {
+        let hex_str = hex::encode([2u8; 32]);
+        let fr = wallet_to_fr(&hex_str).unwrap();
+        let back = fr_to_bytes_be(&fr);
+        assert_eq!(back, [2u8; 32]);
+    }
+
+    #[test]
+    fn wallet_to_fr_invalid_hex() {
+        assert!(wallet_to_fr("0xZZZZ").is_err());
+    }
+
+    #[test]
+    fn wallet_hex_to_bytes_ok() {
+        let input = hex::encode([3u8; 32]);
+        let result = wallet_hex_to_bytes(&input).unwrap();
+        assert_eq!(result, [3u8; 32]);
+    }
+
+    #[test]
+    fn wallet_hex_to_bytes_with_prefix() {
+        let input = format!("0x{}", hex::encode([4u8; 32]));
+        let result = wallet_hex_to_bytes(&input).unwrap();
+        assert_eq!(result, [4u8; 32]);
+    }
+
+    #[test]
+    fn wallet_hex_to_bytes_wrong_length() {
+        assert!(wallet_hex_to_bytes("aabb").is_err());
+    }
+
+    #[test]
+    fn wallet_hex_to_bytes_invalid_hex() {
+        assert!(wallet_hex_to_bytes("0xnothex").is_err());
+    }
+
+    #[test]
+    fn fr_to_bytes_be_is_big_endian() {
+        let f = Fr::from(1u64);
+        let bytes = fr_to_bytes_be(&f);
+        assert_eq!(bytes[31], 1);
+        assert_eq!(bytes[0], 0);
+    }
 }

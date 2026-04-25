@@ -2,14 +2,11 @@ use async_trait::async_trait;
 
 use crate::error::UpdaterError;
 
-/// Abstracts the OFAC sanctioned-wallets source so the real CSV fetch
-/// can be swapped for a canned list in tests and local dev.
 #[async_trait]
 pub trait OfacFetcher: Send + Sync {
     async fn fetch_wallets(&self) -> Result<Vec<String>, UpdaterError>;
 }
 
-/// Live impl that hits the OFAC SDN CSV endpoint over HTTPS.
 pub struct HttpOfacFetcher {
     url: String,
 }
@@ -38,7 +35,6 @@ impl OfacFetcher for HttpOfacFetcher {
 
         for result in rdr.records() {
             let record = result.map_err(|e| UpdaterError::Parse(e.to_string()))?;
-            // SDN CSV: look for "Digital Currency Address" entries
             for field in record.iter() {
                 let trimmed = field.trim();
                 if trimmed.starts_with("0x") && trimmed.len() == 66 {
@@ -52,7 +48,6 @@ impl OfacFetcher for HttpOfacFetcher {
     }
 }
 
-/// Canned-response impl used by `MOCK_SANCTIONS=true` builds and tests.
 pub struct MockOfacFetcher {
     wallets: Vec<String>,
 }
@@ -62,7 +57,6 @@ impl MockOfacFetcher {
         Self { wallets }
     }
 
-    /// The hardcoded set originally shipped with `fetch.rs::mock_wallets`.
     pub fn with_default_fixture() -> Self {
         let wallets = [
             "0x000000000000000000000000000000000000000000000000000000000000dead",

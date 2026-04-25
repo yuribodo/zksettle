@@ -66,3 +66,13 @@ pub async fn handler(
         jurisdiction: req.jurisdiction,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_jurisdiction_is_us() {
+        assert_eq!(default_jurisdiction(), "US");
+    }
+}

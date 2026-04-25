@@ -132,4 +132,40 @@ mod tests {
         let result = extract_proof_settled(&logs).unwrap();
         assert!(result.is_empty());
     }
+
+    #[test]
+    fn discriminator_matches_sha256_prefix() {
+        use sha2::{Digest, Sha256};
+        let hash = Sha256::digest(b"event:ProofSettled");
+        let expected: [u8; 8] = hash[..8].try_into().unwrap();
+        assert_eq!(event_discriminator(), expected);
+    }
+
+    #[test]
+    fn correct_discriminator_no_body_errors() {
+        let disc = event_discriminator();
+        let logs = vec![format!("Program data: {}", STANDARD.encode(disc))];
+        let result = extract_proof_settled(&logs);
+        assert!(result.is_err(), "correct disc with empty body should fail borsh deser");
+    }
+
+    #[test]
+    fn multiple_events_parsed() {
+        let e1 = make_test_event();
+        let mut e2 = make_test_event();
+        e2.amount = 999;
+        let logs = vec![encode_event(&e1), encode_event(&e2)];
+        let result = extract_proof_settled(&logs).unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].amount, 2_500_000);
+        assert_eq!(result[1].amount, 999);
+    }
+
+    #[test]
+    fn boundary_length_exactly_discriminator_len() {
+        let data = [0u8; DISCRIMINATOR_LEN];
+        let logs = vec![format!("Program data: {}", STANDARD.encode(data))];
+        let result = extract_proof_settled(&logs).unwrap();
+        assert!(result.is_empty());
+    }
 }

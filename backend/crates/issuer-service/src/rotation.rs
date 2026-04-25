@@ -34,6 +34,7 @@ pub fn spawn(
     })
 }
 
+#[mutants::skip]
 async fn publish_roots(
     state: &SharedState,
     rpc: Arc<dyn SolanaRpc>,

@@ -27,6 +27,7 @@ governor = "0.8"
 dashmap = "6"
 rand = "0.9"
 sha2 = "0.10"
+mutants = "0.0.3"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

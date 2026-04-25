@@ -86,4 +86,57 @@ mod tests {
         let m = Metering::new();
         assert_eq!(m.current_count("unknown", 5000), 0);
     }
+
+    #[test]
+    fn period_boundary_exact() {
+        let m = Metering::new();
+        m.increment("k1", 0);
+        let exactly_at = PERIOD_SECS;
+        m.increment("k1", exactly_at);
+        assert_eq!(m.current_count("k1", exactly_at), 1);
+    }
+
+    #[test]
+    fn period_boundary_one_before() {
+        let m = Metering::new();
+        m.increment("k1", 0);
+        let just_before = PERIOD_SECS - 1;
+        m.increment("k1", just_before);
+        assert_eq!(m.current_count("k1", just_before), 2);
+    }
+
+    #[test]
+    fn get_returns_fresh_record_after_period() {
+        let m = Metering::new();
+        m.increment("k1", 0);
+        m.increment("k1", 1);
+        let after = PERIOD_SECS + 100;
+        let rec = m.get("k1", after);
+        assert_eq!(rec.request_count, 0);
+        assert_eq!(rec.period_start, after);
+    }
+
+    #[test]
+    fn last_request_updated() {
+        let m = Metering::new();
+        m.increment("k1", 100);
+        m.increment("k1", 200);
+        let rec = m.get("k1", 200);
+        assert_eq!(rec.last_request, 200);
+    }
+
+    #[test]
+    fn period_secs_is_30_days() {
+        assert_eq!(PERIOD_SECS, 30 * 24 * 60 * 60);
+    }
+
+    #[test]
+    fn subtraction_not_addition_in_period_check() {
+        let m = Metering::new();
+        let start = PERIOD_SECS / 2;
+        m.increment("k1", start);
+        let now = start + 1;
+        m.increment("k1", now);
+        assert_eq!(m.current_count("k1", now), 2, "should accumulate, not reset");
+    }
 }

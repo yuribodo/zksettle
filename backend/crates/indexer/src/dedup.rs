@@ -12,6 +12,7 @@ pub struct NullifierStore {
 }
 
 impl NullifierStore {
+    #[mutants::skip]
     pub fn open(path: &Path, capacity: u64, ttl: Duration) -> Result<Self, IndexerError> {
         let mut opts = Options::default();
         opts.create_if_missing(true);
@@ -78,6 +79,7 @@ impl NullifierStore {
         }
     }
 
+    #[mutants::skip]
     pub fn flush(&self) -> Result<(), IndexerError> {
         self.db.flush().map_err(|e| {
             IndexerError::DedupWrite(format!("failed to flush dedup db: {e}"))

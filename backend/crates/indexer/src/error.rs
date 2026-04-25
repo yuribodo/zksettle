@@ -51,3 +51,26 @@ impl IntoResponse for IndexerError {
         (status, self.to_string()).into_response()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::response::IntoResponse;
+
+    fn status_of(err: IndexerError) -> StatusCode {
+        err.into_response().status()
+    }
+
+    #[test]
+    fn status_codes() {
+        assert_eq!(status_of(IndexerError::Unauthorized), StatusCode::UNAUTHORIZED);
+        assert_eq!(status_of(IndexerError::Config("x".into())), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(status_of(IndexerError::DedupWrite("x".into())), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(status_of(IndexerError::IrysUpload("x".into())), StatusCode::BAD_GATEWAY);
+        assert_eq!(status_of(IndexerError::MissingEvents), StatusCode::BAD_REQUEST);
+        assert_eq!(status_of(IndexerError::BorshDeserialize("x".into())), StatusCode::BAD_REQUEST);
+        assert_eq!(status_of(IndexerError::DiscriminatorMismatch), StatusCode::BAD_REQUEST);
+        assert_eq!(status_of(IndexerError::NoProofSettledEvent), StatusCode::OK);
+        assert_eq!(status_of(IndexerError::DuplicateNullifier), StatusCode::OK);
+    }
+}

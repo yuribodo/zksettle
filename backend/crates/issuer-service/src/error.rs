@@ -67,3 +67,46 @@ impl IntoResponse for ServiceError {
         (status, body).into_response()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::response::IntoResponse;
+
+    fn status_of(err: ServiceError) -> StatusCode {
+        err.into_response().status()
+    }
+
+    #[test]
+    fn status_codes() {
+        assert_eq!(status_of(ServiceError::WalletNotFound), StatusCode::NOT_FOUND);
+        assert_eq!(status_of(ServiceError::DuplicateWallet), StatusCode::CONFLICT);
+        assert_eq!(status_of(ServiceError::AlreadyRevoked), StatusCode::CONFLICT);
+        assert_eq!(status_of(ServiceError::WalletRevoked), StatusCode::FORBIDDEN);
+        assert_eq!(status_of(ServiceError::InvalidHex("bad".into())), StatusCode::BAD_REQUEST);
+        assert_eq!(status_of(ServiceError::WalletIsSanctioned), StatusCode::FORBIDDEN);
+        assert_eq!(status_of(ServiceError::Chain("rpc fail".into())), StatusCode::BAD_GATEWAY);
+        assert_eq!(status_of(ServiceError::Persist("io".into())), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn tree_error_maps_to_500() {
+        use zksettle_crypto::error::CryptoError;
+        let err = ServiceError::Tree(CryptoError::RootMismatch);
+        assert_eq!(status_of(err), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[test]
+    fn from_crypto_sanctioned() {
+        use zksettle_crypto::error::CryptoError;
+        let se: ServiceError = CryptoError::WalletIsSanctioned.into();
+        assert!(matches!(se, ServiceError::WalletIsSanctioned));
+    }
+
+    #[test]
+    fn from_crypto_other() {
+        use zksettle_crypto::error::CryptoError;
+        let se: ServiceError = CryptoError::RootMismatch.into();
+        assert!(matches!(se, ServiceError::Tree(_)));
+    }
+}

@@ -40,4 +40,23 @@ mod tests {
         let (_, root2) = build_sanctions_tree(&[]).unwrap();
         assert_eq!(root1, root2);
     }
+
+    #[test]
+    fn root_matches_manual_smt_build() {
+        let wallet = "0x000000000000000000000000000000000000000000000000000000000000dead";
+        let (_, root) = build_sanctions_tree(&[wallet.to_string()]).unwrap();
+
+        let mut manual = SparseMerkleTree::new();
+        let fr = wallet_to_fr(wallet).unwrap();
+        manual.insert(fr);
+        let manual_root = fr_to_bytes_be(&manual.root());
+
+        assert_eq!(root, manual_root);
+    }
+
+    #[test]
+    fn invalid_wallet_returns_error() {
+        let result = build_sanctions_tree(&["not_hex".to_string()]);
+        assert!(result.is_err());
+    }
 }

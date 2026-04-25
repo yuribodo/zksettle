@@ -13,6 +13,7 @@ pub struct PublishResponse {
     pub registered: bool,
 }
 
+#[mutants::skip]
 pub async fn handler(
     State(state): State<SharedState>,
     axum::Extension(SharedRpc(rpc)): axum::Extension<SharedRpc>,

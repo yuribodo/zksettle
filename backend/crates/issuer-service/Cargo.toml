@@ -27,6 +27,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 borsh = "1"
 sha2 = "0.10"
 subtle = "2"
+mutants = "0.0.3"
 
 [dev-dependencies]
 http-body-util = "0.1"

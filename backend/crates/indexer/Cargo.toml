@@ -30,6 +30,7 @@ ed25519-dalek = { version = "2", features = ["rand_core"] }
 moka = { version = "0.12", features = ["sync"] }
 rocksdb = "0.24"
 sha2 = "0.10"
+mutants = "0.0.3"
 
 [dev-dependencies]
 axum-test = "16"
