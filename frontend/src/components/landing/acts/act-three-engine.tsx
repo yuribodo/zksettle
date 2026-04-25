@@ -50,15 +50,75 @@ export function ActThreeEngine() {
   );
 }
 
+function clamp01(n: number): number {
+  return Math.max(0, Math.min(1, n));
+}
+
 function EngineDiagram({
-  progress: _progress,
-  benchmarks: _benchmarks,
+  progress,
+  benchmarks,
 }: {
   progress: number;
   benchmarks: ReadonlyArray<{ value: string; label: string }>;
 }) {
-  // Stub — Task 4.2 implements the SVG diagram
-  return <div className="mt-8 h-64 rounded-md bg-surface-deep" aria-hidden />;
+  // 3 fases: A=verify (0..0.33), B=prove (0.33..0.66), C=settle (0.66..1)
+  const phaseA = clamp01(progress / 0.33);
+  const phaseB = clamp01((progress - 0.33) / 0.33);
+  const phaseC = clamp01((progress - 0.66) / 0.34);
+
+  const proofTimer = (phaseB * 4.8).toFixed(1);
+
+  return (
+    <div className="mt-8 rounded-md bg-surface-deep p-8">
+      <svg viewBox="0 0 320 200" className="w-full" aria-label="ZKSettle engine diagram" role="img">
+        {/* Phase A: Merkle tree forming */}
+        <g style={{ opacity: phaseA }}>
+          <circle cx="60" cy="40" r="6" fill="var(--color-stone)" />
+          <circle cx="100" cy="40" r="6" fill="var(--color-stone)" />
+          <line x1="60" y1="40" x2="80" y2="80" stroke="var(--color-stone)" strokeWidth="1.2" opacity={phaseA} />
+          <line x1="100" y1="40" x2="80" y2="80" stroke="var(--color-stone)" strokeWidth="1.2" opacity={phaseA} />
+          <circle cx="80" cy="80" r="8" fill="var(--color-forest)" />
+          <text x="80" y="105" textAnchor="middle" fontSize="9" fill="var(--color-quill)" fontFamily="ui-monospace, monospace">
+            root
+          </text>
+        </g>
+
+        {/* Phase B: Proof generation timer */}
+        <g style={{ opacity: phaseB }} transform="translate(150 0)">
+          <rect x="0" y="20" width="100" height="80" rx="6" fill="none" stroke="var(--color-forest)" strokeWidth="1.5" />
+          <text x="50" y="58" textAnchor="middle" fontSize="18" fontWeight="700" fill="var(--color-forest)" fontFamily="ui-monospace, monospace">
+            {proofTimer}s
+          </text>
+          <text x="50" y="78" textAnchor="middle" fontSize="9" fill="var(--color-stone)" fontFamily="ui-monospace, monospace">
+            proving...
+          </text>
+        </g>
+
+        {/* Phase C: Benchmarks explode in */}
+        <g style={{ opacity: phaseC }} transform="translate(0 130)">
+          {benchmarks.map((b, i) => {
+            // Stagger: each benchmark fades in at its own threshold of phaseC
+            const localProgress = clamp01((phaseC - i * 0.15) / 0.4);
+            const yOffset = (1 - localProgress) * 12;
+            return (
+              <g
+                key={b.label}
+                transform={`translate(${i * 80} ${yOffset})`}
+                style={{ opacity: localProgress }}
+              >
+                <text x="40" y="20" textAnchor="middle" fontSize="14" fontWeight="700" fill="var(--color-forest)" fontFamily="ui-monospace, monospace">
+                  {b.value}
+                </text>
+                <text x="40" y="38" textAnchor="middle" fontSize="8" fill="var(--color-stone)">
+                  {b.label}
+                </text>
+              </g>
+            );
+          })}
+        </g>
+      </svg>
+    </div>
+  );
 }
 
 function ChapterBlock({
