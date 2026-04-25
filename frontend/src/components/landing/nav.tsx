@@ -17,7 +17,8 @@ export function Nav() {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
+    const onScroll = () =>
+      setScrolled(window.scrollY > window.innerHeight * 0.8);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -27,9 +28,11 @@ export function Nav() {
     <nav
       aria-label="Primary"
       className={cn(
-        "sticky top-0 z-40 h-14 w-full bg-canvas",
-        "border-b border-transparent transition-colors duration-200 ease-[var(--ease-brand)]",
-        scrolled && "border-border-subtle",
+        "fixed inset-x-0 top-0 z-50 h-14 w-full",
+        "border-b transition-all duration-300 ease-[var(--ease-brand)]",
+        scrolled
+          ? "border-border-subtle bg-canvas/80 backdrop-blur-md"
+          : "border-transparent bg-transparent",
       )}
     >
       <div className="mx-auto flex h-full w-full max-w-6xl items-center justify-between px-5 md:px-8">
