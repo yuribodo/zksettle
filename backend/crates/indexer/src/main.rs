@@ -7,6 +7,7 @@ use tracing_subscriber::EnvFilter;
 
 use indexer::config::Config;
 use indexer::dedup::NullifierStore;
+use indexer::events_store::EventStore;
 use indexer::irys::client::IrysClient;
 use indexer::irys::IrysUploader;
 use indexer::{build_router, AppState};
@@ -43,10 +44,15 @@ async fn main() -> anyhow::Result<()> {
     )
     .context("opening dedup store")?;
 
+    let events_path = std::path::Path::new(&config.events_path);
+    std::fs::create_dir_all(events_path).context("creating events directory")?;
+    let events = EventStore::open(events_path).context("opening events store")?;
+
     let state = Arc::new(AppState {
         config: config.clone(),
         irys,
         dedup,
+        events,
     });
 
     let addr = format!("0.0.0.0:{}", config.port);
