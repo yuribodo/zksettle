@@ -28,6 +28,17 @@ fn is_hop_by_hop(name: &str) -> bool {
     HOP_BY_HOP.iter().any(|h| h.eq_ignore_ascii_case(name))
 }
 
+/// Route `/events*` (the indexer-served audit log) to `GATEWAY_INDEXER_URL`
+/// when configured. Everything else goes to `GATEWAY_UPSTREAM_URL` (issuer-service).
+fn pick_upstream<'a>(path_after_v1: &str, config: &'a crate::config::Config) -> &'a str {
+    if path_after_v1.starts_with("/events") {
+        if let Some(ref url) = config.indexer_url {
+            return url.as_str();
+        }
+    }
+    config.upstream_url.as_str()
+}
+
 fn filter_hop_by_hop(src: &HeaderMap) -> HeaderMap {
     let mut out = HeaderMap::with_capacity(src.len());
     for (name, value) in src.iter() {
@@ -60,17 +71,15 @@ pub async fn proxy_to_upstream(
 
     let method = req.method().clone();
     let req_headers = req.headers().clone();
-    let path = req
-        .uri()
-        .path()
-        .strip_prefix("/v1")
-        .unwrap_or(req.uri().path());
+    let raw_path = req.uri().path();
+    let path = raw_path.strip_prefix("/v1").unwrap_or(raw_path);
     let query = req
         .uri()
         .query()
         .map(|q| format!("?{q}"))
         .unwrap_or_default();
-    let url = format!("{}{path}{query}", state.config.upstream_url);
+    let upstream_base = pick_upstream(path, &state.config);
+    let url = format!("{upstream_base}{path}{query}");
 
     let body_bytes = axum::body::to_bytes(req.into_body(), 1024 * 1024)
         .await
@@ -135,5 +144,45 @@ mod tests {
         assert_eq!(filtered.get("content-type").unwrap(), "application/json");
         assert_eq!(filtered.get("x-request-id").unwrap(), "abc");
         assert_eq!(filtered.len(), 2);
+    }
+
+    fn cfg(upstream: &str, indexer: Option<&str>) -> crate::config::Config {
+        crate::config::Config {
+            port: 4000,
+            upstream_url: upstream.into(),
+            indexer_url: indexer.map(|s| s.into()),
+            log_level: "error".into(),
+            admin_key: None,
+            allow_open_keys: true,
+            cors_allowed_origins: vec![],
+        }
+    }
+
+    #[test]
+    fn pick_upstream_routes_events_to_indexer_when_configured() {
+        let c = cfg("http://issuer:3000", Some("http://indexer:3001"));
+        assert_eq!(pick_upstream("/events", &c), "http://indexer:3001");
+        assert_eq!(pick_upstream("/events?limit=10", &c), "http://indexer:3001");
+    }
+
+    #[test]
+    fn pick_upstream_falls_back_to_issuer_when_indexer_missing() {
+        let c = cfg("http://issuer:3000", None);
+        assert_eq!(pick_upstream("/events", &c), "http://issuer:3000");
+    }
+
+    #[test]
+    fn pick_upstream_non_events_paths_go_to_issuer() {
+        let c = cfg("http://issuer:3000", Some("http://indexer:3001"));
+        assert_eq!(pick_upstream("/credentials/abc", &c), "http://issuer:3000");
+        assert_eq!(pick_upstream("/roots", &c), "http://issuer:3000");
+        assert_eq!(pick_upstream("/health", &c), "http://issuer:3000");
+    }
+
+    #[test]
+    fn pick_upstream_only_matches_events_prefix() {
+        let c = cfg("http://issuer:3000", Some("http://indexer:3001"));
+        // A path that *contains* "events" but doesn't start with it should not route.
+        assert_eq!(pick_upstream("/credentials_events", &c), "http://issuer:3000");
     }
 }
