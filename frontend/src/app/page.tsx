@@ -7,9 +7,7 @@ import { HowItWorksSection } from "@/components/landing/how-it-works-section";
 import { MomentumSection } from "@/components/landing/momentum-section";
 import { Nav } from "@/components/landing/nav";
 import { NumbersSection } from "@/components/landing/numbers-section";
-import { ParadoxSection } from "@/components/landing/paradox-section";
 import { SmoothScrollProvider } from "@/components/landing/smooth-scroll-provider";
-import { TwoRealitiesSection } from "@/components/landing/two-realities-section";
 import { UseCasesSection } from "@/components/landing/use-cases-section";
 
 export default function Home() {
@@ -19,8 +17,6 @@ export default function Home() {
       <main id="main-content">
         <ActOneHero />
         <ActTwoParadox />
-        <ParadoxSection />
-        <TwoRealitiesSection />
         <HowItWorksSection />
         <NumbersSection />
         <DemoSection />
