@@ -275,7 +275,7 @@ mod tests {
     #[test]
     fn publish_sanctions_root_when_registered_uses_update_discriminator() {
         let rpc = MockSolanaRpc::new();
-        let kp = Keypair::from_bytes(&keypair_bytes()).unwrap();
+        let kp = Keypair::try_from(&keypair_bytes()[..]).unwrap();
         let program = Pubkey::new_unique();
         let (pda, _) = issuer_pda(&kp.pubkey(), &program);
         rpc.set_account(pda, pda_payload([1u8; 32], [2u8; 32], [3u8; 32]));

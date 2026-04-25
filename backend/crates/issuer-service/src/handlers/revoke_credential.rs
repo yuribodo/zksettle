@@ -62,7 +62,7 @@ pub async fn handler(
                 .expect("checked above")
                 .revoked = false;
             st.roots_dirty = prev_roots_dirty;
-            return Err(e.into());
+            return Err(e);
         }
     }
 

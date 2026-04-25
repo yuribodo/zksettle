@@ -97,7 +97,7 @@ mod tests {
         let state: SharedState = Arc::new(RwLock::new(IssuerState::new()));
         let hex = format!("0x{}", hex::encode([2u8; 32]));
 
-        handler(
+        let _ = handler(
             State(state.clone()),
             empty_state_path(),
             Json(AddWalletRequest { wallet: hex.clone() }),
