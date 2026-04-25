@@ -1,7 +1,7 @@
 import { ClosingCta } from "@/components/landing/closing-cta";
 import { DevelopersSection } from "@/components/landing/developers-section";
 import { Footer } from "@/components/landing/footer";
-import { ActOneHero, ActTwoParadox, ActThreeEngine } from "@/components/landing/acts";
+import { ActOneHero, ActTwoParadox, ActThreeEngine, ActFourMove } from "@/components/landing/acts";
 import { MomentumSection } from "@/components/landing/momentum-section";
 import { Nav } from "@/components/landing/nav";
 import { SmoothScrollProvider } from "@/components/landing/smooth-scroll-provider";
@@ -15,6 +15,7 @@ export default function Home() {
         <ActOneHero />
         <ActTwoParadox />
         <ActThreeEngine />
+        <ActFourMove />
         <UseCasesSection />
         <DevelopersSection />
         <MomentumSection />
