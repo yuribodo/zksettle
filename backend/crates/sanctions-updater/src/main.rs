@@ -5,13 +5,16 @@ mod convert;
 mod error;
 mod fetch;
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
+use zksettle_rpc::{RealSolanaRpc, SolanaRpc};
 
 use config::Config;
+use fetch::{HttpOfacFetcher, MockOfacFetcher, OfacFetcher};
 
 #[tokio::main]
 async fn main() {
@@ -44,7 +47,15 @@ async fn main() {
         "starting sanctions updater"
     );
 
-    let mut registered = match chain::is_issuer_registered(&cfg.rpc_url, &keypair.pubkey(), &program_id) {
+    let rpc: Arc<dyn SolanaRpc> = Arc::new(RealSolanaRpc::new(cfg.rpc_url.clone()));
+
+    let fetcher: Arc<dyn OfacFetcher> = if cfg.mock_sanctions {
+        Arc::new(MockOfacFetcher::with_default_fixture())
+    } else {
+        Arc::new(HttpOfacFetcher::new(cfg.ofac_sdn_url.clone()))
+    };
+
+    let mut registered = match chain::is_issuer_registered(rpc.as_ref(), &keypair.pubkey(), &program_id) {
         Ok(r) => r,
         Err(e) => {
             tracing::warn!(%e, "could not probe issuer PDA, assuming not registered");
@@ -56,7 +67,7 @@ async fn main() {
     let keypair_bytes = keypair_json;
 
     loop {
-        match run_tick(&cfg, &keypair_bytes, &program_id, registered).await {
+        match run_tick(rpc.clone(), fetcher.clone(), &keypair_bytes, &program_id, registered).await {
             Ok(result) => {
                 if result.did_register {
                     registered = true;
@@ -81,22 +92,22 @@ async fn main() {
 }
 
 async fn run_tick(
-    cfg: &Config,
+    rpc: Arc<dyn SolanaRpc>,
+    fetcher: Arc<dyn OfacFetcher>,
     keypair_bytes: &[u8],
     program_id: &Pubkey,
     registered: bool,
 ) -> Result<chain::PublishResult, error::UpdaterError> {
-    let wallets = fetch::fetch_sanctioned_wallets(cfg).await?;
+    let wallets = fetcher.fetch_wallets().await?;
     tracing::info!(count = wallets.len(), "fetched sanctioned wallets");
 
     let (_tree, root_bytes) = build::build_sanctions_tree(&wallets)?;
 
     let result = {
-        let url = cfg.rpc_url.clone();
         let kb = keypair_bytes.to_vec();
         let pid = *program_id;
         tokio::task::spawn_blocking(move || {
-            chain::publish_sanctions_root(&url, &kb, &pid, root_bytes, registered)
+            chain::publish_sanctions_root(rpc.as_ref(), &kb, &pid, root_bytes, registered)
         })
         .await
         .map_err(|e| error::UpdaterError::Chain(format!("task panicked: {e}")))?

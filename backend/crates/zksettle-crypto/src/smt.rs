@@ -28,6 +28,7 @@ pub struct SparseMerkleTree {
     empty_hashes: [Fr; MERKLE_DEPTH + 1],
 }
 
+#[derive(Debug)]
 pub struct SmtProof {
     pub path: [Fr; MERKLE_DEPTH],
     pub path_indices: [u8; MERKLE_DEPTH],
@@ -46,6 +47,12 @@ impl SparseMerkleTree {
         let leaf_hash = poseidon2_hash(&[wallet]);
         let bits = key_bits(leaf_hash);
         self.leaves.insert(bits, Fr::from(1u64));
+    }
+
+    pub fn remove(&mut self, wallet: Fr) -> bool {
+        let leaf_hash = poseidon2_hash(&[wallet]);
+        let bits = key_bits(leaf_hash);
+        self.leaves.remove(&bits).is_some()
     }
 
     pub fn root(&self) -> Fr {
@@ -112,9 +119,7 @@ impl SparseMerkleTree {
         let mut path = [Fr::ZERO; MERKLE_DEPTH];
 
         for i in 0..MERKLE_DEPTH {
-            // Top-down prefix: wallet path to branch point, last bit flipped for sibling.
-            let depth_from_top = MERKLE_DEPTH - 1 - i;
-            let mut prefix = Vec::with_capacity(depth_from_top + 1);
+            let mut prefix = Vec::new();
             // Top-down path from root to the parent of level i:
             for j in (i + 1..MERKLE_DEPTH).rev() {
                 prefix.push(bits[j]);
@@ -166,5 +171,156 @@ pub fn verify_smt_exclusion(
 impl Default for SparseMerkleTree {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ark_ff::AdditiveGroup;
+
+    fn wallet(n: u64) -> Fr {
+        Fr::from(n)
+    }
+
+    #[test]
+    fn key_bits_known_input() {
+        let bits = key_bits(Fr::from(1u64));
+        assert!(bits[0], "bit 0 of 1 must be set");
+        assert!(!bits[1], "bit 1 of 1 must be unset");
+        assert!(!bits[19], "bit 19 of 1 must be unset");
+
+        let bits5 = key_bits(Fr::from(5u64)); // 101 in binary
+        assert!(bits5[0]);
+        assert!(!bits5[1]);
+        assert!(bits5[2]);
+    }
+
+    #[test]
+    fn empty_tree_root_is_deterministic() {
+        let smt = SparseMerkleTree::new();
+        let root1 = smt.root();
+        let root2 = SparseMerkleTree::new().root();
+        assert_eq!(root1, root2);
+    }
+
+    #[test]
+    fn insert_changes_root() {
+        let mut smt = SparseMerkleTree::new();
+        let empty_root = smt.root();
+        smt.insert(wallet(42));
+        assert_ne!(smt.root(), empty_root);
+    }
+
+    #[test]
+    fn remove_present_returns_true() {
+        let mut smt = SparseMerkleTree::new();
+        smt.insert(wallet(1));
+        assert!(smt.remove(wallet(1)));
+    }
+
+    #[test]
+    fn remove_absent_returns_false() {
+        let mut smt = SparseMerkleTree::new();
+        assert!(!smt.remove(wallet(999)));
+    }
+
+    #[test]
+    fn remove_restores_root() {
+        let mut smt = SparseMerkleTree::new();
+        let empty_root = smt.root();
+        smt.insert(wallet(7));
+        smt.remove(wallet(7));
+        assert_eq!(smt.root(), empty_root);
+    }
+
+    #[test]
+    fn subtree_hash_nonempty_differs_from_empty() {
+        let mut smt = SparseMerkleTree::new();
+        smt.insert(wallet(1));
+        let root = smt.root();
+        assert_ne!(root, smt.empty_hashes[MERKLE_DEPTH]);
+    }
+
+    #[test]
+    fn has_leaves_under_positive_and_negative() {
+        let mut smt = SparseMerkleTree::new();
+        smt.insert(wallet(1));
+        let leaf_hash = poseidon2_hash(&[wallet(1)]);
+        let bits = key_bits(leaf_hash);
+        let top_bit = bits[MERKLE_DEPTH - 1];
+        assert!(smt.has_leaves_under(&[top_bit]));
+        assert!(!smt.has_leaves_under(&[!top_bit]));
+    }
+
+    #[test]
+    fn sibling_path_nonempty() {
+        let mut smt = SparseMerkleTree::new();
+        smt.insert(wallet(10));
+        smt.insert(wallet(20));
+
+        let leaf_hash = poseidon2_hash(&[wallet(10)]);
+        let bits = key_bits(leaf_hash);
+        let path = smt.sibling_path(&bits);
+        let has_nonzero = path.iter().any(|&h| h != Fr::ZERO);
+        assert!(has_nonzero, "sibling path should have non-zero elements when tree is populated");
+    }
+
+    #[test]
+    fn exclusion_proof_verifies() {
+        let mut smt = SparseMerkleTree::new();
+        smt.insert(wallet(100));
+        smt.insert(wallet(200));
+        let root = smt.root();
+
+        let proof = smt.exclusion_proof(wallet(50)).unwrap();
+        verify_smt_exclusion(wallet(50), &proof, root).unwrap();
+    }
+
+    #[test]
+    fn exclusion_proof_for_sanctioned_wallet_errors() {
+        let mut smt = SparseMerkleTree::new();
+        smt.insert(wallet(100));
+        let err = smt.exclusion_proof(wallet(100)).unwrap_err();
+        assert!(matches!(err, CryptoError::WalletIsSanctioned));
+    }
+
+    #[test]
+    fn verify_rejects_wrong_root() {
+        let mut smt = SparseMerkleTree::new();
+        smt.insert(wallet(100));
+        let root = smt.root();
+        let proof = smt.exclusion_proof(wallet(50)).unwrap();
+        let wrong_root = poseidon2_hash(&[root]);
+        let err = verify_smt_exclusion(wallet(50), &proof, wrong_root).unwrap_err();
+        assert!(matches!(err, CryptoError::RootMismatch));
+    }
+
+    #[test]
+    fn verify_rejects_nonzero_leaf() {
+        let mut smt = SparseMerkleTree::new();
+        smt.insert(wallet(100));
+        let root = smt.root();
+        let mut proof = smt.exclusion_proof(wallet(50)).unwrap();
+        proof.leaf_value = Fr::from(1u64);
+        let err = verify_smt_exclusion(wallet(50), &proof, root).unwrap_err();
+        assert!(matches!(err, CryptoError::WalletIsSanctioned));
+    }
+
+    #[test]
+    fn verify_rejects_wrong_path_indices() {
+        let mut smt = SparseMerkleTree::new();
+        smt.insert(wallet(100));
+        let root = smt.root();
+        let mut proof = smt.exclusion_proof(wallet(50)).unwrap();
+        proof.path_indices[0] ^= 1;
+        let err = verify_smt_exclusion(wallet(50), &proof, root).unwrap_err();
+        assert!(matches!(err, CryptoError::InvalidSmtPathIndices));
+    }
+
+    #[test]
+    fn default_trait() {
+        let smt = SparseMerkleTree::default();
+        assert_eq!(smt.root(), SparseMerkleTree::new().root());
     }
 }

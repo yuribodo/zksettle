@@ -52,6 +52,7 @@ pub async fn handler(
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs(),
+            revoked: false,
         },
     );
 
@@ -64,4 +65,14 @@ pub async fn handler(
         leaf_index,
         jurisdiction: req.jurisdiction,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_jurisdiction_is_us() {
+        assert_eq!(default_jurisdiction(), "US");
+    }
 }

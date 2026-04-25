@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 zksettle-types = { path = "../zksettle-types", features = ["borsh", "serde"] }
+async-trait = "0.1"
 axum = { version = "0.8", features = ["macros"] }
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.6", features = ["trace"] }
@@ -29,6 +30,7 @@ ed25519-dalek = { version = "2", features = ["rand_core"] }
 moka = { version = "0.12", features = ["sync"] }
 rocksdb = "0.24"
 sha2 = "0.10"
+mutants = "0.0.3"
 
 [dev-dependencies]
 axum-test = "16"

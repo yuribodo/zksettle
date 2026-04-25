@@ -24,6 +24,7 @@ impl IrysClient {
         }
     }
 
+    #[mutants::skip]
     pub async fn upload(&self, event: &ProofSettled) -> Result<String, IndexerError> {
         let record = AttestationRecord::from(event);
         let tags = build_tags(event);

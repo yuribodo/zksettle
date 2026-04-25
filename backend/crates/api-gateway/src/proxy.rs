@@ -3,11 +3,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::body::Body;
 use axum::extract::{Request, State};
-use axum::http::{HeaderMap, HeaderName, StatusCode};
+use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Response};
 
 use crate::auth::AuthenticatedKey;
 use crate::error::GatewayError;
+use crate::upstream::UpstreamRequest;
 use crate::AppState;
 
 const HOP_BY_HOP: &[&str] = &[
@@ -27,6 +28,17 @@ fn is_hop_by_hop(name: &str) -> bool {
     HOP_BY_HOP.iter().any(|h| h.eq_ignore_ascii_case(name))
 }
 
+fn filter_hop_by_hop(src: &HeaderMap) -> HeaderMap {
+    let mut out = HeaderMap::with_capacity(src.len());
+    for (name, value) in src.iter() {
+        if !is_hop_by_hop(name.as_str()) {
+            out.append(name.clone(), value.clone());
+        }
+    }
+    out
+}
+
+#[mutants::skip]
 pub async fn proxy_to_upstream(
     State(state): State<Arc<AppState>>,
     AuthenticatedKey(record): AuthenticatedKey,
@@ -64,39 +76,47 @@ pub async fn proxy_to_upstream(
         .await
         .map_err(|e| GatewayError::Upstream(e.to_string()))?;
 
-    let mut upstream_req = state.http.request(method, &url);
-    for (name, value) in &req_headers {
-        if !is_hop_by_hop(name.as_str()) {
-            upstream_req = upstream_req.header(name.as_str(), value);
-        }
-    }
+    let upstream_req = UpstreamRequest {
+        method,
+        url,
+        headers: filter_hop_by_hop(&req_headers),
+        body: body_bytes,
+    };
 
-    let upstream_resp = upstream_req
-        .body(body_bytes)
-        .send()
-        .await
-        .map_err(|e| GatewayError::Upstream(e.to_string()))?;
+    let upstream_resp = state.upstream.send(upstream_req).await?;
 
-    let status = StatusCode::from_u16(upstream_resp.status().as_u16())
-        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-
-    if status.is_success() || status.is_redirection() {
+    if upstream_resp.status.is_success() || upstream_resp.status.is_redirection() {
         state.metering.increment(&record.key_hash, now);
     }
 
-    let mut resp_headers = HeaderMap::new();
-    for (name, value) in upstream_resp.headers() {
-        if !is_hop_by_hop(name.as_str()) {
-            if let Ok(header_name) = HeaderName::from_bytes(name.as_str().as_bytes()) {
-                resp_headers.append(header_name, value.clone());
-            }
+    let status = upstream_resp.status;
+    let resp_headers = filter_hop_by_hop(&upstream_resp.headers);
+
+    Ok((status, resp_headers, Body::from(upstream_resp.body)).into_response())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hop_by_hop_matches_all_entries() {
+        for &h in HOP_BY_HOP {
+            assert!(is_hop_by_hop(h), "{h} should be hop-by-hop");
         }
     }
 
-    let resp_bytes = upstream_resp
-        .bytes()
-        .await
-        .map_err(|e| GatewayError::Upstream(e.to_string()))?;
+    #[test]
+    fn hop_by_hop_case_insensitive() {
+        assert!(is_hop_by_hop("Connection"));
+        assert!(is_hop_by_hop("TRANSFER-ENCODING"));
+        assert!(is_hop_by_hop("Keep-Alive"));
+    }
 
-    Ok((status, resp_headers, Body::from(resp_bytes)).into_response())
+    #[test]
+    fn not_hop_by_hop() {
+        assert!(!is_hop_by_hop("content-type"));
+        assert!(!is_hop_by_hop("accept"));
+        assert!(!is_hop_by_hop("x-custom-header"));
+    }
 }

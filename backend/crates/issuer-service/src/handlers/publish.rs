@@ -5,7 +5,7 @@ use serde::Serialize;
 use crate::chain;
 use crate::error::ServiceError;
 use crate::state::{PublishLock, SharedState};
-use crate::{KeypairBytes, ProgramId, RpcUrl};
+use crate::{KeypairBytes, ProgramId, SharedRpc};
 
 #[derive(Serialize)]
 pub struct PublishResponse {
@@ -13,9 +13,10 @@ pub struct PublishResponse {
     pub registered: bool,
 }
 
+#[mutants::skip]
 pub async fn handler(
     State(state): State<SharedState>,
-    axum::Extension(RpcUrl(rpc_url)): axum::Extension<RpcUrl>,
+    axum::Extension(SharedRpc(rpc)): axum::Extension<SharedRpc>,
     axum::Extension(KeypairBytes(keypair_bytes)): axum::Extension<KeypairBytes>,
     axum::Extension(ProgramId(program_id)): axum::Extension<ProgramId>,
     axum::Extension(publish_lock): axum::Extension<PublishLock>,
@@ -35,7 +36,7 @@ pub async fn handler(
     };
 
     let result = tokio::task::spawn_blocking(move || {
-        chain::publish_roots(&rpc_url, &keypair_bytes, &program_id, mr, sr, jr, was_registered)
+        chain::publish_roots(rpc.as_ref(), &keypair_bytes, &program_id, mr, sr, jr, was_registered)
     })
     .await
     .map_err(|e| ServiceError::Chain(e.to_string()))??;

@@ -190,3 +190,54 @@ fn test_all_fixture_outputs() {
     assert_eq!(fr_to_hex(sanctions_root), fr_to_hex(parse_hex(EXPECTED_SANCTIONS_ROOT)));
     assert_eq!(fr_to_hex(jurisdiction_root), fr_to_hex(parse_hex(EXPECTED_JURISDICTION_ROOT)));
 }
+
+#[test]
+fn test_set_leaf_changes_root() {
+    let leaf = poseidon2_hash(&[Fr::from(1u64)]);
+    let mut tree = MerkleTree::new();
+    tree.insert(leaf);
+
+    let root_before = tree.root();
+    tree.zero_leaf(0).unwrap();
+    let root_after = tree.root();
+
+    assert_ne!(root_before, root_after);
+}
+
+#[test]
+fn test_set_leaf_out_of_bounds() {
+    let mut tree = MerkleTree::new();
+    tree.insert(Fr::from(1u64));
+
+    assert!(tree.set_leaf(5, Fr::ZERO).is_err());
+}
+
+#[test]
+fn test_old_proof_invalid_after_zero() {
+    let leaf = poseidon2_hash(&[Fr::from(1u64)]);
+    let mut tree = MerkleTree::new();
+    tree.insert(leaf);
+    tree.insert(poseidon2_hash(&[Fr::from(2u64)]));
+
+    let proof = tree.proof(0).unwrap();
+    assert!(verify_merkle_proof(leaf, &proof, tree.root()));
+
+    tree.zero_leaf(0).unwrap();
+    let new_root = tree.root();
+    assert!(!verify_merkle_proof(leaf, &proof, new_root));
+}
+
+#[test]
+fn test_other_proofs_survive_zero() {
+    let leaf0 = poseidon2_hash(&[Fr::from(1u64)]);
+    let leaf1 = poseidon2_hash(&[Fr::from(2u64)]);
+    let mut tree = MerkleTree::new();
+    tree.insert(leaf0);
+    tree.insert(leaf1);
+
+    tree.zero_leaf(0).unwrap();
+
+    let new_root = tree.root();
+    let proof1 = tree.proof(1).unwrap();
+    assert!(verify_merkle_proof(leaf1, &proof1, new_root));
+}

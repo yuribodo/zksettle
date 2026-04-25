@@ -1,15 +1,17 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use tokio::sync::watch;
+use zksettle_rpc::SolanaRpc;
 
 use crate::chain;
 use crate::state::{PublishLock, SharedState};
 
 pub fn spawn(
     state: SharedState,
-    rpc_url: String,
+    rpc: Arc<dyn SolanaRpc>,
     keypair: Keypair,
     program_id: Pubkey,
     interval_secs: u64,
@@ -27,14 +29,15 @@ pub fn spawn(
                     return;
                 }
             }
-            publish_roots(&state, &rpc_url, &keypair_bytes, &program_id, &publish_lock).await;
+            publish_roots(&state, rpc.clone(), &keypair_bytes, &program_id, &publish_lock).await;
         }
     })
 }
 
+#[mutants::skip]
 async fn publish_roots(
     state: &SharedState,
-    rpc_url: &str,
+    rpc: Arc<dyn SolanaRpc>,
     keypair_bytes: &[u8],
     program_id: &Pubkey,
     publish_lock: &PublishLock,
@@ -51,12 +54,11 @@ async fn publish_roots(
         (roots.0, roots.1, roots.2, st.registered)
     };
 
-    let url = rpc_url.to_string();
     let kb = keypair_bytes.to_vec();
     let pid = *program_id;
 
     let result = tokio::task::spawn_blocking(move || {
-        chain::publish_roots(&url, &kb, &pid, mr, sr, jr, was_registered)
+        chain::publish_roots(rpc.as_ref(), &kb, &pid, mr, sr, jr, was_registered)
     })
     .await;
 

@@ -3,8 +3,7 @@ use solana_sdk::instruction::{AccountMeta, Instruction};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
-use solana_sdk::transaction::Transaction;
-use solana_rpc_client::rpc_client::RpcClient;
+use zksettle_rpc::SolanaRpc;
 
 use crate::error::ServiceError;
 
@@ -78,22 +77,19 @@ pub struct PublishResult {
     pub did_register: bool,
 }
 
+#[mutants::skip]
 pub fn is_issuer_registered(
-    rpc_url: &str,
+    rpc: &dyn SolanaRpc,
     authority: &Pubkey,
     program_id: &Pubkey,
 ) -> Result<bool, ServiceError> {
-    use solana_sdk::commitment_config::CommitmentConfig;
-    let rpc = RpcClient::new(rpc_url.to_string());
     let (pda, _) = issuer_pda(authority, program_id);
-    let resp = rpc
-        .get_account_with_commitment(&pda, CommitmentConfig::confirmed())
-        .map_err(|e| ServiceError::Chain(format!("RPC probe for issuer PDA failed: {e}")))?;
-    Ok(resp.value.is_some())
+    Ok(rpc.get_account_data(&pda)?.is_some())
 }
 
+#[mutants::skip]
 pub fn publish_roots(
-    rpc_url: &str,
+    rpc: &dyn SolanaRpc,
     keypair_bytes: &[u8],
     program_id: &Pubkey,
     merkle_root: [u8; 32],
@@ -101,7 +97,6 @@ pub fn publish_roots(
     jurisdiction_root: [u8; 32],
     currently_registered: bool,
 ) -> Result<PublishResult, ServiceError> {
-    let rpc = RpcClient::new(rpc_url.to_string());
     let keypair = Keypair::try_from(keypair_bytes)
         .map_err(|e| ServiceError::Chain(e.to_string()))?;
     let roots = RootArgs { merkle_root, sanctions_root, jurisdiction_root };
@@ -112,32 +107,57 @@ pub fn publish_roots(
         build_update_ix(&keypair.pubkey(), program_id, &roots)
     };
 
-    let slot = send_tx(&rpc, &keypair, ix)?;
+    let (_sig, slot) = rpc.send_and_confirm(ix, &keypair)?;
     Ok(PublishResult {
         slot,
         did_register: !currently_registered,
     })
 }
 
-fn send_tx(
-    rpc: &RpcClient,
-    keypair: &Keypair,
-    ix: Instruction,
-) -> Result<u64, ServiceError> {
-    let recent = rpc
-        .get_latest_blockhash()
-        .map_err(|e| ServiceError::Chain(e.to_string()))?;
-    let tx = Transaction::new_signed_with_payer(&[ix], Some(&keypair.pubkey()), &[keypair], recent);
-    let sig = rpc
-        .send_and_confirm_transaction(&tx)
-        .map_err(|e| ServiceError::Chain(e.to_string()))?;
-    tracing::info!(%sig, "tx confirmed");
-    let statuses = rpc
-        .get_signature_statuses(&[sig])
-        .map_err(|e| ServiceError::Chain(format!("get_signature_statuses: {e}")))?;
-    let slot = statuses.value[0]
-        .as_ref()
-        .ok_or_else(|| ServiceError::Chain("tx confirmed but status not found".into()))?
-        .slot;
-    Ok(slot)
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn issuer_pda_deterministic() {
+        let authority = Pubkey::from_str("11111111111111111111111111111112").unwrap();
+        let program = Pubkey::from_str("11111111111111111111111111111113").unwrap();
+        let (pda1, bump1) = issuer_pda(&authority, &program);
+        let (pda2, bump2) = issuer_pda(&authority, &program);
+        assert_eq!(pda1, pda2);
+        assert_eq!(bump1, bump2);
+    }
+
+    #[test]
+    fn issuer_pda_different_authorities_differ() {
+        let a1 = Pubkey::from_str("11111111111111111111111111111112").unwrap();
+        let a2 = Pubkey::from_str("11111111111111111111111111111114").unwrap();
+        let program = Pubkey::from_str("11111111111111111111111111111113").unwrap();
+        let (pda1, _) = issuer_pda(&a1, &program);
+        let (pda2, _) = issuer_pda(&a2, &program);
+        assert_ne!(pda1, pda2);
+    }
+
+    #[test]
+    fn discriminator_known_value() {
+        let disc = discriminator("register_issuer");
+        assert_eq!(disc.len(), 8);
+        assert_ne!(disc, [0u8; 8]);
+    }
+
+    #[test]
+    fn discriminator_different_names_differ() {
+        let d1 = discriminator("register_issuer");
+        let d2 = discriminator("update_issuer_root");
+        assert_ne!(d1, d2);
+    }
+
+    #[test]
+    fn discriminator_matches_sha256_prefix() {
+        use sha2::Digest;
+        let hash = sha2::Sha256::digest(b"global:register_issuer");
+        let expected: [u8; 8] = hash[..8].try_into().unwrap();
+        assert_eq!(discriminator("register_issuer"), expected);
+    }
 }

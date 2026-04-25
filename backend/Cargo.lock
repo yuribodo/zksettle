@@ -378,11 +378,13 @@ name = "api-gateway"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum 0.8.9",
  "dashmap",
  "governor",
  "hex",
  "http-body-util",
+ "mutants",
  "rand 0.9.4",
  "reqwest 0.12.28",
  "serde",
@@ -2825,6 +2827,7 @@ name = "indexer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum 0.8.9",
  "axum-test",
  "base64 0.22.1",
@@ -2833,6 +2836,7 @@ dependencies = [
  "ed25519-dalek 2.2.0",
  "hex",
  "moka",
+ "mutants",
  "reqwest 0.12.28",
  "rocksdb",
  "serde",
@@ -2907,16 +2911,22 @@ dependencies = [
  "axum 0.8.9",
  "borsh 1.6.1",
  "hex",
+ "http-body-util",
+ "mutants",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "solana-rpc-client",
  "solana-sdk",
+ "subtle",
  "thiserror 2.0.18",
  "tokio",
+ "tower",
  "tracing",
  "tracing-subscriber",
+ "zksettle-config",
  "zksettle-crypto",
+ "zksettle-rpc",
  "zksettle-types",
 ]
 
@@ -4082,6 +4092,12 @@ dependencies = [
  "tagptr",
  "uuid",
 ]
+
+[[package]]
+name = "mutants"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc0287524726960e07b119cebd01678f852f147742ae0d925e6a520dca956126"
 
 [[package]]
 name = "native-tls"
@@ -5263,9 +5279,11 @@ version = "0.1.0"
 dependencies = [
  "ark-bn254 0.5.0",
  "ark-ff 0.5.0",
+ "async-trait",
  "borsh 1.6.1",
  "csv",
  "hex",
+ "mutants",
  "reqwest 0.12.28",
  "serde_json",
  "sha2 0.10.9",
@@ -5275,7 +5293,9 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "zksettle-config",
  "zksettle-crypto",
+ "zksettle-rpc",
 ]
 
 [[package]]
@@ -10717,6 +10737,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "zksettle-config"
+version = "0.1.0"
+
+[[package]]
 name = "zksettle-crypto"
 version = "0.1.0"
 dependencies = [
@@ -10724,6 +10748,16 @@ dependencies = [
  "ark-ff 0.5.0",
  "hex",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "zksettle-rpc"
+version = "0.1.0"
+dependencies = [
+ "solana-rpc-client",
+ "solana-sdk",
+ "thiserror 2.0.18",
+ "tracing",
 ]
 
 [[package]]

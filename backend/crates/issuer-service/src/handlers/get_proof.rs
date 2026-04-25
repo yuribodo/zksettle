@@ -27,6 +27,10 @@ pub async fn handler(
         .get(&wallet_bytes)
         .ok_or(ServiceError::WalletNotFound)?;
 
+    if cred.revoked {
+        return Err(ServiceError::WalletRevoked);
+    }
+
     let proof = st.membership_tree.proof(cred.leaf_index)?;
     let root = st.membership_tree.root();
 

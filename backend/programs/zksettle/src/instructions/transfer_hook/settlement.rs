@@ -262,9 +262,8 @@ fn enforce_token_2022_hook_accounts(
     Ok(())
 }
 
-// TODO: close hook_payload PDA after settlement to reclaim rent and unblock
-// the authority for the next transfer (init constraint prevents re-staging
-// while the PDA exists). settle_hook path closes it; this path does not.
+// Payload PDA not closed here (owner is read-only in Execute layout).
+// Authority calls `close_hook_payload` post-transfer to reclaim rent.
 pub fn execute_hook_handler<'info>(
     ctx: Context<'_, '_, '_, 'info, ExecuteHook<'info>>,
     amount: u64,

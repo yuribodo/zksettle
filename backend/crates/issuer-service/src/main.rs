@@ -1,3 +1,4 @@
+mod auth;
 mod chain;
 mod config;
 mod convert;
@@ -9,18 +10,23 @@ mod state;
 
 use std::sync::Arc;
 
+use axum::middleware;
 use axum::routing::{get, post};
 use axum::{Extension, Router};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
 use tokio::sync::{watch, RwLock};
+use zksettle_rpc::{RealSolanaRpc, SolanaRpc};
 
+use auth::ApiToken;
 use config::Config;
 use state::{IssuerState, PublishLock};
 
+/// Shared Solana RPC handle for handlers + rotation task.
+/// `Arc<dyn SolanaRpc>` is `Send + Sync` because the trait requires both.
 #[derive(Clone)]
-pub struct RpcUrl(pub String);
+pub struct SharedRpc(pub Arc<dyn SolanaRpc>);
 #[derive(Clone)]
 pub struct KeypairBytes(pub Vec<u8>);
 #[derive(Clone)]
@@ -50,16 +56,43 @@ async fn main() {
         .parse()
         .unwrap_or_else(|e| panic!("invalid program ID '{}': {e}", cfg.program_id));
 
+    let allow_unauth = std::env::var("ALLOW_UNAUTHENTICATED")
+        .ok()
+        .map(|v| matches!(v.to_ascii_lowercase().as_str(), "true" | "1" | "yes"))
+        .unwrap_or(false);
+
+    match (&cfg.api_token, cfg.listen_addr.ip().is_loopback(), allow_unauth) {
+        (Some(_), _, _) => {}
+        (None, true, _) => {
+            tracing::warn!("API_TOKEN not set — bearer auth disabled on loopback");
+        }
+        (None, false, true) => {
+            tracing::warn!(
+                "API_TOKEN not set and ALLOW_UNAUTHENTICATED=true — write endpoints are anonymous"
+            );
+        }
+        (None, false, false) => {
+            panic!(
+                "refusing to start: API_TOKEN not set on non-loopback address {}; \
+                 set API_TOKEN or ALLOW_UNAUTHENTICATED=true",
+                cfg.listen_addr
+            );
+        }
+    }
+
     tracing::info!(
         authority = %keypair.pubkey(),
         %program_id,
         rpc = %cfg.rpc_url,
         listen = %cfg.listen_addr,
         rotation_secs = cfg.rotation_interval_secs,
+        auth_enabled = cfg.api_token.is_some(),
         "starting issuer service"
     );
 
-    let already_registered = match chain::is_issuer_registered(&cfg.rpc_url, &keypair.pubkey(), &program_id) {
+    let rpc: Arc<dyn SolanaRpc> = Arc::new(RealSolanaRpc::new(cfg.rpc_url.clone()));
+
+    let already_registered = match chain::is_issuer_registered(rpc.as_ref(), &keypair.pubkey(), &program_id) {
         Ok(true) => {
             tracing::info!("issuer PDA exists on-chain, resuming as registered");
             true
@@ -93,7 +126,7 @@ async fn main() {
     let rotation_keypair = Keypair::try_from(keypair_json.as_slice()).unwrap();
     let _rotation_handle = rotation::spawn(
         shared.clone(),
-        cfg.rpc_url.clone(),
+        rpc.clone(),
         rotation_keypair,
         program_id,
         cfg.rotation_interval_secs,
@@ -101,16 +134,40 @@ async fn main() {
         publish_lock.clone(),
     );
 
-    let app = Router::new()
+    let public_routes = Router::new()
         .route("/health", get(handlers::health::handler))
-        .route("/credentials", post(handlers::issue_credential::handler))
-        .route("/credentials/{wallet}", get(handlers::get_credential::handler))
-        .route("/wallets", post(handlers::add_wallet::handler))
-        .route("/proofs/membership/{wallet}", get(handlers::get_proof::handler))
-        .route("/proofs/sanctions/{wallet}", get(handlers::get_sanctions_proof::handler))
         .route("/roots", get(handlers::get_roots::handler))
-        .route("/roots/publish", post(handlers::publish::handler))
-        .layer(Extension(RpcUrl(cfg.rpc_url)))
+        .route(
+            "/credentials/{wallet}",
+            get(handlers::get_credential::handler),
+        )
+        .route(
+            "/proofs/membership/{wallet}",
+            get(handlers::get_proof::handler),
+        )
+        .route(
+            "/proofs/sanctions/{wallet}",
+            get(handlers::get_sanctions_proof::handler),
+        );
+
+    let mut protected_routes = Router::new()
+        .route("/credentials", post(handlers::issue_credential::handler))
+        .route(
+            "/credentials/{wallet}",
+            axum::routing::delete(handlers::revoke_credential::handler),
+        )
+        .route("/wallets", post(handlers::add_wallet::handler))
+        .route("/roots/publish", post(handlers::publish::handler));
+
+    if let Some(ref token) = cfg.api_token {
+        protected_routes = protected_routes
+            .layer(middleware::from_fn(auth::require_bearer))
+            .layer(Extension(ApiToken::new(token.clone())));
+    }
+
+    let app = public_routes
+        .merge(protected_routes)
+        .layer(Extension(SharedRpc(rpc)))
         .layer(Extension(KeypairBytes(keypair_json)))
         .layer(Extension(ProgramId(program_id)))
         .layer(Extension(publish_lock))

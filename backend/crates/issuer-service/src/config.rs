@@ -1,5 +1,7 @@
 use std::net::SocketAddr;
 
+use zksettle_config::{env_or, expand_tilde};
+
 pub struct Config {
     pub rpc_url: String,
     pub keypair_path: String,
@@ -7,6 +9,7 @@ pub struct Config {
     pub rotation_interval_secs: u64,
     pub listen_addr: SocketAddr,
     pub state_path: Option<String>,
+    pub api_token: Option<String>,
 }
 
 impl Config {
@@ -22,20 +25,7 @@ impl Config {
                 .parse()
                 .expect("LISTEN_ADDR must be valid socket addr"),
             state_path: std::env::var("STATE_PATH").ok(),
+            api_token: std::env::var("API_TOKEN").ok().filter(|s| !s.is_empty()),
         }
     }
-}
-
-fn env_or(key: &str, default: &str) -> String {
-    std::env::var(key).unwrap_or_else(|_| default.to_string())
-}
-
-fn expand_tilde(path: &str) -> String {
-    if let Some(rest) = path.strip_prefix("~/") {
-        match std::env::var("HOME") {
-            Ok(home) => return format!("{home}/{rest}"),
-            Err(_) => eprintln!("WARNING: path contains ~ but HOME is not set, using literal path: {path}"),
-        }
-    }
-    path.to_string()
 }
