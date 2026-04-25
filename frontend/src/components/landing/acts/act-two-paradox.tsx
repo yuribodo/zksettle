@@ -9,6 +9,18 @@ import { useActPin } from "./use-act-pin";
 
 const ACT_DURATION = "+=300%"; // 3x viewport pin
 
+function clamp01(n: number): number {
+  return Math.max(0, Math.min(1, n));
+}
+
+function fadeWindow(p: number, fadeIn: number, fullStart: number, fullEnd: number, fadeOut: number): number {
+  if (p <= fadeIn) return 0;
+  if (p < fullStart) return clamp01((p - fadeIn) / (fullStart - fadeIn));
+  if (p <= fullEnd) return 1;
+  if (p < fadeOut) return clamp01(1 - (p - fullEnd) / (fadeOut - fullEnd));
+  return 0;
+}
+
 export function ActTwoParadox() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0);
@@ -26,63 +38,79 @@ export function ActTwoParadox() {
       aria-labelledby="act-two-heading"
       className="relative isolate min-h-screen overflow-hidden bg-canvas"
     >
-      <div className="absolute inset-0 mx-auto flex max-w-6xl flex-col justify-center gap-10 px-5 py-24 md:px-8">
-        <p className="font-mono text-xs uppercase tracking-[0.08em] text-stone">
-          {eyebrow}
-        </p>
+      {/* Stage: each phase is absolutely centered. Only one (or transitioning) is visible at a time. */}
+      <div className="absolute inset-0 mx-auto max-w-6xl px-5 md:px-8">
 
-        <DisplayHeading id="act-two-heading" level="xl" className="max-w-[18ch]">
-          {headline.map((line, i) => (
-            <span key={i} className="block">
-              {line}
-            </span>
-          ))}
-        </DisplayHeading>
+        {/* Phase 1 — Headline + eyebrow (peak 0–0.20, fade out by 0.30) */}
+        <PhaseLayer opacity={fadeWindow(progress, -0.05, 0.0, 0.18, 0.32)}>
+          <p className="font-mono text-xs uppercase tracking-[0.08em] text-stone">{eyebrow}</p>
+          <DisplayHeading id="act-two-heading" level="xl" className="mt-8 max-w-[18ch]">
+            {headline.map((line, i) => (
+              <span key={i} className="block">
+                {line}
+              </span>
+            ))}
+          </DisplayHeading>
+        </PhaseLayer>
 
-        {/* Video placeholder slot — Task 3.2 will fill this */}
-        <ActTwoVideoSlot progress={progress} />
+        {/* Phase 2 — Video centerpiece (fade in 0.22, peak 0.30–0.70, fade out by 0.82) */}
+        <PhaseLayer opacity={fadeWindow(progress, 0.22, 0.30, 0.70, 0.82)} centered>
+          <ActTwoVideoCenterpiece progress={progress} />
+        </PhaseLayer>
 
-        {/* Recap slot — Task 3.3 will fill this */}
-        <ActTwoRecapSlot progress={progress} />
-
-        <p className="max-w-[55ch] text-lg leading-relaxed text-quill md:text-xl">
-          {closer}
-        </p>
+        {/* Phase 3 — Recap + closer (fade in 0.78, stays peak through 1.0) */}
+        <PhaseLayer opacity={fadeWindow(progress, 0.78, 0.86, 1.10, 1.20)}>
+          <ActTwoRecap closer={closer} />
+        </PhaseLayer>
       </div>
     </section>
   );
 }
 
-function ActTwoVideoSlot({ progress }: { progress: number }) {
-  // Visible during phase 2 (progress 0.20 → 0.80). Scales subtly + fades at edges.
-  const phaseProgress = Math.min(Math.max((progress - 0.2) / 0.6, 0), 1);
-  const scale = 0.94 + phaseProgress * 0.06;
-  const opacity =
-    phaseProgress < 0.05
-      ? phaseProgress / 0.05
-      : phaseProgress > 0.95
-        ? Math.max(0, 1 - (phaseProgress - 0.95) * 20)
-        : 1;
+function PhaseLayer({
+  children,
+  opacity,
+  centered = false,
+}: {
+  children: React.ReactNode;
+  opacity: number;
+  centered?: boolean;
+}) {
+  if (opacity <= 0.001) return null;
+  return (
+    <div
+      className="absolute inset-0 flex flex-col px-5 md:px-8"
+      style={{
+        opacity,
+        justifyContent: "center",
+        alignItems: centered ? "center" : "stretch",
+        pointerEvents: opacity > 0.5 ? "auto" : "none",
+        transition: "opacity 0.15s linear",
+      }}
+    >
+      <div className={centered ? "w-full" : "mx-auto w-full max-w-6xl"}>{children}</div>
+    </div>
+  );
+}
+
+function ActTwoVideoCenterpiece({ progress }: { progress: number }) {
+  // Subtle scale through the video phase (0.22 → 0.82)
+  const phaseProgress = clamp01((progress - 0.22) / 0.60);
+  const scale = 0.96 + phaseProgress * 0.04;
 
   return (
     <div
-      className="relative mx-auto w-full max-w-4xl"
-      style={{
-        opacity,
-        transform: `scale(${scale})`,
-        transition: "transform 0.1s linear",
-      }}
+      className="mx-auto w-full max-w-4xl"
+      style={{ transform: `scale(${scale})`, transition: "transform 0.1s linear" }}
     >
       <div
-        className="relative aspect-video w-full rounded-[var(--radius-6)] border border-dashed border-stone/30 bg-surface-deep/40"
+        className="relative aspect-video w-full rounded-[var(--radius-6)] border border-dashed border-stone/30 bg-surface-deep/60"
         role="img"
         aria-label="Video centerpiece placeholder"
       >
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-stone">
           <PlayGlyph />
-          <p className="font-mono text-xs uppercase tracking-[0.12em]">
-            Video centerpiece
-          </p>
+          <p className="font-mono text-xs uppercase tracking-[0.12em]">Video centerpiece</p>
           <p className="max-w-[36ch] px-6 text-center text-xs text-stone/70">
             Placeholder — o vídeo do paradoxo entra aqui (~30–60s, mute autoplay).
           </p>
@@ -102,43 +130,22 @@ function PlayGlyph() {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden
     >
-      <circle
-        cx="20"
-        cy="20"
-        r="18.5"
-        stroke="currentColor"
-        strokeWidth="1"
-        opacity="0.4"
-      />
-      <path
-        d="M16 13.5L27 20L16 26.5V13.5Z"
-        fill="currentColor"
-        opacity="0.5"
-      />
+      <circle cx="20" cy="20" r="18.5" stroke="currentColor" strokeWidth="1" opacity="0.4" />
+      <path d="M16 13.5L27 20L16 26.5V13.5Z" fill="currentColor" opacity="0.5" />
     </svg>
   );
 }
 
-function ActTwoRecapSlot({ progress }: { progress: number }) {
-  // Visible after the video: progress > 0.8
-  const phaseProgress = Math.min(Math.max((progress - 0.8) / 0.18, 0), 1);
-  const opacity = phaseProgress;
-  const yOffset = (1 - phaseProgress) * 24;
-
+function ActTwoRecap({ closer }: { closer: string }) {
   const { leftLabel, rightLabel, recap } = COPY.paradoxAct;
 
   return (
-    <div
-      className="grid grid-cols-1 gap-6 md:grid-cols-2"
-      style={{
-        opacity,
-        transform: `translateY(${yOffset}px)`,
-        transition: "opacity 0.1s linear, transform 0.1s linear",
-        pointerEvents: phaseProgress < 0.5 ? "none" : "auto",
-      }}
-    >
-      <RecapColumn label={leftLabel} fields={recap.leftFields} variant="without" />
-      <RecapColumn label={rightLabel} fields={recap.rightFields} variant="with" />
+    <div className="mx-auto w-full max-w-5xl">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <RecapColumn label={leftLabel} fields={recap.leftFields} variant="without" />
+        <RecapColumn label={rightLabel} fields={recap.rightFields} variant="with" />
+      </div>
+      <p className="mt-8 max-w-[55ch] text-lg leading-relaxed text-quill md:text-xl">{closer}</p>
     </div>
   );
 }

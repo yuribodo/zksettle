@@ -28,7 +28,7 @@ export function ActFourMove() {
     <section
       ref={containerRef}
       aria-labelledby="act-four-heading"
-      className="relative isolate min-h-screen overflow-hidden bg-surface-deep text-canvas"
+      className="relative isolate min-h-screen overflow-hidden bg-canvas text-ink"
     >
       <div className="absolute inset-0 mx-auto flex max-w-6xl flex-col justify-center gap-16 px-5 py-24 md:px-8">
         <CodeReveal code={code} progress={progress} />
@@ -67,10 +67,15 @@ function CodeReveal({
       <p className="font-mono text-xs uppercase tracking-[0.08em] text-stone">
         {code.label}
       </p>
-      <pre className="mt-4 rounded-md bg-black/30 p-6 font-mono text-base text-forest">
+      <pre className="mt-4 rounded-[var(--radius-6)] bg-ink p-6 font-mono text-base text-canvas shadow-lg">
         {code.lines.slice(0, visibleLines).map((line, i) => (
-          <div key={i}>{line}</div>
+          <div key={i} className={i === 0 ? "text-stone" : "text-forest"}>
+            {line}
+          </div>
         ))}
+        {visibleLines < code.lines.length ? (
+          <span className="inline-block h-[1.1em] w-[0.55ch] translate-y-[2px] bg-canvas/70 align-middle" aria-hidden />
+        ) : null}
       </pre>
     </div>
   );
@@ -92,7 +97,7 @@ function UseCaseChips({
       {useCases.map((uc) => (
         <span
           key={uc}
-          className="rounded-full border border-canvas/20 px-3 py-1 text-sm"
+          className="rounded-full border border-stone/30 bg-canvas px-3 py-1 text-sm text-quill"
         >
           {uc}
         </span>
@@ -124,7 +129,7 @@ function ClosingCard({
       <DisplayHeading id="act-four-heading" level="l" className="max-w-[18ch]">
         {closer.headline}
       </DisplayHeading>
-      <p className="mt-4 max-w-[55ch] text-lg text-canvas/80">{closer.sub}</p>
+      <p className="mt-4 max-w-[55ch] text-lg text-quill">{closer.sub}</p>
       <div className="mt-8 flex flex-wrap gap-4">
         <Link
           href={closer.ctas.primary.href}
