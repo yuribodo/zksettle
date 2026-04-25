@@ -20,12 +20,21 @@ pub struct RegisterIssuer<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn register_handler(ctx: Context<RegisterIssuer>, merkle_root: [u8; 32]) -> Result<()> {
+pub fn register_handler(
+    ctx: Context<RegisterIssuer>,
+    merkle_root: [u8; 32],
+    sanctions_root: [u8; 32],
+    jurisdiction_root: [u8; 32],
+) -> Result<()> {
     require!(merkle_root != [0u8; 32], ZkSettleError::ZeroMerkleRoot);
+    require!(sanctions_root != [0u8; 32], ZkSettleError::ZeroSanctionsRoot);
+    require!(jurisdiction_root != [0u8; 32], ZkSettleError::ZeroJurisdictionRoot);
 
     let issuer = &mut ctx.accounts.issuer;
     issuer.authority = ctx.accounts.authority.key();
     issuer.merkle_root = merkle_root;
+    issuer.sanctions_root = sanctions_root;
+    issuer.jurisdiction_root = jurisdiction_root;
     issuer.root_slot = Clock::get()?.slot;
     issuer.bump = ctx.bumps.issuer;
 
@@ -46,11 +55,20 @@ pub struct UpdateIssuerRoot<'info> {
     pub issuer: Account<'info, Issuer>,
 }
 
-pub fn update_handler(ctx: Context<UpdateIssuerRoot>, merkle_root: [u8; 32]) -> Result<()> {
+pub fn update_handler(
+    ctx: Context<UpdateIssuerRoot>,
+    merkle_root: [u8; 32],
+    sanctions_root: [u8; 32],
+    jurisdiction_root: [u8; 32],
+) -> Result<()> {
     require!(merkle_root != [0u8; 32], ZkSettleError::ZeroMerkleRoot);
+    require!(sanctions_root != [0u8; 32], ZkSettleError::ZeroSanctionsRoot);
+    require!(jurisdiction_root != [0u8; 32], ZkSettleError::ZeroJurisdictionRoot);
 
     let issuer = &mut ctx.accounts.issuer;
     issuer.merkle_root = merkle_root;
+    issuer.sanctions_root = sanctions_root;
+    issuer.jurisdiction_root = jurisdiction_root;
     issuer.root_slot = Clock::get()?.slot;
 
     msg!("Issuer root updated at slot {}", issuer.root_slot);

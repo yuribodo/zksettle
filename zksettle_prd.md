@@ -48,7 +48,7 @@ Nenhuma solução ZK de compliance existe nativamente no Solana. Todas as fintec
 2. Issuer adiciona wallet à Merkle tree privada, publica root on-chain via `register_issuer()`
 3. Ao transferir USDC-test, usuário gera ZK proof no browser em <10s — nenhum dado sai do dispositivo
 4. Usuário submete instrução SPL transfer com proof como extra account
-5. Transfer Hook intercepta, verifica Groth16 proof via alt_bn128 syscalls (<200K CUs, <$0.001)
+5. Transfer Hook intercepta, verifica Groth16 proof via alt_bn128 syscalls (<250K CUs, <$0.001; ver ADR-022)
 6. Transferência aprovada com proof válida, bloqueada sem proof ou com proof inválida
 7. `ComplianceAttestation` registrado on-chain como audit trail imutável
 
@@ -71,7 +71,7 @@ Exchange/stablecoin issuer prova cobertura total de saques sem revelar posiçõe
 | ID | Requisito | Prioridade |
 |---|---|---|
 | RF-01 | Gerar ZK proof (Groth16 BN254) localmente no browser via WASM em <10s | Crítico |
-| RF-02 | Anchor program: `register_issuer()`, `verify_proof()`, `check_attestation()` | Crítico |
+| RF-02 | Anchor program: `register_issuer()`, `update_issuer_root()`, `verify_proof()`, `check_attestation()` | Crítico |
 | RF-03 | Transfer Hook que bloqueia transferência SPL sem ComplianceAttestation válido | Crítico |
 | RF-04 | SDK TypeScript: `zksettle.prove()`, `zksettle.wrap()`, `zksettle.audit()` | Crítico |
 | RF-05 | Nullifier tracking via Light Protocol para prevenir replay attacks | Crítico |
@@ -84,7 +84,7 @@ Exchange/stablecoin issuer prova cobertura total de saques sem revelar posiçõe
 ## 6. Requisitos não funcionais
 
 - **Latência de proof generation:** <10 segundos no browser (target: <5s)
-- **Custo de verificação on-chain:** <200K compute units, <0.001 SOL por proof
+- **Custo de verificação on-chain:** <250K compute units, <0.001 SOL por proof (ver ADR-022)
 - **Latência E2E:** proof + verificação + settlement <15 segundos total
 - **Privacidade:** zero PII transmitido para servidor. Proof gerada 100% client-side.
 - **Atomicidade:** Transfer Hook garante que transferência só executa se proof válida — impossível contornar chamando SPL diretamente
@@ -105,24 +105,36 @@ O circuit prova simultaneamente:
 - **Expiry:** credential não expirou (timestamp válido)
 - **Nullifier:** anti-replay, esta proof não foi usada antes neste contexto
 
-**Inputs privados** (nunca saem do dispositivo): wallet address, credential data, Merkle path, índices  
-**Inputs públicos** (verificáveis on-chain): Merkle root do issuer, nullifier, timestamp, jurisdiction_set_hash
+**Inputs privados** (nunca saem do dispositivo): wallet address, credential data, Merkle paths (membership, sanctions, jurisdiction), path indices, private key, credential expiry  
+**Inputs públicos** (verificáveis on-chain, 11 campos): merkle_root, nullifier, mint_lo, mint_hi, epoch, recipient_lo, recipient_hi, amount, sanctions_root, jurisdiction_root, timestamp. Pubkeys são split em dois limbs de 128 bits para caber no scalar field BN254 (~254 bits).
 
 ### Componente 2 — Anchor Program
 
-Programa Rust/Anchor no Solana com três instruções:
+Programa Rust/Anchor no Solana. Instruções principais:
 
 ```rust
-register_issuer(merkle_root: [u8; 32], pubkey: Pubkey)
-verify_proof(proof: Vec<u8>, public_inputs: Vec<u8>) -> ComplianceAttestation
-check_attestation(wallet: Pubkey) -> bool
+register_issuer(merkle_root: [u8; 32], sanctions_root: [u8; 32], jurisdiction_root: [u8; 32])
+update_issuer_root(merkle_root: [u8; 32], sanctions_root: [u8; 32], jurisdiction_root: [u8; 32])
+verify_proof(proof_and_witness, nullifier_hash, mint, epoch, recipient, amount, ...)
+check_attestation(nullifier_hash, ...)
+
+// Transfer-hook flow (Componente 3)
+init_extra_account_meta_list(extras)            // uma vez por mint
+set_hook_payload(proof_and_witness, nullifier_hash, mint, epoch, recipient, amount, light_args)
+settle_hook(amount)                              // caminho direto (agents / testes)
+transfer_hook(amount)                            // entry do Token-2022 Execute
 ```
 
-Verificação usa `alt_bn128_pairing`, `alt_bn128_addition`, `alt_bn128_multiplication` — syscalls nativas do Solana. Custo: <200K CUs, <0.001 SOL.
+Verificação usa `alt_bn128_pairing`, `alt_bn128_addition`, `alt_bn128_multiplication` — syscalls nativas do Solana. Custo: <250K CUs, <0.001 SOL (ver ADR-022).
 
 ### Componente 3 — Token Transfer Hook
 
-Integração com Token Extensions (Token-2022). Intercepta toda transferência SPL atomicamente. Aprovada com proof válida. Bloqueada sem proof. Impossível de contornar chamando SPL diretamente.
+Integração com Token Extensions (Token-2022). Fluxo em duas fases por limitação do `ExecuteInstruction` (dados = apenas `amount: u64`, sem espaço para proof + witness):
+
+1. Cliente invoca `set_hook_payload` na mesma transação, armazenando proof/witness + `StagedLightArgs` num PDA `[HOOK_PAYLOAD_SEED, authority.key()]`.
+2. Token-2022 invoca `transfer_hook(amount)` automaticamente durante o transfer. O handler rebinde o payload ao contexto da tx (mint, recipient, amount), chama `verify_bundle`, e cria nullifier + attestation comprimidos via Light CPI.
+
+Atomicidade enforçada com o flag `TransferHookAccount.transferring` do Token-2022 (chamadas stand-alone ao `transfer_hook` falham com `NotInTransfer`). Anti-replay via colisão de endereço Light compressed (ADR-007 + ADR-020). Caminho alternativo: `settle_hook` para chamadas diretas (off-chain agents, testes).
 
 ### Componente 4 — TypeScript SDK (@zksettle/sdk)
 
@@ -149,8 +161,8 @@ Interface web para issuers e fintechs: live feed de proofs, transações bloquea
 | Token compliance | SPL Token Extensions + Transfer Hooks | Atomicidade garantida, não bypassável |
 | State compression | Light Protocol ZK Compression | Nullifiers 200× mais baratos |
 | SDK | TypeScript + @solana/web3.js | Stack do time, integração rápida |
-| Hash em circuits | Poseidon | ZK-friendly, 100× menos constraints que SHA-256 |
-| Frontend | Next.js + TypeScript | Deploy rápido, stack conhecida |
+| Hash em circuits | Poseidon2 | ZK-friendly, 100× menos constraints que SHA-256 |
+| Frontend | Vite + React + TypeScript | SPA dashboard, sem necessidade de SSR, bundle menor e dev loop mais rápido (alinhado ao README) |
 
 ---
 
@@ -274,9 +286,9 @@ ADR-001..008 só cobre root update. Revogação de credential exige republicar M
 
 Usuário gera 1 proof → deriva session token válido por N tx no mesmo contexto (ex: dia de trading). Circuit emite `session_commitment` como public input, hook aceita múltiplas tx até expiry. UX 100× melhor sem quebrar anti-replay — nullifier por sessão, não por tx.
 
-### 15.5 · Jurisdiction set como Merkle tree, não hash
+### 15.5 · Jurisdiction set como Merkle tree, não hash [IMPLEMENTADO — ADR-013 / circuit main.nr]
 
-PRD define `jurisdiction_set_hash` como public input. Se issuer adiciona/remove país do conjunto permitido, toda proof antiga invalida. Substituir por **Merkle root do conjunto permitido + proof de membership da jurisdiction do user**. Issuer atualiza lista sem invalidar proofs existentes.
+~~PRD define `jurisdiction_set_hash` como public input.~~ Implementado: circuit prova membership da jurisdiction do user via Merkle path contra `jurisdiction_root` (public input index 9). Issuer publica `jurisdiction_root` via `register_issuer` / `update_issuer_root`. Proofs antigas continuam válidas se jurisdiction ainda permitida.
 
 ### 15.6 · Transfer Hook com policy engine
 
@@ -298,13 +310,13 @@ Se circuit único estourar constraints ou exceder 10s no browser, separar em 2 s
 
 PRD define schema de credential custom. Adotar **W3C Verifiable Credentials** com signature BBS+ (selective disclosure nativa). Issuer reusa stack padrão da indústria, credentials portáveis entre protocolos. Posiciona ZKSettle como camada ZK de infra VC, não silo proprietário — narrativa de $100M+.
 
-### 15.11 · Attestation como cNFT (CPI-able primitive)
+### 15.11 · Attestation como cNFT (CPI-able primitive) [IMPLEMENTADO — ADR-019]
 
-Outros programas (Kamino, MarginFi) consumir `check_attestation(wallet)` via CPI acopla fortemente. Alternativa: emitir **compressed NFT via Bubblegum** como attestation no wallet do user. Qualquer program lê via account padrão sem CPI cross-program. Padrão Solana reconhecido. Desbloqueia UC-03/UC-04 sem mudar o core do program.
+Implementado: `init_attestation_tree` + Bubblegum `MintV1` CPI emitido após Light CPI em `verify_proof`, `settle_hook`, e `transfer_hook`. cNFT minted para `recipient` com metadados derivados de `hashv(issuer || nullifier || merkle_root || slot || expiry_slot)`. O caminho CPI `check_attestation` permanece para acoplamento on-chain direto.
 
-### 15.12 · Nullifier context explícito (mint + epoch)
+### 15.12 · Nullifier context explícito (mint + epoch) [IMPLEMENTADO — ADR-020]
 
-ADR-007 define `nullifier = Poseidon(sk, context_hash)` mas deixa `context` vago. Especificar: `nullifier = Poseidon(sk, mint_pubkey, epoch_index)` com `epoch = floor(now / 24h)`. User tem 1 proof por dia por token, não por tx. UX dramaticamente melhor, mantém anti-replay (forjar exigiria sk).
+Implementado: `nullifier = Poseidon2(sk, mint_lo, mint_hi, epoch, recipient_lo, recipient_hi, amount)` com `epoch = floor(unix_timestamp / 86400)`. Binding a `recipient` + `amount` previne front-running. `verify_proof` valida epoch freshness (`EpochInFuture` / `EpochStale`, `MAX_EPOCH_LAG = 1`).
 
 ### Top 3 para pitch
 

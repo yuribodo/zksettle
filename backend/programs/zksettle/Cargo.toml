@@ -9,8 +9,22 @@ crate-type = ["cdylib", "lib"]
 name = "zksettle"
 
 [features]
+# `placeholder-vk` is kept as an opt-in flag for bisecting against the old
+# single-pub-input verifying key. The committed `default.vk` is now the real
+# compliance VK (2 pub inputs: MERKLE_ROOT_IDX, NULLIFIER_IDX).
 default = []
+placeholder-vk = []
 cpi = ["no-entrypoint"]
+# Integration tests that boot the full light-program-test harness.
+# Require a running prover server (see light-program-test README).
+# On Unix, enable `--features light-tests` to compile `tests/*.rs` that use
+# `light-program-test`. Windows: omit feature or use WSL (OpenSSL/Perl chain).
+light-tests = []
+# Emit `sol_log_compute_units` probes around the transfer_hook critical
+# section (verify_bundle + Light CPI + Bubblegum mint) and the same stages on
+# `verify_proof`, so CU cost can be measured under the ADR-022 ceiling. Off by
+# default to avoid probe overhead in prod.
+hook-cu-probe = []
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
@@ -21,19 +35,29 @@ custom-panic = []
 
 
 [dependencies]
-anchor-lang = "1.0.0"
+anchor-lang = { version = "=0.31.1", features = ["interface-instructions"] }
+anchor-spl = { version = "=0.31.1", features = ["token_2022"] }
+spl-account-compression = { version = "1.0.0", features = ["cpi"] }
 gnark-verifier-solana = { git = "https://github.com/reilabs/sunspot.git", rev = "ce4765ccdf050507874bbb544be992a11dc48ffc" }
+light-sdk = { version = "=0.23.0", default-features = false, features = ["v2", "anchor"] }
+borsh = "0.10.4"
+zksettle-types = { path = "../../crates/zksettle-types", default-features = false }
+spl-tlv-account-resolution = "0.11.1"
+spl-transfer-hook-interface = "2.1.0"
 
 [build-dependencies]
 gnark-verifier-solana = { git = "https://github.com/reilabs/sunspot.git", rev = "ce4765ccdf050507874bbb544be992a11dc48ffc" }
 
 [dev-dependencies]
-litesvm = "0.10.0"
-solana-message = "3.0.1"
-solana-transaction = "3.0.2"
-solana-signer = "3.0.0"
-solana-keypair = "3.0.1"
-solana-instruction = "3.0.0"
+solana-signer = "2.2"
+solana-keypair = "2.2"
+spl-token-2022 = "6.0"
+solana-instruction = "2.3"
+spl-discriminator = "0.5"
+
+[target.'cfg(unix)'.dev-dependencies]
+light-program-test = "=0.23.0"
+tokio = { version = "1", features = ["full"] }
 
 
 [lints.rust]

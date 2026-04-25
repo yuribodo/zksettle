@@ -1,0 +1,56 @@
+use axum::extract::State;
+use axum::Json;
+use serde::Serialize;
+
+use crate::chain;
+use crate::error::ServiceError;
+use crate::state::{PublishLock, SharedState};
+use crate::{KeypairBytes, ProgramId, SharedRpc};
+
+#[derive(Serialize)]
+pub struct PublishResponse {
+    pub slot: u64,
+    pub registered: bool,
+}
+
+#[mutants::skip]
+pub async fn handler(
+    State(state): State<SharedState>,
+    axum::Extension(SharedRpc(rpc)): axum::Extension<SharedRpc>,
+    axum::Extension(KeypairBytes(keypair_bytes)): axum::Extension<KeypairBytes>,
+    axum::Extension(ProgramId(program_id)): axum::Extension<ProgramId>,
+    axum::Extension(publish_lock): axum::Extension<PublishLock>,
+) -> Result<Json<PublishResponse>, ServiceError> {
+    let _guard = publish_lock.lock().await;
+
+    let (mr, sr, jr, was_registered) = {
+        let st = state.read().await;
+        if !st.roots_dirty && st.registered {
+            return Ok(Json(PublishResponse {
+                slot: st.last_publish_slot,
+                registered: true,
+            }));
+        }
+        let roots = st.roots_as_bytes();
+        (roots.0, roots.1, roots.2, st.registered)
+    };
+
+    let result = tokio::task::spawn_blocking(move || {
+        chain::publish_roots(rpc.as_ref(), &keypair_bytes, &program_id, mr, sr, jr, was_registered)
+    })
+    .await
+    .map_err(|e| ServiceError::Chain(e.to_string()))??;
+
+    let mut st = state.write().await;
+    if result.did_register && !st.registered {
+        st.registered = true;
+    }
+    st.last_publish_slot = result.slot;
+    st.roots_dirty = false;
+    let registered = st.registered;
+
+    Ok(Json(PublishResponse {
+        slot: result.slot,
+        registered,
+    }))
+}

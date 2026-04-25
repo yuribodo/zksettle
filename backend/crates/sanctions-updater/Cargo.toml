@@ -1,0 +1,29 @@
+[package]
+name = "sanctions-updater"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sanctions-updater"
+path = "src/main.rs"
+
+[dependencies]
+async-trait = "0.1"
+tokio = { version = "1", features = ["full"] }
+solana-sdk = "2.3"
+solana-rpc-client = "2.3"
+ark-bn254 = "0.5"
+ark-ff = "0.5"
+zksettle-config = { path = "../zksettle-config" }
+zksettle-crypto = { path = "../zksettle-crypto" }
+zksettle-rpc = { path = "../zksettle-rpc" }
+reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+csv = "1"
+hex = "0.4"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+borsh = "1"
+sha2 = "0.10"
+serde_json = "1"
+mutants = "0.0.3"

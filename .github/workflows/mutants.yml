@@ -1,0 +1,111 @@
+name: Mutation Testing
+
+on:
+  schedule:
+    - cron: "0 3 * * 1" # Monday 3am UTC
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: "Comma-separated crate names (empty = all off-chain)"
+        required: false
+        type: string
+      extra_args:
+        description: "Extra cargo-mutants args (e.g. --shard 1/4)"
+        required: false
+        type: string
+
+concurrency:
+  group: mutants-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutants:
+    name: cargo-mutants
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - uses: Swatinem/rust-cache@23869a5bd66c73db3c0ac40331f3206eb23791dc # v2.9.1
+        with:
+          workspaces: backend -> target
+
+      - name: Install cargo-mutants
+        run: cargo install cargo-mutants@27.0.0 --locked
+
+      - name: Run mutation tests
+        env:
+          INPUT_PACKAGES: ${{ inputs.packages }}
+          INPUT_EXTRA_ARGS: ${{ inputs.extra_args }}
+        run: |
+          ARGS="--in-place"
+
+          if [ -n "$INPUT_PACKAGES" ]; then
+            IFS=',' read -ra PKGS <<< "$INPUT_PACKAGES"
+            for pkg in "${PKGS[@]}"; do
+              ARGS="$ARGS --package $(echo "$pkg" | xargs)"
+            done
+          else
+            for pkg in api-gateway indexer issuer-service sanctions-updater zksettle-crypto zksettle-types; do
+              ARGS="$ARGS --package $pkg"
+            done
+          fi
+
+          if [ -n "$INPUT_EXTRA_ARGS" ]; then
+            ARGS="$ARGS $INPUT_EXTRA_ARGS"
+          fi
+
+          cargo mutants $ARGS
+
+      - name: Generate summary
+        if: always()
+        run: |
+          OUTCOMES="mutants.out/outcomes.json"
+          if [ ! -f "$OUTCOMES" ]; then
+            echo "No outcomes.json found" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          CAUGHT=$(jq '[.outcomes[] | select(.scenario != "Baseline" and .summary == "CaughtMutant")] | length' "$OUTCOMES")
+          MISSED=$(jq '[.outcomes[] | select(.scenario != "Baseline" and .summary == "MissedMutant")] | length' "$OUTCOMES")
+          TIMEOUT=$(jq '[.outcomes[] | select(.scenario != "Baseline" and .summary == "Timeout")] | length' "$OUTCOMES")
+          UNVIABLE=$(jq '[.outcomes[] | select(.scenario != "Baseline" and .summary == "Unviable")] | length' "$OUTCOMES")
+          TESTED=$((CAUGHT + MISSED + TIMEOUT))
+
+          if [ "$TESTED" -gt 0 ]; then
+            SCORE=$(( (CAUGHT * 100) / TESTED ))
+          else
+            SCORE=0
+          fi
+
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Mutation Testing Results
+
+          | Metric | Count |
+          |--------|-------|
+          | Caught | $CAUGHT |
+          | Missed | $MISSED |
+          | Timeout | $TIMEOUT |
+          | Unviable | $UNVIABLE |
+          | **Score** | **${SCORE}%** |
+
+          EOF
+
+          if [ "$MISSED" -gt 0 ]; then
+            echo "### Surviving Mutants" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            jq -r '.outcomes[] | select(.summary == "MissedMutant") | "\(.scenario.Mutant.function) in \(.scenario.Mutant.source_file)"' "$OUTCOMES" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mutation-report
+          path: backend/mutants.out/
+          retention-days: 30
