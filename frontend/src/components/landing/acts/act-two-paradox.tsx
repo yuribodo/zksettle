@@ -119,7 +119,63 @@ function PlayGlyph() {
   );
 }
 
-function ActTwoRecapSlot({ progress: _progress }: { progress: number }) {
-  // Stub — Task 3.3 implements the recap
-  return null;
+function ActTwoRecapSlot({ progress }: { progress: number }) {
+  // Visible after the video: progress > 0.8
+  const phaseProgress = Math.min(Math.max((progress - 0.8) / 0.18, 0), 1);
+  const opacity = phaseProgress;
+  const yOffset = (1 - phaseProgress) * 24;
+
+  const { leftLabel, rightLabel, recap } = COPY.paradoxAct;
+
+  return (
+    <div
+      className="grid grid-cols-1 gap-6 md:grid-cols-2"
+      style={{
+        opacity,
+        transform: `translateY(${yOffset}px)`,
+        transition: "opacity 0.1s linear, transform 0.1s linear",
+        pointerEvents: phaseProgress < 0.5 ? "none" : "auto",
+      }}
+    >
+      <RecapColumn label={leftLabel} fields={recap.leftFields} variant="without" />
+      <RecapColumn label={rightLabel} fields={recap.rightFields} variant="with" />
+    </div>
+  );
+}
+
+type RecapField = { key: string; value: string; flag: string | null };
+
+function RecapColumn({
+  label,
+  fields,
+  variant,
+}: {
+  label: string;
+  fields: ReadonlyArray<RecapField>;
+  variant: "without" | "with";
+}) {
+  const styleClasses =
+    variant === "with"
+      ? "rounded-[var(--radius-6)] border border-forest/20 bg-surface-deep p-6"
+      : "rounded-[var(--radius-6)] border border-danger-text/20 bg-canvas p-6";
+  return (
+    <article className={styleClasses}>
+      <p className="font-mono text-xs uppercase tracking-[0.08em] text-stone">{label}</p>
+      <dl className="mt-4 space-y-2 font-mono text-sm">
+        {fields.map((f) => (
+          <div key={f.key} className="flex justify-between gap-4">
+            <dt className="text-stone">{f.key}:</dt>
+            <dd className={variant === "without" ? "text-quill" : "text-forest"}>
+              {f.value}
+              {f.flag ? (
+                <span className="ml-2 rounded-sm bg-danger-text/15 px-1 py-0.5 text-xs text-danger-text">
+                  {f.flag}
+                </span>
+              ) : null}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </article>
+  );
 }
