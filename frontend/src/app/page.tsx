@@ -8,12 +8,13 @@ import { MomentumSection } from "@/components/landing/momentum-section";
 import { Nav } from "@/components/landing/nav";
 import { NumbersSection } from "@/components/landing/numbers-section";
 import { ParadoxSection } from "@/components/landing/paradox-section";
+import { SmoothScrollProvider } from "@/components/landing/smooth-scroll-provider";
 import { TwoRealitiesSection } from "@/components/landing/two-realities-section";
 import { UseCasesSection } from "@/components/landing/use-cases-section";
 
 export default function Home() {
   return (
-    <>
+    <SmoothScrollProvider>
       <Nav />
       <main id="main-content">
         <Hero />
@@ -28,6 +29,6 @@ export default function Home() {
         <ClosingCta />
       </main>
       <Footer />
-    </>
+    </SmoothScrollProvider>
   );
 }
