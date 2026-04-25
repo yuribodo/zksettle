@@ -210,11 +210,15 @@ pub fn execute_hook_ix(
 
 pub fn close_hook_payload_ix(authority: &Pubkey) -> Instruction {
     let (payload_pda, _) = hook_payload_pda(authority);
+    close_hook_payload_ix_with_pda(authority, &payload_pda)
+}
+
+pub fn close_hook_payload_ix_with_pda(signer: &Pubkey, payload_pda: &Pubkey) -> Instruction {
     Instruction {
         program_id: zksettle::ID,
         accounts: vec![
-            AccountMeta::new(*authority, true),
-            AccountMeta::new(payload_pda, false),
+            AccountMeta::new(*signer, true),
+            AccountMeta::new(*payload_pda, false),
         ],
         data: ClosePayloadIx {}.data(),
     }

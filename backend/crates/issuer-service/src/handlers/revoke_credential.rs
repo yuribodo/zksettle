@@ -31,12 +31,14 @@ pub async fn handler(
     }
 
     let leaf_index = cred.leaf_index;
+    let prev_roots_dirty = st.roots_dirty;
 
     st.membership_tree
         .zero_leaf(leaf_index)
         .map_err(ServiceError::from)?;
 
-    if !st.sanctions_tree.remove(wallet_fr) {
+    let removed_from_sanctions = st.sanctions_tree.remove(wallet_fr);
+    if !removed_from_sanctions {
         tracing::debug!(%wallet, "wallet was not in sanctions tree");
     }
 
@@ -48,7 +50,20 @@ pub async fn handler(
     st.roots_dirty = true;
 
     if let Some(ref path) = state_path {
-        crate::persist::save(path, &st)?;
+        if let Err(e) = crate::persist::save(path, &st) {
+            if let Err(e) = st.membership_tree.set_leaf(leaf_index, wallet_fr) {
+                tracing::error!(%e, "rollback set_leaf failed, state may be inconsistent");
+            }
+            if removed_from_sanctions {
+                st.sanctions_tree.insert(wallet_fr);
+            }
+            st.credentials
+                .get_mut(&wallet_bytes)
+                .expect("checked above")
+                .revoked = false;
+            st.roots_dirty = prev_roots_dirty;
+            return Err(e.into());
+        }
     }
 
     Ok(Json(RevokeResponse {
