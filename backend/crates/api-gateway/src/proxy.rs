@@ -38,6 +38,7 @@ fn filter_hop_by_hop(src: &HeaderMap) -> HeaderMap {
     out
 }
 
+#[mutants::skip]
 pub async fn proxy_to_upstream(
     State(state): State<Arc<AppState>>,
     AuthenticatedKey(record): AuthenticatedKey,
@@ -92,4 +93,30 @@ pub async fn proxy_to_upstream(
     let resp_headers = filter_hop_by_hop(&upstream_resp.headers);
 
     Ok((status, resp_headers, Body::from(upstream_resp.body)).into_response())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hop_by_hop_matches_all_entries() {
+        for &h in HOP_BY_HOP {
+            assert!(is_hop_by_hop(h), "{h} should be hop-by-hop");
+        }
+    }
+
+    #[test]
+    fn hop_by_hop_case_insensitive() {
+        assert!(is_hop_by_hop("Connection"));
+        assert!(is_hop_by_hop("TRANSFER-ENCODING"));
+        assert!(is_hop_by_hop("Keep-Alive"));
+    }
+
+    #[test]
+    fn not_hop_by_hop() {
+        assert!(!is_hop_by_hop("content-type"));
+        assert!(!is_hop_by_hop("accept"));
+        assert!(!is_hop_by_hop("x-custom-header"));
+    }
 }

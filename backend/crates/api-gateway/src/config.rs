@@ -55,4 +55,18 @@ mod tests {
             "error should name the var"
         );
     }
+
+    #[test]
+    fn debug_redacts_admin_key() {
+        let cfg = Config {
+            port: 4000,
+            upstream_url: "http://localhost:3000".into(),
+            log_level: "info".into(),
+            admin_key: Some("my_admin_secret".into()),
+            allow_open_keys: false,
+        };
+        let dbg = format!("{cfg:?}");
+        assert!(!dbg.contains("my_admin_secret"));
+        assert!(dbg.contains("[REDACTED]"));
+    }
 }

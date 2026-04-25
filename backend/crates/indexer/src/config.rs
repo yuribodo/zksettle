@@ -109,4 +109,23 @@ mod tests {
         };
         assert!(!cfg.is_dry_run());
     }
+
+    #[test]
+    fn debug_redacts_secrets() {
+        let cfg = Config {
+            port: 3000,
+            helius_auth_token: "super_secret_token".into(),
+            irys_node_url: "http://localhost".into(),
+            irys_wallet_key: Some("wallet_secret_key".into()),
+            program_id: "test".into(),
+            log_level: "info".into(),
+            dedup_path: "./data/dedup".into(),
+            dedup_capacity: 1_000_000,
+            dedup_ttl_secs: 86400,
+        };
+        let dbg = format!("{cfg:?}");
+        assert!(!dbg.contains("super_secret_token"));
+        assert!(!dbg.contains("wallet_secret_key"));
+        assert!(dbg.contains("[REDACTED]"));
+    }
 }

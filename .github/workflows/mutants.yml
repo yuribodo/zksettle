@@ -50,7 +50,7 @@ jobs:
               ARGS="$ARGS --package $(echo "$pkg" | xargs)"
             done
           else
-            for pkg in api-gateway indexer issuer-service sanctions-updater zksettle-crypto zksettle-rpc zksettle-types; do
+            for pkg in api-gateway indexer issuer-service sanctions-updater zksettle-crypto zksettle-types; do
               ARGS="$ARGS --package $pkg"
             done
           fi

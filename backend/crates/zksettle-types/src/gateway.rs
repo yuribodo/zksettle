@@ -83,7 +83,6 @@ mod tests {
 
     #[test]
     fn tier_monthly_limit_strictly_increases_by_tier() {
-        // guards against accidental variant swap in the match arms
         assert!(Tier::Developer.monthly_limit() < Tier::Startup.monthly_limit());
         assert!(Tier::Startup.monthly_limit() < Tier::Growth.monthly_limit());
         assert!(Tier::Growth.monthly_limit() < Tier::Enterprise.monthly_limit());
