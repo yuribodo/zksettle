@@ -119,4 +119,21 @@ mod tests {
         assert!(!is_hop_by_hop("accept"));
         assert!(!is_hop_by_hop("x-custom-header"));
     }
+
+    #[test]
+    fn filter_hop_by_hop_strips_hop_headers() {
+        let mut src = HeaderMap::new();
+        src.insert("connection", "keep-alive".parse().unwrap());
+        src.insert("content-type", "application/json".parse().unwrap());
+        src.insert("transfer-encoding", "chunked".parse().unwrap());
+        src.insert("x-request-id", "abc".parse().unwrap());
+
+        let filtered = filter_hop_by_hop(&src);
+
+        assert!(!filtered.contains_key("connection"));
+        assert!(!filtered.contains_key("transfer-encoding"));
+        assert_eq!(filtered.get("content-type").unwrap(), "application/json");
+        assert_eq!(filtered.get("x-request-id").unwrap(), "abc");
+        assert_eq!(filtered.len(), 2);
+    }
 }
