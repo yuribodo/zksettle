@@ -53,9 +53,70 @@ export function ActTwoParadox() {
   );
 }
 
-function ActTwoVideoSlot({ progress: _progress }: { progress: number }) {
-  // Stub — Task 3.2 implements the actual placeholder/video
-  return null;
+function ActTwoVideoSlot({ progress }: { progress: number }) {
+  // Visible during phase 2 (progress 0.20 → 0.80). Scales subtly + fades at edges.
+  const phaseProgress = Math.min(Math.max((progress - 0.2) / 0.6, 0), 1);
+  const scale = 0.94 + phaseProgress * 0.06;
+  const opacity =
+    phaseProgress < 0.05
+      ? phaseProgress / 0.05
+      : phaseProgress > 0.95
+        ? Math.max(0, 1 - (phaseProgress - 0.95) * 20)
+        : 1;
+
+  return (
+    <div
+      className="relative mx-auto w-full max-w-4xl"
+      style={{
+        opacity,
+        transform: `scale(${scale})`,
+        transition: "transform 0.1s linear",
+      }}
+    >
+      <div
+        className="relative aspect-video w-full rounded-[var(--radius-6)] border border-dashed border-stone/30 bg-surface-deep/40"
+        role="img"
+        aria-label="Video centerpiece placeholder"
+      >
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-stone">
+          <PlayGlyph />
+          <p className="font-mono text-xs uppercase tracking-[0.12em]">
+            Video centerpiece
+          </p>
+          <p className="max-w-[36ch] px-6 text-center text-xs text-stone/70">
+            Placeholder — o vídeo do paradoxo entra aqui (~30–60s, mute autoplay).
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlayGlyph() {
+  return (
+    <svg
+      width="40"
+      height="40"
+      viewBox="0 0 40 40"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <circle
+        cx="20"
+        cy="20"
+        r="18.5"
+        stroke="currentColor"
+        strokeWidth="1"
+        opacity="0.4"
+      />
+      <path
+        d="M16 13.5L27 20L16 26.5V13.5Z"
+        fill="currentColor"
+        opacity="0.5"
+      />
+    </svg>
+  );
 }
 
 function ActTwoRecapSlot({ progress: _progress }: { progress: number }) {
