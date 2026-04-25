@@ -4,8 +4,21 @@ import { useRef, useState } from "react";
 
 import { COPY } from "@/content/copy";
 import { DisplayHeading } from "@/components/ui/display-heading";
+import { ProofConsole, type ConsoleLine } from "@/components/landing/proof-console";
 
 import { useActPin } from "./use-act-pin";
+
+const DEMO_RUNNING_LINES: readonly ConsoleLine[] = [
+  { kind: "muted", text: "$ zksettle.prove(credential)" },
+  { kind: "muted", text: "[..] proving..." },
+];
+
+const DEMO_DONE_LINES: readonly ConsoleLine[] = [
+  { kind: "muted", text: "$ zksettle.prove(credential)" },
+  { kind: "ok", text: "[ok] credential verified (issuer: zk-mock-1)" },
+  { kind: "ok", text: "[ok] proof generated in 4.8s" },
+  { kind: "result", text: "proof: 0xa3f1...c7e2" },
+];
 
 const ACT_DURATION = "+=300%"; // 3x viewport
 
@@ -146,7 +159,41 @@ function ChapterBlock({
   );
 }
 
-function DemoButton({ progress: _progress }: { progress: number }) {
-  // Stub — Task 4.3 implements the demo button + console
-  return null;
+function DemoButton({ progress }: { progress: number }) {
+  const [running, setRunning] = useState(false);
+  const [done, setDone] = useState(false);
+  const visible = progress > 0.85;
+
+  if (!visible) return null;
+
+  function runDemo() {
+    setRunning(true);
+    setDone(false);
+    setTimeout(() => {
+      setRunning(false);
+      setDone(true);
+    }, 2000);
+  }
+
+  const { demoCta } = COPY.engine;
+  const buttonLabel = running ? "Generating proof..." : done ? "Generate again →" : demoCta;
+  const lines = done ? DEMO_DONE_LINES : DEMO_RUNNING_LINES;
+
+  return (
+    <div className="mt-8 transition-opacity duration-500">
+      <button
+        type="button"
+        onClick={runDemo}
+        disabled={running}
+        className="rounded-md bg-forest px-5 py-2 text-sm font-medium text-canvas hover:bg-forest-hover disabled:opacity-60"
+      >
+        {buttonLabel}
+      </button>
+      {(running || done) ? (
+        <div className="mt-4">
+          <ProofConsole initial="$ zksettle.prove(credential)" lines={lines} />
+        </div>
+      ) : null}
+    </div>
+  );
 }
