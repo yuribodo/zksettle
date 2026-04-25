@@ -2,9 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  AdditiveBlending,
   BufferAttribute,
   BufferGeometry,
   Color,
+  NormalBlending,
   OrthographicCamera,
   Points,
   Scene,
@@ -15,15 +17,28 @@ import {
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { createPrng } from "@/lib/prng";
 
-import { FRAGMENT_SHADER, VERTEX_SHADER } from "./veil-shaders";
+import {
+  FRAGMENT_SHADER,
+  HALO_FRAGMENT_SHADER,
+  HALO_VERTEX_SHADER,
+  VERTEX_SHADER,
+} from "./veil-shaders";
 
 const DESKTOP_MIN_WIDTH = 768;
 const MAX_PARTICLES = 12_000;
-const PARTICLE_TIERS = [12_000, 6_000, 3_000] as const;
-const GLYPH_SHARE = 0.7;
+const PARTICLE_TIERS = [12_000, 6_000, 3_000, 3_000] as const;
+// At the final tier the halo pass switches off — same particle count, fewer draws.
+const HALO_OFF_TIER = 3;
+
+// Stride distribution (mod 25). Keeps proportions roughly stable across tiers.
+const STRIDE = 25;
+const STRIDE_RING = 14; // 56% — commitment ring
+const STRIDE_BAR = 4; //  16% — settlement bar
+const STRIDE_ORBITAL = 2; //  8% — orbital halo (idle hint)
+// Remainder (5/25 = 20%) — regular ambient drift
 
 const ASH_COLOR = new Color(0x6b6762);
-const FOREST_COLOR = new Color(0x0c3d2e);
+const FOREST_COLOR = new Color(0x0d4732);
 
 function buildGeometry(): BufferGeometry {
   const prng = createPrng(0x5e1); // deterministic seal
@@ -31,9 +46,7 @@ function buildGeometry(): BufferGeometry {
   const targets = new Float32Array(MAX_PARTICLES * 3);
   const phases = new Float32Array(MAX_PARTICLES);
   const sizes = new Float32Array(MAX_PARTICLES);
-
-  const glyphCount = Math.floor(MAX_PARTICLES * GLYPH_SHARE);
-  const ringCount = Math.floor(glyphCount * 0.82);
+  const kinds = new Float32Array(MAX_PARTICLES);
 
   for (let i = 0; i < MAX_PARTICLES; i += 1) {
     const sx = (prng.next() - 0.5) * 3.6;
@@ -42,27 +55,36 @@ function buildGeometry(): BufferGeometry {
     starts[i * 3 + 1] = sy;
     starts[i * 3 + 2] = 0;
 
+    const m = i % STRIDE;
     let tx: number;
     let ty: number;
-    let isGlyph: boolean;
+    let kind: number;
 
-    if (i < ringCount) {
+    if (m < STRIDE_RING) {
       // commitment ring
       const angle = prng.next() * Math.PI * 2;
       const r = 0.46 + (prng.next() - 0.5) * 0.025;
       tx = Math.cos(angle) * r;
       ty = Math.sin(angle) * r;
-      isGlyph = true;
-    } else if (i < glyphCount) {
+      kind = 2.0;
+    } else if (m < STRIDE_RING + STRIDE_BAR) {
       // settlement bar across the ring
       tx = (prng.next() - 0.5) * 0.9;
       ty = (prng.next() - 0.5) * 0.03;
-      isGlyph = true;
-    } else {
-      // ambient — stay near start so convergence is elegant, not total
+      kind = 2.0;
+    } else if (m < STRIDE_RING + STRIDE_BAR + STRIDE_ORBITAL) {
+      // orbital ambient — vertex shader overrides position from aPhase + uTime
       tx = sx * 0.85;
       ty = sy * 0.85;
-      isGlyph = false;
+      kind = 1.0;
+      // Burn a PRNG draw so downstream determinism doesn't shift between kinds.
+      prng.next();
+    } else {
+      // regular ambient — drifts in flow field, never converges
+      tx = sx * 0.85;
+      ty = sy * 0.85;
+      kind = 0.0;
+      prng.next();
     }
 
     targets[i * 3] = tx;
@@ -70,9 +92,9 @@ function buildGeometry(): BufferGeometry {
     targets[i * 3 + 2] = 0;
 
     phases[i] = prng.next() * Math.PI * 2;
-    // encode glyph membership via sign on aSize (shader reads step(0.0, aSize))
-    const baseSize = 1.1 + prng.next() * 1.4;
-    sizes[i] = isGlyph ? baseSize : -baseSize;
+    // Wider size range gives perceived depth.
+    sizes[i] = 0.6 + prng.next() * 2.6;
+    kinds[i] = kind;
   }
 
   const geometry = new BufferGeometry();
@@ -80,6 +102,7 @@ function buildGeometry(): BufferGeometry {
   geometry.setAttribute("aTarget", new BufferAttribute(targets, 3));
   geometry.setAttribute("aPhase", new BufferAttribute(phases, 1));
   geometry.setAttribute("aSize", new BufferAttribute(sizes, 1));
+  geometry.setAttribute("aKind", new BufferAttribute(kinds, 1));
   // Three requires `position` for bounding-box maths even though the vertex shader ignores it.
   geometry.setAttribute("position", new BufferAttribute(starts, 3));
 
@@ -147,25 +170,26 @@ export function VeilCanvas({ className }: VeilCanvasProps) {
     container.appendChild(renderer.domElement);
 
     const geometry = buildGeometry();
-    // Start at the highest tier; the FPS monitor downgrades as needed.
     let tierIndex = 0;
     geometry.setDrawRange(0, PARTICLE_TIERS[tierIndex]!);
 
-    // Hold direct references to each uniform so strict indexed access can't
-    // mark them `undefined` on every frame tick.
+    // Uniform containers held by reference — strict indexed access stays happy
+    // and updates propagate to both materials that share these references.
     const uProgress = { value: 0 };
     const uTime = { value: 0 };
     const uPixelRatio = { value: pixelRatio };
     const uScale = { value: 1 };
     const uAshColor = { value: ASH_COLOR };
     const uForestColor = { value: FOREST_COLOR };
-    const uOpacity = { value: 0.75 };
+    const uOpacity = { value: 0.88 };
+    const uVelocity = { value: 0 };
 
-    const material = new ShaderMaterial({
+    const coreMaterial = new ShaderMaterial({
       vertexShader: VERTEX_SHADER,
       fragmentShader: FRAGMENT_SHADER,
       transparent: true,
       depthWrite: false,
+      blending: NormalBlending,
       uniforms: {
         uProgress,
         uTime,
@@ -174,12 +198,35 @@ export function VeilCanvas({ className }: VeilCanvasProps) {
         uAshColor,
         uForestColor,
         uOpacity,
+        uVelocity,
       },
     });
 
-    const points = new Points(geometry, material);
-    points.frustumCulled = false;
-    scene.add(points);
+    // Halo pass renders larger soft discs at low alpha — simulates ink bleed
+    // on a light background, where additive blending would wash to white.
+    const haloMaterial = new ShaderMaterial({
+      vertexShader: HALO_VERTEX_SHADER,
+      fragmentShader: HALO_FRAGMENT_SHADER,
+      transparent: true,
+      depthWrite: false,
+      blending: AdditiveBlending,
+      uniforms: {
+        uProgress,
+        uTime,
+        uPixelRatio,
+        uScale,
+        uForestColor,
+      },
+    });
+
+    const haloPoints = new Points(geometry, haloMaterial);
+    haloPoints.frustumCulled = false;
+    haloPoints.renderOrder = 0;
+    const corePoints = new Points(geometry, coreMaterial);
+    corePoints.frustumCulled = false;
+    corePoints.renderOrder = 1;
+    scene.add(haloPoints);
+    scene.add(corePoints);
 
     const fitCamera = (width: number, height: number) => {
       const aspect = width / height;
@@ -188,7 +235,6 @@ export function VeilCanvas({ className }: VeilCanvasProps) {
       camera.top = 1;
       camera.bottom = -1;
       camera.updateProjectionMatrix();
-      // Keep the glyph around 40% of the shorter viewport edge.
       uScale.value = Math.min(aspect, 1) * 0.9 + 0.1;
       renderer.setSize(width, height);
     };
@@ -213,6 +259,8 @@ export function VeilCanvas({ className }: VeilCanvasProps) {
     let lastTick = performance.now();
     let windowStart = lastTick;
     let frameCount = 0;
+    let smoothedVelocity = 0;
+    let isVisible = true;
 
     const tick = () => {
       const now = performance.now();
@@ -223,6 +271,9 @@ export function VeilCanvas({ className }: VeilCanvasProps) {
         if (fps < 50 && tierIndex < PARTICLE_TIERS.length - 1) {
           tierIndex += 1;
           geometry.setDrawRange(0, PARTICLE_TIERS[tierIndex]!);
+          if (tierIndex >= HALO_OFF_TIER) {
+            haloPoints.visible = false;
+          }
         }
         frameCount = 0;
         windowStart = now;
@@ -232,30 +283,73 @@ export function VeilCanvas({ className }: VeilCanvasProps) {
       lastTick = now;
 
       uTime.value = now * 0.001;
-      // critically-damped interpolation toward scroll progress
+
+      // Critically-damped interpolation toward scroll progress.
       const step = 1 - Math.exp(-dt * 6);
+      const prevProgress = uProgress.value;
       uProgress.value += (targetProgress - uProgress.value) * step;
+
+      // Velocity = change in progress per second, smoothed for the stretch effect.
+      const instantVelocity = dt > 0 ? (uProgress.value - prevProgress) / dt : 0;
+      const velStep = 1 - Math.exp(-dt * 8);
+      smoothedVelocity += (instantVelocity - smoothedVelocity) * velStep;
+      uVelocity.value = smoothedVelocity;
 
       renderer.render(scene, camera);
       rafId = requestAnimationFrame(tick);
     };
 
+    const startLoop = () => {
+      if (rafId !== 0) return;
+      lastTick = performance.now();
+      windowStart = lastTick;
+      frameCount = 0;
+      rafId = requestAnimationFrame(tick);
+    };
+
+    const stopLoop = () => {
+      if (rafId === 0) return;
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    };
+
+    // Pause the render loop while the hero is fully off-screen — saves a
+    // continuous rAF tick + GPU draw across the rest of the page.
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        const wasVisible = isVisible;
+        isVisible = entry.isIntersecting;
+        if (!wasVisible && isVisible && !reduceMotion) {
+          startLoop();
+        } else if (wasVisible && !isVisible) {
+          stopLoop();
+        }
+      },
+      { threshold: 0 },
+    );
+    observer.observe(container);
+
     if (reduceMotion) {
-      // short-circuit to a single rendered frame — no rAF loop, no drift
       uProgress.value = targetProgress;
       uTime.value = 0;
+      uVelocity.value = 0;
       renderer.render(scene, camera);
     } else {
-      rafId = requestAnimationFrame(tick);
+      startLoop();
     }
 
     return () => {
-      if (rafId !== 0) cancelAnimationFrame(rafId);
+      stopLoop();
+      observer.disconnect();
       window.removeEventListener("resize", onResize);
       window.removeEventListener("scroll", onScroll);
-      scene.remove(points);
+      scene.remove(corePoints);
+      scene.remove(haloPoints);
       geometry.dispose();
-      material.dispose();
+      coreMaterial.dispose();
+      haloMaterial.dispose();
       renderer.dispose();
       if (renderer.domElement.parentElement === container) {
         container.removeChild(renderer.domElement);
@@ -295,7 +389,7 @@ function VeilStaticFallback({ className }: { className?: string }) {
         fill="none"
         stroke="var(--color-forest)"
         strokeWidth="0.8"
-        opacity="0.35"
+        opacity="0.4"
       />
       <line
         x1="56"
@@ -304,7 +398,7 @@ function VeilStaticFallback({ className }: { className?: string }) {
         y2="100"
         stroke="var(--color-forest)"
         strokeWidth="1.2"
-        opacity="0.35"
+        opacity="0.4"
       />
     </svg>
   );
