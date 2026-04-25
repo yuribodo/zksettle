@@ -25,9 +25,10 @@ use zksettle::error::ZkSettleError;
 use zksettle::instructions::transfer_hook::{ExtraAccountMetaInput, MAX_HOOK_PROOF_BYTES};
 
 use helpers::{
-    boot_harness, close_hook_payload_ix, create_token2022_mint_with_hook_ixs, default_light_args,
-    execute_hook_ix, extra_meta_pda, hook_payload_pda, init_extra_meta_ix, nonzero_nullifier,
-    registered_issuer, set_hook_payload_ix, ANCHOR_ERROR_CODE_OFFSET, CONSTRAINT_SEEDS,
+    boot_harness, close_hook_payload_ix, close_hook_payload_ix_with_pda,
+    create_token2022_mint_with_hook_ixs, default_light_args, execute_hook_ix, extra_meta_pda,
+    hook_payload_pda, init_extra_meta_ix, nonzero_nullifier, registered_issuer,
+    set_hook_payload_ix, ANCHOR_ERROR_CODE_OFFSET, CONSTRAINT_SEEDS,
 };
 
 async fn stage_default_payload(
@@ -340,9 +341,11 @@ async fn close_hook_payload_wrong_authority_fails() {
 
     let wrong = helpers::funded_authority(&mut rpc, 10_000_000_000).await;
 
+    // Attacker signs but targets the legit PDA — seed mismatch yields ConstraintSeeds.
+    let (legit_pda, _) = hook_payload_pda(&authority.pubkey());
     let result = rpc
         .create_and_send_transaction(
-            &[close_hook_payload_ix(&wrong.pubkey())],
+            &[close_hook_payload_ix_with_pda(&wrong.pubkey(), &legit_pda)],
             &wrong.pubkey(),
             &[&wrong],
         )

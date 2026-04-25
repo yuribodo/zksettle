@@ -54,12 +54,37 @@ impl HttpUpstream for ReqwestUpstream {
 
         let status = StatusCode::from_u16(resp.status().as_u16())
             .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+
+        const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
+
+        let content_length = resp
+            .headers()
+            .get(reqwest::header::CONTENT_LENGTH)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<usize>().ok());
+
+        if let Some(len) = content_length {
+            if len > MAX_RESPONSE_BYTES {
+                return Err(GatewayError::Upstream(format!(
+                    "upstream response too large: {len} bytes"
+                )));
+            }
+        }
+
         // reqwest and axum both re-export http 1.x HeaderMap; breaks if either bumps to http 2.x.
         let headers = resp.headers().clone();
+
         let body = resp
             .bytes()
             .await
             .map_err(|e| GatewayError::Upstream(e.to_string()))?;
+
+        if body.len() > MAX_RESPONSE_BYTES {
+            return Err(GatewayError::Upstream(format!(
+                "upstream response too large: {} bytes",
+                body.len()
+            )));
+        }
 
         Ok(UpstreamResponse { status, headers, body })
     }

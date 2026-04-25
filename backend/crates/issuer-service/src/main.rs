@@ -56,8 +56,28 @@ async fn main() {
         .parse()
         .unwrap_or_else(|e| panic!("invalid program ID '{}': {e}", cfg.program_id));
 
-    if cfg.api_token.is_none() {
-        tracing::warn!("API_TOKEN not set — all endpoints are unauthenticated");
+    let allow_unauth = std::env::var("ALLOW_UNAUTHENTICATED")
+        .ok()
+        .map(|v| matches!(v.to_ascii_lowercase().as_str(), "true" | "1" | "yes"))
+        .unwrap_or(false);
+
+    match (&cfg.api_token, cfg.listen_addr.ip().is_loopback(), allow_unauth) {
+        (Some(_), _, _) => {}
+        (None, true, _) => {
+            tracing::warn!("API_TOKEN not set — bearer auth disabled on loopback");
+        }
+        (None, false, true) => {
+            tracing::warn!(
+                "API_TOKEN not set and ALLOW_UNAUTHENTICATED=true — write endpoints are anonymous"
+            );
+        }
+        (None, false, false) => {
+            panic!(
+                "refusing to start: API_TOKEN not set on non-loopback address {}; \
+                 set API_TOKEN or ALLOW_UNAUTHENTICATED=true",
+                cfg.listen_addr
+            );
+        }
     }
 
     tracing::info!(
