@@ -65,7 +65,9 @@ mod tests {
     #[tokio::test]
     async fn invalid_hex_returns_invalid_hex() {
         let state = state_with([7u8; 32]);
-        let err = handler(State(state), Path("not-hex".into())).await.unwrap_err();
+        let err = handler(State(state), Path("not-hex".into()))
+            .await
+            .unwrap_err();
         assert!(matches!(err, ServiceError::InvalidHex(_)));
     }
 }

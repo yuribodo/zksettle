@@ -37,7 +37,11 @@ pub async fn handler(
     Ok(Json(MembershipProofResponse {
         wallet,
         leaf_index: cred.leaf_index,
-        path: proof.path.iter().map(|f| hex::encode(fr_to_bytes_be(f))).collect(),
+        path: proof
+            .path
+            .iter()
+            .map(|f| hex::encode(fr_to_bytes_be(f)))
+            .collect(),
         path_indices: proof.path_indices.to_vec(),
         root: hex::encode(fr_to_bytes_be(&root)),
     }))

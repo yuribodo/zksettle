@@ -88,7 +88,11 @@ impl HttpUpstream for ReqwestUpstream {
             )));
         }
 
-        Ok(UpstreamResponse { status, headers, body })
+        Ok(UpstreamResponse {
+            status,
+            headers,
+            body,
+        })
     }
 }
 
@@ -168,11 +172,9 @@ pub mod mock {
                 return Err(err);
             }
             self.sent.lock().unwrap().push(req);
-            self.responses
-                .lock()
-                .unwrap()
-                .pop_front()
-                .ok_or_else(|| GatewayError::Upstream("MockHttpUpstream: no queued response".into()))
+            self.responses.lock().unwrap().pop_front().ok_or_else(|| {
+                GatewayError::Upstream("MockHttpUpstream: no queued response".into())
+            })
         }
     }
 }

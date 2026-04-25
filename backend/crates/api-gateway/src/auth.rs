@@ -74,7 +74,10 @@ mod tests {
         })
     }
 
-    async fn extract(state: &Arc<AppState>, req: Request<()>) -> Result<AuthenticatedKey, GatewayError> {
+    async fn extract(
+        state: &Arc<AppState>,
+        req: Request<()>,
+    ) -> Result<AuthenticatedKey, GatewayError> {
         let (mut parts, _) = req.into_parts();
         AuthenticatedKey::from_request_parts(&mut parts, state).await
     }

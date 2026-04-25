@@ -39,8 +39,8 @@ impl IrysClient {
             return Ok("dry-run".into());
         }
 
-        let body = serde_json::to_vec(&record)
-            .map_err(|e| IndexerError::IrysUpload(e.to_string()))?;
+        let body =
+            serde_json::to_vec(&record).map_err(|e| IndexerError::IrysUpload(e.to_string()))?;
 
         let url = format!("{}/tx/solana", self.node_url);
 
@@ -51,17 +51,16 @@ impl IrysClient {
                 tokio::time::sleep(delay).await;
             }
 
-            match self.http.post(&url)
+            match self
+                .http
+                .post(&url)
                 .header("Content-Type", "application/json")
                 .body(body.clone())
                 .send()
                 .await
             {
                 Ok(resp) if resp.status().is_success() => {
-                    let tx_id = resp
-                        .text()
-                        .await
-                        .unwrap_or_else(|_| "unknown".into());
+                    let tx_id = resp.text().await.unwrap_or_else(|_| "unknown".into());
                     info!(tx_id = %tx_id, "uploaded attestation to irys");
                     return Ok(tx_id);
                 }

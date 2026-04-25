@@ -36,7 +36,15 @@ pub async fn handler(
     };
 
     let result = tokio::task::spawn_blocking(move || {
-        chain::publish_roots(rpc.as_ref(), &keypair_bytes, &program_id, mr, sr, jr, was_registered)
+        chain::publish_roots(
+            rpc.as_ref(),
+            &keypair_bytes,
+            &program_id,
+            mr,
+            sr,
+            jr,
+            was_registered,
+        )
     })
     .await
     .map_err(|e| ServiceError::Chain(e.to_string()))??;
@@ -129,14 +137,19 @@ mod tests {
         let resp = h.call().await.unwrap().0;
         assert!(resp.registered);
         assert_eq!(resp.slot, 42);
-        assert_eq!(h.rpc.send_count(), 0, "must not call RPC when nothing changed");
+        assert_eq!(
+            h.rpc.send_count(),
+            0,
+            "must not call RPC when nothing changed"
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn rpc_failure_propagates_as_chain_error() {
         let h = Harness::new();
         h.state.write().await.roots_dirty = true;
-        h.rpc.queue_error(RpcError::Call("simulated rpc down".into()));
+        h.rpc
+            .queue_error(RpcError::Call("simulated rpc down".into()));
 
         let err = h.call().await.unwrap_err();
         assert!(matches!(err, ServiceError::Chain(_)));

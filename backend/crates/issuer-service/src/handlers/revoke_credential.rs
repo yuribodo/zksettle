@@ -88,7 +88,8 @@ mod tests {
 
     fn state_with_wallet(wallet: [u8; 32], revoked: bool) -> SharedState {
         let mut st = IssuerState::new();
-        st.membership_tree.insert(wallet_to_fr(&format!("0x{}", hex::encode(wallet))).unwrap());
+        st.membership_tree
+            .insert(wallet_to_fr(&format!("0x{}", hex::encode(wallet))).unwrap());
         st.credentials.insert(
             wallet,
             CredentialRecord {

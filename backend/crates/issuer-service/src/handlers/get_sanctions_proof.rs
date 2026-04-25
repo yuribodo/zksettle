@@ -34,7 +34,11 @@ pub async fn handler(
 
     Ok(Json(SanctionsProofResponse {
         wallet,
-        path: proof.path.iter().map(|f| hex::encode(fr_to_bytes_be(f))).collect(),
+        path: proof
+            .path
+            .iter()
+            .map(|f| hex::encode(fr_to_bytes_be(f)))
+            .collect(),
         path_indices: proof.path_indices.to_vec(),
         leaf_value: hex::encode(fr_to_bytes_be(&proof.leaf_value)),
         root: hex::encode(fr_to_bytes_be(&root)),

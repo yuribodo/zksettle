@@ -57,7 +57,8 @@ mod tests {
     async fn wallet_count_reflects_inserted_credentials() {
         let mut st = IssuerState::new();
         let wallet_hex = format!("0x{}", hex::encode([1u8; 32]));
-        st.membership_tree.insert(wallet_to_fr(&wallet_hex).unwrap());
+        st.membership_tree
+            .insert(wallet_to_fr(&wallet_hex).unwrap());
         st.credentials.insert(
             [1u8; 32],
             CredentialRecord {

@@ -29,7 +29,14 @@ pub fn spawn(
                     return;
                 }
             }
-            publish_roots(&state, rpc.clone(), &keypair_bytes, &program_id, &publish_lock).await;
+            publish_roots(
+                &state,
+                rpc.clone(),
+                &keypair_bytes,
+                &program_id,
+                &publish_lock,
+            )
+            .await;
         }
     })
 }
@@ -94,7 +101,13 @@ mod tests {
     fn fixture(
         roots_dirty: bool,
         registered: bool,
-    ) -> (SharedState, Arc<MockSolanaRpc>, Vec<u8>, Pubkey, PublishLock) {
+    ) -> (
+        SharedState,
+        Arc<MockSolanaRpc>,
+        Vec<u8>,
+        Pubkey,
+        PublishLock,
+    ) {
         let mut st = IssuerState::new();
         st.roots_dirty = roots_dirty;
         st.registered = registered;
@@ -170,8 +183,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(50)).await;
         let _ = tx.send(());
 
-        let join_result =
-            tokio::time::timeout(Duration::from_secs(2), handle).await;
+        let join_result = tokio::time::timeout(Duration::from_secs(2), handle).await;
         assert!(join_result.is_ok(), "rotation task must exit on shutdown");
     }
 }

@@ -38,7 +38,11 @@ fn build_ix(
     register: bool,
 ) -> Instruction {
     let (pda, _) = issuer_pda(authority, program_id);
-    let name = if register { "register_issuer" } else { "update_issuer_root" };
+    let name = if register {
+        "register_issuer"
+    } else {
+        "update_issuer_root"
+    };
     let mut data = discriminator(name).to_vec();
     roots.serialize(&mut data).unwrap();
 
@@ -52,7 +56,10 @@ fn build_ix(
     ];
     if register {
         #[allow(deprecated)]
-        accounts.push(AccountMeta::new_readonly(solana_sdk::system_program::ID, false));
+        accounts.push(AccountMeta::new_readonly(
+            solana_sdk::system_program::ID,
+            false,
+        ));
     }
 
     Instruction {
@@ -115,8 +122,8 @@ pub fn publish_sanctions_root(
     new_sanctions_root: [u8; 32],
     currently_registered: bool,
 ) -> Result<PublishResult, UpdaterError> {
-    let keypair = Keypair::try_from(keypair_bytes)
-        .map_err(|e| UpdaterError::Chain(e.to_string()))?;
+    let keypair =
+        Keypair::try_from(keypair_bytes).map_err(|e| UpdaterError::Chain(e.to_string()))?;
 
     let (merkle_root, _old_sanctions, jurisdiction_root) = if currently_registered {
         read_current_roots(rpc, &keypair.pubkey(), program_id)?
@@ -171,7 +178,10 @@ mod tests {
 
     #[test]
     fn discriminator_different_names_differ() {
-        assert_ne!(discriminator("register_issuer"), discriminator("update_issuer_root"));
+        assert_ne!(
+            discriminator("register_issuer"),
+            discriminator("update_issuer_root")
+        );
     }
 
     #[test]
@@ -280,14 +290,8 @@ mod tests {
         let (pda, _) = issuer_pda(&kp.pubkey(), &program);
         rpc.set_account(pda, pda_payload([1u8; 32], [2u8; 32], [3u8; 32]));
 
-        let result = publish_sanctions_root(
-            &rpc,
-            &kp.to_bytes(),
-            &program,
-            [99u8; 32],
-            true,
-        )
-        .unwrap();
+        let result =
+            publish_sanctions_root(&rpc, &kp.to_bytes(), &program, [99u8; 32], true).unwrap();
 
         assert!(!result.did_register);
         assert_eq!(rpc.send_count(), 1);

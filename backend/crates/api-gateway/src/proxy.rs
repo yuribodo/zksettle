@@ -251,16 +251,16 @@ mod tests {
             state.metering.increment(&rec.key_hash, now);
         }
 
-        let err = proxy_to_upstream(
-            State(state.clone()),
-            AuthenticatedKey(rec),
-            build_request(),
-        )
-        .await
-        .unwrap_err();
+        let err = proxy_to_upstream(State(state.clone()), AuthenticatedKey(rec), build_request())
+            .await
+            .unwrap_err();
 
         assert!(matches!(err, GatewayError::QuotaExhausted));
-        assert_eq!(mock.sent_count(), 0, "must not call upstream after quota check");
+        assert_eq!(
+            mock.sent_count(),
+            0,
+            "must not call upstream after quota check"
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

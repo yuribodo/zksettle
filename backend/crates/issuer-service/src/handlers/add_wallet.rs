@@ -78,7 +78,9 @@ mod tests {
         let resp = handler(
             State(state.clone()),
             empty_state_path(),
-            Json(AddWalletRequest { wallet: hex.clone() }),
+            Json(AddWalletRequest {
+                wallet: hex.clone(),
+            }),
         )
         .await
         .unwrap()
@@ -100,7 +102,9 @@ mod tests {
         let _ = handler(
             State(state.clone()),
             empty_state_path(),
-            Json(AddWalletRequest { wallet: hex.clone() }),
+            Json(AddWalletRequest {
+                wallet: hex.clone(),
+            }),
         )
         .await
         .unwrap();
@@ -122,7 +126,9 @@ mod tests {
         let err = handler(
             State(state),
             empty_state_path(),
-            Json(AddWalletRequest { wallet: "bad-hex".into() }),
+            Json(AddWalletRequest {
+                wallet: "bad-hex".into(),
+            }),
         )
         .await
         .unwrap_err();
