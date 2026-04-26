@@ -1,189 +1,161 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { COPY } from "@/content/copy";
 import { DisplayHeading } from "@/components/ui/display-heading";
 
-import { useActPin } from "./use-act-pin";
-
-const ACT_DURATION = "+=300%"; // 3x viewport pin
-
-function clamp01(n: number): number {
-  return Math.max(0, Math.min(1, n));
-}
-
-function fadeWindow(p: number, fadeIn: number, fullStart: number, fullEnd: number, fadeOut: number): number {
-  if (p <= fadeIn) return 0;
-  if (p < fullStart) return clamp01((p - fadeIn) / (fullStart - fadeIn));
-  if (p <= fullEnd) return 1;
-  if (p < fadeOut) return clamp01(1 - (p - fullEnd) / (fadeOut - fullEnd));
-  return 0;
-}
+import { HologramCanvas } from "./hologram-canvas";
 
 export function ActTwoParadox() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [progress, setProgress] = useState(0);
+  const sectionRef = useRef<HTMLElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoStarted, setVideoStarted] = useState(false);
+  const [canvasOff, setCanvasOff] = useState(false);
 
-  useActPin(containerRef, {
-    duration: ACT_DURATION,
-    onUpdate: setProgress,
-  });
+  const reducedMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const triggerVideo = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || videoStarted) return;
+    if (reducedMotion) return;
+    video.play().then(() => setVideoStarted(true)).catch(() => {});
+  }, [videoStarted, reducedMotion]);
+
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry!.isIntersecting) {
+          triggerVideo();
+          setCanvasOff(false);
+        } else {
+          setCanvasOff(true);
+        }
+      },
+      { threshold: 0.5 },
+    );
+
+    io.observe(section);
+    return () => io.disconnect();
+  }, [triggerVideo]);
 
   const { eyebrow, headline, closer } = COPY.paradoxAct;
 
   return (
     <section
-      ref={containerRef}
+      ref={sectionRef}
       id="act-two-paradox"
       aria-labelledby="act-two-heading"
-      className="relative isolate min-h-screen overflow-hidden"
+      className="relative isolate h-screen w-full overflow-hidden bg-[#050505]"
     >
-      {/* Stage: each phase is absolutely centered. Only one (or transitioning) is visible at a time. */}
-      <div className="absolute inset-0 mx-auto max-w-6xl px-5 md:px-8">
+      {/* Layer 0 — Shader */}
+      <HologramCanvas paused={canvasOff} />
 
-        {/* Phase 1 — Headline + eyebrow (peak 0–0.20, fade out by 0.30) */}
-        <PhaseLayer opacity={fadeWindow(progress, -0.05, 0.0, 0.18, 0.32)}>
-          <p className="font-mono text-xs uppercase tracking-[0.08em] text-stone">{eyebrow}</p>
-          <DisplayHeading id="act-two-heading" level="xl" className="mt-8 max-w-[18ch]">
-            {headline.map((line, i) => (
-              <span key={i} className="block">
-                {line}
-              </span>
-            ))}
-          </DisplayHeading>
-        </PhaseLayer>
-
-        {/* Phase 2 — Video centerpiece (fade in 0.22, peak 0.30–0.70, fade out by 0.82) */}
-        <PhaseLayer opacity={fadeWindow(progress, 0.22, 0.30, 0.70, 0.82)} centered>
-          <ActTwoVideoCenterpiece progress={progress} />
-        </PhaseLayer>
-
-        {/* Phase 3 — Recap + closer (fade in 0.78, stays peak through 1.0) */}
-        <PhaseLayer opacity={fadeWindow(progress, 0.78, 0.86, 1.10, 1.20)}>
-          <ActTwoRecap closer={closer} />
-        </PhaseLayer>
+      {/* Layer 1 — Video */}
+      <div className="absolute inset-0 z-10">
+        <video
+          ref={videoRef}
+          className="h-full w-full object-cover"
+          muted
+          playsInline
+          loop
+          preload="metadata"
+          poster=""
+          aria-hidden
+        />
+        <div className="absolute inset-0 bg-black/30" />
       </div>
+
+      {/* Layer 2 — Text */}
+      <div className="absolute inset-0 z-20 flex flex-col items-center justify-center px-5 md:px-8">
+        {/* Eyebrow — fades out when video starts */}
+        <p
+          className="font-mono text-xs uppercase tracking-[0.08em] text-stone transition-opacity duration-[400ms]"
+          style={{ opacity: videoStarted ? 0 : 1 }}
+        >
+          {eyebrow}
+        </p>
+
+        {/* Headline — centered initially, migrates to top when video starts */}
+        <DisplayHeading
+          id="act-two-heading"
+          level="xl"
+          className="mt-4 max-w-[18ch] text-center text-white transition-all duration-[600ms] ease-out"
+          style={{
+            textShadow: "0 2px 24px rgba(0,0,0,0.6)",
+            transform: videoStarted ? "translateY(-40vh) scale(0.8)" : "translateY(0) scale(1)",
+            ...(videoStarted ? { position: "absolute", top: "50%" } : {}),
+          }}
+        >
+          {headline}
+        </DisplayHeading>
+
+        {/* Closer — always visible (video TBD), fades in with delay once video plays */}
+        <p
+          className="absolute bottom-12 font-mono text-sm tracking-[0.06em] text-white/80 transition-opacity duration-[800ms]"
+          style={{
+            opacity: videoStarted ? 1 : 0.8,
+            transitionDelay: videoStarted ? "1500ms" : "0ms",
+          }}
+        >
+          {closer}
+        </p>
+      </div>
+
+      {/* Unmute toggle — bottom-right corner */}
+      {videoStarted && (
+        <UnmuteToggle videoRef={videoRef} />
+      )}
+
+      {/* Reduced-motion fallback: manual play button */}
+      {reducedMotion && !videoStarted && (
+        <button
+          type="button"
+          onClick={() => {
+            const video = videoRef.current;
+            if (video) video.play().then(() => setVideoStarted(true)).catch(() => {});
+          }}
+          className="absolute inset-0 z-30 flex items-center justify-center"
+          aria-label="Play video"
+        >
+          <span className="rounded-full border border-white/40 bg-black/50 p-4">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden>
+              <path d="M12 8L26 16L12 24V8Z" fill="white" fillOpacity="0.8" />
+            </svg>
+          </span>
+        </button>
+      )}
     </section>
   );
 }
 
-function PhaseLayer({
-  children,
-  opacity,
-  centered = false,
-}: {
-  children: React.ReactNode;
-  opacity: number;
-  centered?: boolean;
-}) {
-  if (opacity <= 0.001) return null;
+function UnmuteToggle({ videoRef }: { videoRef: React.RefObject<HTMLVideoElement | null> }) {
+  const [muted, setMuted] = useState(true);
+
   return (
-    <div
-      className="absolute inset-0 flex flex-col px-5 md:px-8"
-      style={{
-        opacity,
-        justifyContent: "center",
-        alignItems: centered ? "center" : "stretch",
-        pointerEvents: opacity > 0.5 ? "auto" : "none",
-        transition: "opacity 0.15s linear",
+    <button
+      type="button"
+      className="absolute bottom-4 right-4 z-30 rounded-full border border-white/20 bg-black/40 p-2 text-white/50 transition-colors hover:bg-black/60 hover:text-white/80"
+      aria-label={muted ? "Unmute video" : "Mute video"}
+      onClick={() => {
+        const video = videoRef.current;
+        if (!video) return;
+        video.muted = !video.muted;
+        setMuted(video.muted);
       }}
     >
-      <div className={centered ? "w-full" : "mx-auto w-full max-w-6xl"}>{children}</div>
-    </div>
-  );
-}
-
-function ActTwoVideoCenterpiece({ progress }: { progress: number }) {
-  // Subtle scale through the video phase (0.22 → 0.82)
-  const phaseProgress = clamp01((progress - 0.22) / 0.60);
-  const scale = 0.96 + phaseProgress * 0.04;
-
-  return (
-    <div
-      className="mx-auto w-full max-w-4xl"
-      style={{ transform: `scale(${scale})`, transition: "transform 0.1s linear" }}
-    >
-      <div
-        className="relative aspect-video w-full rounded-[var(--radius-6)] border border-dashed border-stone/30 bg-surface-deep/60"
-        role="img"
-        aria-label="Video centerpiece placeholder"
-      >
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-stone">
-          <PlayGlyph />
-          <p className="font-mono text-xs uppercase tracking-[0.12em]">Video centerpiece</p>
-          <p className="max-w-[36ch] px-6 text-center text-xs text-stone/70">
-            Placeholder — o vídeo do paradoxo entra aqui (~30–60s, mute autoplay).
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PlayGlyph() {
-  return (
-    <svg
-      width="40"
-      height="40"
-      viewBox="0 0 40 40"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden
-    >
-      <circle cx="20" cy="20" r="18.5" stroke="currentColor" strokeWidth="1" opacity="0.4" />
-      <path d="M16 13.5L27 20L16 26.5V13.5Z" fill="currentColor" opacity="0.5" />
-    </svg>
-  );
-}
-
-function ActTwoRecap({ closer }: { closer: string }) {
-  const { leftLabel, rightLabel, recap } = COPY.paradoxAct;
-
-  return (
-    <div className="mx-auto w-full max-w-5xl">
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <RecapColumn label={leftLabel} fields={recap.leftFields} variant="without" />
-        <RecapColumn label={rightLabel} fields={recap.rightFields} variant="with" />
-      </div>
-      <p className="mt-8 max-w-[55ch] text-lg leading-relaxed text-quill md:text-xl">{closer}</p>
-    </div>
-  );
-}
-
-type RecapField = { key: string; value: string; flag: string | null };
-
-function RecapColumn({
-  label,
-  fields,
-  variant,
-}: {
-  label: string;
-  fields: ReadonlyArray<RecapField>;
-  variant: "without" | "with";
-}) {
-  const styleClasses =
-    variant === "with"
-      ? "rounded-[var(--radius-6)] border border-forest/20 bg-surface-deep p-6"
-      : "rounded-[var(--radius-6)] border border-danger-text/20 bg-canvas p-6";
-  return (
-    <article className={styleClasses}>
-      <p className="font-mono text-xs uppercase tracking-[0.08em] text-stone">{label}</p>
-      <dl className="mt-4 space-y-2 font-mono text-sm">
-        {fields.map((f) => (
-          <div key={f.key} className="flex justify-between gap-4">
-            <dt className="text-stone">{f.key}:</dt>
-            <dd className={variant === "without" ? "text-quill" : "text-forest"}>
-              {f.value}
-              {f.flag ? (
-                <span className="ml-2 rounded-sm bg-danger-text/15 px-1 py-0.5 text-xs text-danger-text">
-                  {f.flag}
-                </span>
-              ) : null}
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </article>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden>
+        {muted ? (
+          <path d="M8 2L4 6H1v4h3l4 4V2zm3 3.5v5m2.5-7.5v10" stroke="currentColor" strokeWidth="1.2" fill="none" />
+        ) : (
+          <path d="M8 2L4 6H1v4h3l4 4V2zm3 4.5c.5.5.5 1.5 0 2m1.5-4c1.2 1.2 1.2 3.8 0 5" stroke="currentColor" strokeWidth="1.2" fill="none" />
+        )}
+      </svg>
+    </button>
   );
 }
