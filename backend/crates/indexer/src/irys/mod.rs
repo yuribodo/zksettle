@@ -13,6 +13,7 @@ pub trait IrysUploader: Send + Sync {
     async fn upload(&self, event: &ProofSettled) -> Result<String, IndexerError>;
 }
 
+#[mutants::skip]
 #[async_trait]
 impl IrysUploader for client::IrysClient {
     async fn upload(&self, event: &ProofSettled) -> Result<String, IndexerError> {

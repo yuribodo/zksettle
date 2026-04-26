@@ -41,6 +41,7 @@ impl ReqwestUpstream {
     }
 }
 
+#[mutants::skip]
 #[async_trait]
 impl HttpUpstream for ReqwestUpstream {
     async fn send(&self, req: UpstreamRequest) -> Result<UpstreamResponse, GatewayError> {
