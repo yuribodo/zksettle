@@ -5,6 +5,7 @@ use axum::body::Body;
 use axum::extract::{Request, State};
 use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Response};
+use tracing::warn;
 
 use crate::auth::AuthenticatedKey;
 use crate::error::GatewayError;
@@ -62,12 +63,21 @@ pub async fn proxy_to_upstream(
         .unwrap()
         .as_secs();
 
-    let current = metering::current_count(&state.db, &record.key_hash, now).await?;
-    if current >= record.tier.monthly_limit() {
+    let reserved = metering::try_reserve(
+        &state.db,
+        &record.key_hash,
+        now,
+        record.tier.monthly_limit(),
+    )
+    .await?;
+    if !reserved {
         return Err(GatewayError::QuotaExhausted);
     }
 
     if !state.rate_limiter.check(&record.key_hash, record.tier) {
+        if let Err(e) = metering::release(&state.db, &record.key_hash).await {
+            warn!(key_hash = %record.key_hash, error = %e, "failed to release quota on rate limit");
+        }
         return Err(GatewayError::RateLimited);
     }
 
@@ -97,7 +107,14 @@ pub async fn proxy_to_upstream(
     let upstream_resp = state.upstream.send(upstream_req).await?;
 
     if upstream_resp.status.is_success() || upstream_resp.status.is_redirection() {
-        metering::increment(&state.db, &record.key_hash, now).await?;
+        if let Err(e) = metering::record_daily(&state.db, &record.key_hash, now).await {
+            warn!(key_hash = %record.key_hash, error = %e, "record_daily failed, releasing reservation");
+            if let Err(e) = metering::release(&state.db, &record.key_hash).await {
+                warn!(key_hash = %record.key_hash, error = %e, "failed to release quota after record_daily failure");
+            }
+        }
+    } else if let Err(e) = metering::release(&state.db, &record.key_hash).await {
+        warn!(key_hash = %record.key_hash, error = %e, "failed to release quota on upstream error");
     }
 
     let status = upstream_resp.status;
