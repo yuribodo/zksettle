@@ -14,22 +14,10 @@ export interface HeroCopy {
 }
 
 // ── Act 2 ────────────────────────────────────────────────────────────────────
-export interface RecapField {
-  readonly key: string;
-  readonly value: string;
-  readonly flag: string | null;
-}
-
 export interface ParadoxActCopy {
   readonly eyebrow: string;
-  readonly headline: readonly [string, string];
+  readonly headline: string;
   readonly closer: string;
-  readonly leftLabel: string;
-  readonly rightLabel: string;
-  readonly recap: {
-    readonly leftFields: readonly RecapField[];
-    readonly rightFields: readonly RecapField[];
-  };
 }
 
 // ── Act 3 ────────────────────────────────────────────────────────────────────
@@ -91,26 +79,8 @@ export const COPY: LandingCopy = {
   // ── Act 2: Paradox ────────────────────────────────────────────────────────
   paradoxAct: {
     eyebrow: "$9T moved in 2025. Until now, only one option.",
-    headline: ["Same transaction.", "Two realities."] as const,
-    closer:
-      "Compliance e privacidade — impossível até 2025. Agora é só uma proof.",
-    leftLabel: "Without ZK",
-    rightLabel: "With ZK",
-    // Migrated from TwoRealitiesSection (Task 3.3). Legacy section preserved during transition.
-    recap: {
-      leftFields: [
-        { key: "Recipient", value: "Maria Silva", flag: "GDPR" },
-        { key: "Tax ID", value: "123.456.789-00", flag: "LGPD" },
-        { key: "Country", value: "BR", flag: null },
-        { key: "Amount", value: "$5,200 USDC", flag: null },
-      ] as const,
-      rightFields: [
-        { key: "Recipient", value: "▓▓▓▓▓▓▓", flag: null },
-        { key: "Tax ID", value: "▓▓▓▓▓▓▓", flag: null },
-        { key: "Country", value: "▓▓▓▓▓▓▓", flag: null },
-        { key: "Amount", value: "▓▓▓▓▓▓▓", flag: null },
-      ] as const,
-    },
+    headline: "Same transaction. Two realities.",
+    closer: "Compliance and privacy — one proof.",
   },
 
   // ── Act 3: Engine ─────────────────────────────────────────────────────────
