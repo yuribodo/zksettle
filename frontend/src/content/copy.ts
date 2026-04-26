@@ -62,8 +62,6 @@ export interface MoveCopy {
     readonly label: string;
     readonly lines: readonly [string, string, string];
   };
-  /** @deprecated removed after act-four-move.tsx is deleted */
-  readonly useCases: readonly string[];
   readonly markets: readonly Market[];
   readonly closer: {
     readonly headline: string;
@@ -156,14 +154,6 @@ export const COPY: LandingCopy = {
         "→ zksettle.wrap(transferIx, proof)",
       ] as const,
     },
-    useCases: [
-      "Remittances",
-      "Payroll",
-      "DEX",
-      "Bridges",
-      "Institutional",
-      "Settlements",
-    ] as const,
     markets: [
       { name: "Remittances",   descriptor: "Cross-border value, sub-second." },
       { name: "Payroll",       descriptor: "Salaries on-chain, amounts off-record." },

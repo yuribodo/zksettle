@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
 
+import { useGSAP } from "@gsap/react";
+import { gsap } from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+
 import { buttonVariants } from "@/components/ui/button";
 import { COPY } from "@/content/copy";
 import { DisplayHeading } from "@/components/ui/display-heading";
@@ -11,12 +15,53 @@ import { cn } from "@/lib/cn";
 import { useActPin } from "./use-act-pin";
 import { MarketCell } from "./market-cell";
 
+if (typeof window !== "undefined") {
+  gsap.registerPlugin(ScrollTrigger, useGSAP);
+}
+
 const ACT_DURATION = "+=120%";
 
 export function ActFiveMarkets() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useActPin(containerRef, { duration: ACT_DURATION });
+
+  useGSAP(
+    () => {
+      const root = containerRef.current;
+      if (!root) return;
+
+      const mm = gsap.matchMedia();
+      mm.add("(prefers-reduced-motion: no-preference)", () => {
+        const eyebrow = root.querySelector("[data-markets-eyebrow]");
+        const cells = root.querySelectorAll("[data-markets-cell]");
+        const divider = root.querySelector("[data-markets-divider]");
+        const closer = root.querySelector("[data-markets-closer]");
+
+        gsap.set(eyebrow, { opacity: 0, y: 8 });
+        gsap.set(cells, { opacity: 0, y: 12 });
+        gsap.set(divider, { scaleX: 0, transformOrigin: "left center" });
+        gsap.set(closer, { opacity: 0, y: 12 });
+
+        const tl = gsap.timeline({
+          scrollTrigger: {
+            trigger: root,
+            start: "top 65%",
+            once: true,
+          },
+          defaults: { ease: "power2.out" },
+        });
+
+        tl.to(eyebrow, { opacity: 1, y: 0, duration: 0.3 })
+          .to(cells, { opacity: 1, y: 0, duration: 0.32, stagger: 0.06 }, "-=0.1")
+          .to(divider, { scaleX: 1, duration: 0.3 }, "-=0.1")
+          .to(closer, { opacity: 1, y: 0, duration: 0.4 }, "-=0.15");
+      });
+
+      return () => mm.revert();
+    },
+    { scope: containerRef },
+  );
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
