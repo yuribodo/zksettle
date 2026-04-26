@@ -129,6 +129,166 @@ mod tests {
         assert!(!is_hop_by_hop("x-custom-header"));
     }
 
+    use axum::body::Body;
+    use axum::http::{Method, StatusCode};
+    use std::sync::Arc;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use zksettle_types::gateway::{ApiKeyRecord, Tier};
+
+    use crate::config::Config;
+    use crate::key_store::{hash_key, KeyStore};
+    use crate::metering::Metering;
+    use crate::rate_limit::RateLimitStore;
+    use crate::upstream::{MockHttpUpstream, UpstreamResponse};
+
+    fn record() -> ApiKeyRecord {
+        ApiKeyRecord {
+            key_hash: hash_key("zks_test"),
+            tier: Tier::Developer,
+            owner: "alice".into(),
+            created_at: 0,
+        }
+    }
+
+    fn state(mock: Arc<MockHttpUpstream>) -> Arc<AppState> {
+        Arc::new(AppState {
+            config: Config {
+                port: 4000,
+                upstream_url: "http://upstream.example".into(),
+                log_level: "error".into(),
+                admin_key: None,
+                allow_open_keys: true,
+            },
+            keys: KeyStore::new(),
+            metering: Metering::new(),
+            rate_limiter: RateLimitStore::new(),
+            upstream: mock,
+        })
+    }
+
+    fn build_request() -> Request {
+        Request::builder()
+            .method(Method::GET)
+            .uri("/v1/issuers/foo?x=1")
+            .header("x-keep", "yes")
+            .header("connection", "should-be-stripped")
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    fn now_secs() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn happy_path_forwards_request_and_increments_metering() {
+        let mock = Arc::new(MockHttpUpstream::new());
+        let mut headers = HeaderMap::new();
+        headers.insert("x-upstream", "value".parse().unwrap());
+        mock.queue_response(UpstreamResponse {
+            status: StatusCode::OK,
+            headers,
+            body: axum::body::Bytes::from_static(b"hello"),
+        });
+        let state = state(mock.clone());
+        let rec = record();
+
+        let resp = proxy_to_upstream(
+            State(state.clone()),
+            AuthenticatedKey(rec.clone()),
+            build_request(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::OK);
+        // handler uses SystemTime::now() internally; query with the same clock
+        assert_eq!(state.metering.current_count(&rec.key_hash, now_secs()), 1);
+
+        let sent = mock.last_sent().expect("mock recorded send");
+        assert_eq!(sent.method, Method::GET);
+        assert_eq!(sent.url, "http://upstream.example/issuers/foo?x=1");
+        assert!(
+            sent.headers.contains_key("x-keep"),
+            "non-hop-by-hop headers must reach upstream"
+        );
+        assert!(
+            !sent.headers.contains_key("connection"),
+            "hop-by-hop headers must be stripped"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn upstream_5xx_is_propagated_and_metering_does_not_increment() {
+        let mock = Arc::new(MockHttpUpstream::new());
+        mock.queue_response(UpstreamResponse {
+            status: StatusCode::BAD_GATEWAY,
+            headers: HeaderMap::new(),
+            body: axum::body::Bytes::new(),
+        });
+        let state = state(mock.clone());
+        let rec = record();
+
+        let resp = proxy_to_upstream(
+            State(state.clone()),
+            AuthenticatedKey(rec.clone()),
+            build_request(),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+        assert_eq!(
+            state.metering.current_count(&rec.key_hash, now_secs()),
+            0,
+            "non-success upstream response must not consume quota"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn quota_exhausted_short_circuits_before_upstream_call() {
+        let mock = Arc::new(MockHttpUpstream::new());
+        let state = state(mock.clone());
+        let rec = record();
+        // pre-fill the metering counter with the same wall clock the handler
+        // will read so the period-rollover branch doesn't reset us to zero
+        let now = now_secs();
+        for _ in 0..rec.tier.monthly_limit() {
+            state.metering.increment(&rec.key_hash, now);
+        }
+
+        let err = proxy_to_upstream(State(state.clone()), AuthenticatedKey(rec), build_request())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, GatewayError::QuotaExhausted));
+        assert_eq!(
+            mock.sent_count(),
+            0,
+            "must not call upstream after quota check"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn upstream_transport_error_propagates_as_upstream_variant() {
+        let mock = Arc::new(MockHttpUpstream::new());
+        mock.queue_error(GatewayError::Upstream("network down".into()));
+        let state = state(mock.clone());
+
+        let err = proxy_to_upstream(
+            State(state.clone()),
+            AuthenticatedKey(record()),
+            build_request(),
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(err, GatewayError::Upstream(_)));
+    }
+
     #[test]
     fn filter_hop_by_hop_strips_hop_headers() {
         let mut src = HeaderMap::new();

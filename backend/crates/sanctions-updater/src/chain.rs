@@ -38,7 +38,11 @@ fn build_ix(
     register: bool,
 ) -> Instruction {
     let (pda, _) = issuer_pda(authority, program_id);
-    let name = if register { "register_issuer" } else { "update_issuer_root" };
+    let name = if register {
+        "register_issuer"
+    } else {
+        "update_issuer_root"
+    };
     let mut data = discriminator(name).to_vec();
     roots.serialize(&mut data).unwrap();
 
@@ -52,7 +56,10 @@ fn build_ix(
     ];
     if register {
         #[allow(deprecated)]
-        accounts.push(AccountMeta::new_readonly(solana_sdk::system_program::ID, false));
+        accounts.push(AccountMeta::new_readonly(
+            solana_sdk::system_program::ID,
+            false,
+        ));
     }
 
     Instruction {
@@ -62,6 +69,7 @@ fn build_ix(
     }
 }
 
+#[derive(Debug)]
 pub struct PublishResult {
     pub slot: u64,
     pub did_register: bool,
@@ -114,8 +122,8 @@ pub fn publish_sanctions_root(
     new_sanctions_root: [u8; 32],
     currently_registered: bool,
 ) -> Result<PublishResult, UpdaterError> {
-    let keypair = Keypair::try_from(keypair_bytes)
-        .map_err(|e| UpdaterError::Chain(e.to_string()))?;
+    let keypair =
+        Keypair::try_from(keypair_bytes).map_err(|e| UpdaterError::Chain(e.to_string()))?;
 
     let (merkle_root, _old_sanctions, jurisdiction_root) = if currently_registered {
         read_current_roots(rpc, &keypair.pubkey(), program_id)?
@@ -170,7 +178,10 @@ mod tests {
 
     #[test]
     fn discriminator_different_names_differ() {
-        assert_ne!(discriminator("register_issuer"), discriminator("update_issuer_root"));
+        assert_ne!(
+            discriminator("register_issuer"),
+            discriminator("update_issuer_root")
+        );
     }
 
     #[test]
@@ -179,5 +190,131 @@ mod tests {
         let hash = sha2::Sha256::digest(b"global:register_issuer");
         let expected: [u8; 8] = hash[..8].try_into().unwrap();
         assert_eq!(discriminator("register_issuer"), expected);
+    }
+
+    use zksettle_rpc::{MockSolanaRpc, RpcError};
+
+    fn keypair_bytes() -> Vec<u8> {
+        Keypair::new().to_bytes().to_vec()
+    }
+
+    /// Builds a 137-byte payload matching the on-chain Issuer PDA layout
+    /// (8 disc + 32 authority + 32 merkle + 32 sanctions + 32 jurisdiction
+    /// + 8 slot + 1 bump) used by `read_current_roots`.
+    fn pda_payload(merkle: [u8; 32], sanctions: [u8; 32], jurisdiction: [u8; 32]) -> Vec<u8> {
+        let mut buf = vec![0u8; 8 + 32]; // disc + authority padding
+        buf.extend_from_slice(&merkle);
+        buf.extend_from_slice(&sanctions);
+        buf.extend_from_slice(&jurisdiction);
+        buf.extend_from_slice(&[0u8; 8]); // slot
+        buf.push(255); // bump
+        buf
+    }
+
+    #[test]
+    fn is_issuer_registered_returns_true_when_account_exists() {
+        let rpc = MockSolanaRpc::new();
+        let kp = Keypair::new();
+        let program = Pubkey::new_unique();
+        let (pda, _) = issuer_pda(&kp.pubkey(), &program);
+        rpc.set_account(pda, vec![0u8; 137]);
+
+        assert!(is_issuer_registered(&rpc, &kp.pubkey(), &program).unwrap());
+    }
+
+    #[test]
+    fn is_issuer_registered_returns_false_when_account_missing() {
+        let rpc = MockSolanaRpc::new();
+        let kp = Keypair::new();
+        let program = Pubkey::new_unique();
+        assert!(!is_issuer_registered(&rpc, &kp.pubkey(), &program).unwrap());
+    }
+
+    #[test]
+    fn read_current_roots_extracts_three_root_slices() {
+        let rpc = MockSolanaRpc::new();
+        let kp = Keypair::new();
+        let program = Pubkey::new_unique();
+        let (pda, _) = issuer_pda(&kp.pubkey(), &program);
+
+        let merkle = [11u8; 32];
+        let sanctions = [22u8; 32];
+        let jurisdiction = [33u8; 32];
+        rpc.set_account(pda, pda_payload(merkle, sanctions, jurisdiction));
+
+        let (m, s, j) = read_current_roots(&rpc, &kp.pubkey(), &program).unwrap();
+        assert_eq!(m, merkle);
+        assert_eq!(s, sanctions);
+        assert_eq!(j, jurisdiction);
+    }
+
+    #[test]
+    fn read_current_roots_errors_when_pda_missing() {
+        let rpc = MockSolanaRpc::new();
+        let kp = Keypair::new();
+        let err = read_current_roots(&rpc, &kp.pubkey(), &Pubkey::new_unique()).unwrap_err();
+        assert!(matches!(err, UpdaterError::Chain(msg) if msg.contains("not found")));
+    }
+
+    #[test]
+    fn read_current_roots_errors_when_data_too_short() {
+        let rpc = MockSolanaRpc::new();
+        let kp = Keypair::new();
+        let program = Pubkey::new_unique();
+        let (pda, _) = issuer_pda(&kp.pubkey(), &program);
+        rpc.set_account(pda, vec![0u8; 64]); // need ≥136
+
+        let err = read_current_roots(&rpc, &kp.pubkey(), &program).unwrap_err();
+        assert!(matches!(err, UpdaterError::Chain(msg) if msg.contains("too short")));
+    }
+
+    #[test]
+    fn publish_sanctions_root_first_call_uses_register_discriminator() {
+        let rpc = MockSolanaRpc::new();
+        let kb = keypair_bytes();
+        let program = Pubkey::new_unique();
+
+        let result = publish_sanctions_root(&rpc, &kb, &program, [9u8; 32], false).unwrap();
+
+        assert!(result.did_register);
+        assert_eq!(rpc.send_count(), 1);
+        let sent = &rpc.sent_instructions()[0];
+        assert_eq!(&sent.data[..8], &discriminator("register_issuer"));
+    }
+
+    #[test]
+    fn publish_sanctions_root_when_registered_uses_update_discriminator() {
+        let rpc = MockSolanaRpc::new();
+        let kp = Keypair::try_from(&keypair_bytes()[..]).unwrap();
+        let program = Pubkey::new_unique();
+        let (pda, _) = issuer_pda(&kp.pubkey(), &program);
+        rpc.set_account(pda, pda_payload([1u8; 32], [2u8; 32], [3u8; 32]));
+
+        let result =
+            publish_sanctions_root(&rpc, &kp.to_bytes(), &program, [99u8; 32], true).unwrap();
+
+        assert!(!result.did_register);
+        assert_eq!(rpc.send_count(), 1);
+        let sent = &rpc.sent_instructions()[0];
+        assert_eq!(&sent.data[..8], &discriminator("update_issuer_root"));
+        // body must carry the new sanctions root, not the old one
+        assert!(sent.data.windows(32).any(|w| w == [99u8; 32]));
+    }
+
+    #[test]
+    fn publish_sanctions_root_propagates_rpc_failure() {
+        let rpc = MockSolanaRpc::new();
+        rpc.queue_error(RpcError::Call("simulated".into()));
+
+        let err = publish_sanctions_root(
+            &rpc,
+            &keypair_bytes(),
+            &Pubkey::new_unique(),
+            [0u8; 32],
+            false,
+        )
+        .unwrap_err();
+        assert!(matches!(err, UpdaterError::Chain(_)));
+        assert_eq!(rpc.send_count(), 0);
     }
 }

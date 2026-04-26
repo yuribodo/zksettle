@@ -11,6 +11,7 @@ use reqwest::Client;
 
 use crate::error::GatewayError;
 
+#[derive(Clone, Debug)]
 pub struct UpstreamRequest {
     pub method: Method,
     pub url: String,
@@ -18,6 +19,7 @@ pub struct UpstreamRequest {
     pub body: Bytes,
 }
 
+#[derive(Debug)]
 pub struct UpstreamResponse {
     pub status: StatusCode,
     pub headers: HeaderMap,
@@ -87,6 +89,292 @@ impl HttpUpstream for ReqwestUpstream {
             )));
         }
 
-        Ok(UpstreamResponse { status, headers, body })
+        Ok(UpstreamResponse {
+            status,
+            headers,
+            body,
+        })
+    }
+}
+
+#[cfg(any(test, feature = "test-util"))]
+pub mod mock {
+    use std::collections::VecDeque;
+    use std::sync::Mutex;
+
+    use super::{HttpUpstream, UpstreamRequest, UpstreamResponse};
+    use crate::error::GatewayError;
+    use async_trait::async_trait;
+    use axum::body::Bytes;
+    use axum::http::{HeaderMap, StatusCode};
+
+    pub struct MockHttpUpstream {
+        responses: Mutex<VecDeque<UpstreamResponse>>,
+        sent: Mutex<Vec<UpstreamRequest>>,
+        pending_error: Mutex<Option<GatewayError>>,
+    }
+
+    impl MockHttpUpstream {
+        pub fn new() -> Self {
+            Self {
+                responses: Mutex::new(VecDeque::new()),
+                sent: Mutex::new(Vec::new()),
+                pending_error: Mutex::new(None),
+            }
+        }
+
+        pub fn queue_response(&self, resp: UpstreamResponse) {
+            self.responses.lock().unwrap().push_back(resp);
+        }
+
+        pub fn queue_ok(&self) {
+            self.queue_response(UpstreamResponse {
+                status: StatusCode::OK,
+                headers: HeaderMap::new(),
+                body: Bytes::new(),
+            });
+        }
+
+        pub fn queue_error(&self, error: GatewayError) {
+            *self.pending_error.lock().unwrap() = Some(error);
+        }
+
+        pub fn sent_count(&self) -> usize {
+            self.sent.lock().unwrap().len()
+        }
+
+        pub fn last_sent(&self) -> Option<UpstreamRequest> {
+            self.sent.lock().unwrap().last().cloned()
+        }
+    }
+
+    impl Default for MockHttpUpstream {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    #[async_trait]
+    impl HttpUpstream for MockHttpUpstream {
+        async fn send(&self, req: UpstreamRequest) -> Result<UpstreamResponse, GatewayError> {
+            if let Some(err) = self.pending_error.lock().unwrap().take() {
+                return Err(err);
+            }
+            self.sent.lock().unwrap().push(req);
+            self.responses.lock().unwrap().pop_front().ok_or_else(|| {
+                GatewayError::Upstream("MockHttpUpstream: no queued response".into())
+            })
+        }
+    }
+}
+
+#[cfg(any(test, feature = "test-util"))]
+pub use mock::MockHttpUpstream;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn mock_returns_queued_response_in_fifo_order() {
+        let mock = MockHttpUpstream::new();
+        mock.queue_response(UpstreamResponse {
+            status: StatusCode::OK,
+            headers: HeaderMap::new(),
+            body: Bytes::from_static(b"first"),
+        });
+        mock.queue_response(UpstreamResponse {
+            status: StatusCode::CREATED,
+            headers: HeaderMap::new(),
+            body: Bytes::from_static(b"second"),
+        });
+
+        let r1 = mock
+            .send(UpstreamRequest {
+                method: Method::GET,
+                url: "http://x/1".into(),
+                headers: HeaderMap::new(),
+                body: Bytes::new(),
+            })
+            .await
+            .unwrap();
+        assert_eq!(r1.status, StatusCode::OK);
+        assert_eq!(r1.body, Bytes::from_static(b"first"));
+
+        let r2 = mock
+            .send(UpstreamRequest {
+                method: Method::POST,
+                url: "http://x/2".into(),
+                headers: HeaderMap::new(),
+                body: Bytes::new(),
+            })
+            .await
+            .unwrap();
+        assert_eq!(r2.status, StatusCode::CREATED);
+
+        assert_eq!(mock.sent_count(), 2);
+    }
+
+    #[tokio::test]
+    async fn mock_send_errors_when_no_response_queued() {
+        let mock = MockHttpUpstream::new();
+        let err = mock
+            .send(UpstreamRequest {
+                method: Method::GET,
+                url: "http://x".into(),
+                headers: HeaderMap::new(),
+                body: Bytes::new(),
+            })
+            .await
+            .unwrap_err();
+        assert!(matches!(err, GatewayError::Upstream(_)));
+    }
+
+    #[tokio::test]
+    async fn queued_error_fires_once_and_does_not_record_send() {
+        let mock = MockHttpUpstream::new();
+        mock.queue_error(GatewayError::Upstream("boom".into()));
+        mock.queue_ok();
+
+        let err = mock
+            .send(UpstreamRequest {
+                method: Method::GET,
+                url: "http://x".into(),
+                headers: HeaderMap::new(),
+                body: Bytes::new(),
+            })
+            .await
+            .unwrap_err();
+        assert!(matches!(err, GatewayError::Upstream(_)));
+        assert_eq!(mock.sent_count(), 0, "errored send must not be recorded");
+
+        // next call succeeds because the queued error was consumed
+        mock.send(UpstreamRequest {
+            method: Method::GET,
+            url: "http://x".into(),
+            headers: HeaderMap::new(),
+            body: Bytes::new(),
+        })
+        .await
+        .unwrap();
+        assert_eq!(mock.sent_count(), 1);
+    }
+
+    // ReqwestUpstream size guard tests — raw TCP server to exercise CL and body-length guards.
+    mod size_guard {
+        use super::*;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        const MAX_BYTES: usize = 1024 * 1024;
+
+        async fn spawn_raw_server(response_bytes: Vec<u8>) -> u16 {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let port = listener.local_addr().unwrap().port();
+            tokio::spawn(async move {
+                loop {
+                    let (mut sock, _) = match listener.accept().await {
+                        Ok(s) => s,
+                        Err(_) => return,
+                    };
+                    let bytes = response_bytes.clone();
+                    tokio::spawn(async move {
+                        // drain the request line + headers (best effort)
+                        let mut buf = vec![0u8; 4096];
+                        let _ = sock.read(&mut buf).await;
+                        let _ = sock.write_all(&bytes).await;
+                        let _ = sock.shutdown().await;
+                    });
+                }
+            });
+            port
+        }
+
+        fn req(port: u16) -> UpstreamRequest {
+            UpstreamRequest {
+                method: Method::GET,
+                url: format!("http://127.0.0.1:{port}/"),
+                headers: HeaderMap::new(),
+                body: Bytes::new(),
+            }
+        }
+
+        // Kills: *→+, *→/ on MAX constant; >→< on CL and body guards
+        #[tokio::test]
+        async fn under_limit_response_succeeds() {
+            let body = vec![b'a'; 4096];
+            let mut resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            )
+            .into_bytes();
+            resp.extend_from_slice(&body);
+            let port = spawn_raw_server(resp).await;
+
+            let upstream = ReqwestUpstream::new(Client::new());
+            let result = upstream.send(req(port)).await.expect("must accept 4KB");
+            assert_eq!(result.status, StatusCode::OK);
+            assert_eq!(result.body.len(), 4096);
+        }
+
+        // Kills: >→==, >→< on CL guard
+        #[tokio::test]
+        async fn oversized_content_length_header_is_rejected() {
+            // Lie about CL: claim 2MB, send empty body, close. Reqwest will
+            // hand the headers to our code BEFORE attempting body read — our
+            // line-69 guard fires immediately.
+            let resp = b"HTTP/1.1 200 OK\r\nContent-Length: 2097152\r\nConnection: close\r\n\r\n"
+                .to_vec();
+            let port = spawn_raw_server(resp).await;
+
+            let upstream = ReqwestUpstream::new(Client::new());
+            let err = upstream
+                .send(req(port))
+                .await
+                .expect_err("oversized CL must be rejected");
+            assert!(
+                matches!(&err, GatewayError::Upstream(msg) if msg.contains("too large")),
+                "unexpected error: {err:?}"
+            );
+        }
+
+        // Kills: >→>=, >→== on CL and body guards (boundary)
+        #[tokio::test]
+        async fn exactly_max_size_response_succeeds() {
+            let body = vec![0u8; MAX_BYTES];
+            let mut resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                MAX_BYTES
+            )
+            .into_bytes();
+            resp.extend_from_slice(&body);
+            let port = spawn_raw_server(resp).await;
+
+            let upstream = ReqwestUpstream::new(Client::new());
+            let result = upstream
+                .send(req(port))
+                .await
+                .expect("body exactly at MAX must pass");
+            assert_eq!(result.body.len(), MAX_BYTES);
+        }
+
+        // Kills: >→==, >→< on body-length guard (no CL header)
+        #[tokio::test]
+        async fn oversized_body_without_content_length_is_rejected() {
+            let body = vec![0u8; MAX_BYTES + 1];
+            let mut resp = b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n".to_vec();
+            resp.extend_from_slice(&body);
+            let port = spawn_raw_server(resp).await;
+
+            let upstream = ReqwestUpstream::new(Client::new());
+            let err = upstream
+                .send(req(port))
+                .await
+                .expect_err("oversized chunked-style body must be rejected");
+            assert!(
+                matches!(&err, GatewayError::Upstream(msg) if msg.contains("too large")),
+                "unexpected error: {err:?}"
+            );
+        }
     }
 }

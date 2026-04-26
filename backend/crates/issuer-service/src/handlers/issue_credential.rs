@@ -17,7 +17,7 @@ fn default_jurisdiction() -> String {
     "US".to_string()
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct IssueResponse {
     pub wallet: String,
     pub leaf_index: usize,
@@ -69,10 +69,109 @@ pub async fn handler(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use tokio::sync::RwLock;
+
     use super::*;
+    use crate::state::IssuerState;
+    use crate::StatePath;
+
+    fn empty_state_path() -> axum::Extension<StatePath> {
+        axum::Extension(StatePath(None))
+    }
 
     #[test]
     fn default_jurisdiction_is_us() {
         assert_eq!(default_jurisdiction(), "US");
+    }
+
+    #[tokio::test]
+    async fn happy_path_inserts_with_provided_jurisdiction() {
+        let state: SharedState = Arc::new(RwLock::new(IssuerState::new()));
+        let hex = format!("0x{}", hex::encode([1u8; 32]));
+
+        let resp = handler(
+            State(state.clone()),
+            empty_state_path(),
+            Json(IssueRequest {
+                wallet: hex.clone(),
+                jurisdiction: "BR".into(),
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+
+        assert_eq!(resp.jurisdiction, "BR");
+        assert_eq!(resp.leaf_index, 0);
+        let st = state.read().await;
+        assert_eq!(st.credentials[&[1u8; 32]].jurisdiction, "BR");
+        assert!(st.roots_dirty);
+    }
+
+    #[tokio::test]
+    async fn second_credential_gets_next_leaf_index() {
+        let state: SharedState = Arc::new(RwLock::new(IssuerState::new()));
+
+        for (i, byte) in [1u8, 2u8].iter().enumerate() {
+            let resp = handler(
+                State(state.clone()),
+                empty_state_path(),
+                Json(IssueRequest {
+                    wallet: format!("0x{}", hex::encode([*byte; 32])),
+                    jurisdiction: "US".into(),
+                }),
+            )
+            .await
+            .unwrap()
+            .0;
+            assert_eq!(resp.leaf_index, i);
+        }
+    }
+
+    #[tokio::test]
+    async fn duplicate_wallet_returns_conflict() {
+        let state: SharedState = Arc::new(RwLock::new(IssuerState::new()));
+        let hex = format!("0x{}", hex::encode([3u8; 32]));
+
+        let _ = handler(
+            State(state.clone()),
+            empty_state_path(),
+            Json(IssueRequest {
+                wallet: hex.clone(),
+                jurisdiction: "US".into(),
+            }),
+        )
+        .await
+        .unwrap();
+
+        let err = handler(
+            State(state),
+            empty_state_path(),
+            Json(IssueRequest {
+                wallet: hex,
+                jurisdiction: "US".into(),
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(err, ServiceError::DuplicateWallet));
+    }
+
+    #[tokio::test]
+    async fn invalid_hex_returns_invalid_hex() {
+        let state: SharedState = Arc::new(RwLock::new(IssuerState::new()));
+        let err = handler(
+            State(state),
+            empty_state_path(),
+            Json(IssueRequest {
+                wallet: "bad-hex".into(),
+                jurisdiction: "US".into(),
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(err, ServiceError::InvalidHex(_)));
     }
 }
