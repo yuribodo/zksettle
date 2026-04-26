@@ -52,12 +52,19 @@ export interface EngineCopy {
 }
 
 // ── Act 4 ────────────────────────────────────────────────────────────────────
+export interface Market {
+  readonly name: string;
+  readonly descriptor: string;
+}
+
 export interface MoveCopy {
   readonly code: {
     readonly label: string;
     readonly lines: readonly [string, string, string];
   };
+  /** @deprecated removed after act-four-move.tsx is deleted */
   readonly useCases: readonly string[];
+  readonly markets: readonly Market[];
   readonly closer: {
     readonly headline: string;
     readonly sub: string;
@@ -156,6 +163,14 @@ export const COPY: LandingCopy = {
       "Bridges",
       "Institutional",
       "Settlements",
+    ] as const,
+    markets: [
+      { name: "Remittances",   descriptor: "Cross-border value, sub-second." },
+      { name: "Payroll",       descriptor: "Salaries on-chain, amounts off-record." },
+      { name: "DEX",           descriptor: "Private flow, public proof." },
+      { name: "Bridges",       descriptor: "One identity, every chain." },
+      { name: "Institutional", descriptor: "Desk-grade compliance, retail UX." },
+      { name: "Settlements",   descriptor: "Batch clearing, zero PII." },
     ] as const,
     closer: {
       headline: "Compliance is no longer a six-month moat.",
