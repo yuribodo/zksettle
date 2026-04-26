@@ -3,7 +3,8 @@
 import { useEffect, useRef } from "react";
 import { OrthographicCamera, Scene, WebGLRenderer } from "three";
 
-import { LedgerParticles } from "./passes/ledger-particles";
+import { LensWhisper } from "./passes/lens-whisper";
+import { ScrollDistortion } from "./passes/scroll-distortion";
 import { TIER_PARAMS, type CanvasTier } from "./types";
 import { useCanvasStage } from "./use-canvas-stage";
 
@@ -70,33 +71,28 @@ export function PersistentCanvas() {
 
     const initialW = container.clientWidth || window.innerWidth;
     const initialH = container.clientHeight || window.innerHeight;
-    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-    renderer.setPixelRatio(pixelRatio);
-    renderer.setSize(initialW, initialH);
-    renderer.setClearColor(0xfafaf7, 1);
-    container.appendChild(renderer.domElement);
 
     let tier: CanvasTier = pickInitialTier(probe.supportsHighp);
     let tierParams = TIER_PARAMS[tier];
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, tierParams.dpr);
+    renderer.setPixelRatio(pixelRatio);
+    renderer.setSize(initialW, initialH);
+    renderer.setClearColor(0x0a0a0a, 1);
+    container.appendChild(renderer.domElement);
+
     document.documentElement.dataset.canvasTier = tier;
 
     const scene = new Scene();
     const camera = new OrthographicCamera(-1, 1, 1, -1, 0, 10);
     camera.position.z = 5;
 
-    // Wordmark sits on the right side of the hero (positive X in NDC, slightly below center).
-    // Ledger column sits in roughly the same area but taller and narrower.
-    const particles = new LedgerParticles(renderer, {
-      fboSize: tierParams.fbo,
-      pointSize: 2.4,
-      wordmark: "ZKSETTLE",
-      wordmarkCenter: { x: 0.42, y: 0.0 },
-      wordmarkScale: { x: 0.78, y: 0.22 },
-      ledgerCenter: { x: 0.42, y: -0.05 },
-      ledgerScale: { x: 0.55, y: 0.55 },
-    });
-    particles.setPixelRatio(pixelRatio);
-    particles.addToScene(scene);
+    const lw = new LensWhisper();
+    lw.addToScene(scene);
+    lw.setSize(initialW, initialH, pixelRatio);
+
+    const sd = new ScrollDistortion();
+    sd.addToScene(scene);
+    sd.setSize(initialW, initialH, pixelRatio);
 
     const fitCamera = (w: number, h: number) => {
       const aspect = w / Math.max(h, 1);
@@ -106,20 +102,10 @@ export function PersistentCanvas() {
       camera.bottom = -1;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+      lw.setSize(w, h, renderer.getPixelRatio());
+      sd.setSize(w, h, renderer.getPixelRatio());
     };
     fitCamera(initialW, initialH);
-
-    const onPointerMove = (e: PointerEvent) => {
-      const x = (e.clientX / window.innerWidth) * 2 - 1;
-      const y = -((e.clientY / window.innerHeight) * 2 - 1);
-      // Pointer lives in NDC. Multiply by aspect so it lines up with particle space.
-      const aspect = window.innerWidth / Math.max(window.innerHeight, 1);
-      scrollStateRef.current.mouseTarget.x = x * aspect;
-      scrollStateRef.current.mouseTarget.y = y;
-      // Tween up the pull strength on movement (decays naturally below).
-      scrollStateRef.current.rippleProgress = 1;
-    };
-    window.addEventListener("pointermove", onPointerMove, { passive: true });
 
     const onResize = () => {
       const w = container.clientWidth || window.innerWidth;
@@ -133,16 +119,24 @@ export function PersistentCanvas() {
     let windowStart = lastTick;
     let frames = 0;
     let firstFrameRendered = false;
-    let pullStrength = 0;
     let visibilityOpacity = 0;
+    let lastScrollY = window.scrollY;
+    let smoothVelocity = 0;
+    let scrollDistortionOpacity = 0;
     renderer.domElement.style.opacity = "0";
     renderer.domElement.style.transition = "none";
 
     const downgrade = (target: CanvasTier) => {
-      if (tier === target) return;
-      if (tier === "low") return;
+      if (tier === target || tier === "low") return;
       tier = target;
       tierParams = TIER_PARAMS[tier];
+      const newDpr = Math.min(window.devicePixelRatio || 1, tierParams.dpr);
+      renderer.setPixelRatio(newDpr);
+      const w = container.clientWidth || window.innerWidth;
+      const h = container.clientHeight || window.innerHeight;
+      renderer.setSize(w, h);
+      lw.setSize(w, h, newDpr);
+      sd.setSize(w, h, newDpr);
       document.documentElement.dataset.canvasTier = tier;
     };
 
@@ -165,44 +159,69 @@ export function PersistentCanvas() {
       lastTick = now;
 
       const t = now * 0.001;
-      const state = scrollStateRef.current;
 
-      // Compute global scroll progress from document scroll.
-      const docEl = document.documentElement;
-      const scrollable = Math.max(docEl.scrollHeight - window.innerHeight, 1);
-      state.global = Math.min(Math.max(window.scrollY / scrollable, 0), 1);
+      const currentScrollY = window.scrollY;
+      const rawVelocity = Math.abs(currentScrollY - lastScrollY) / Math.max(dt, 0.001);
+      lastScrollY = currentScrollY;
+      const normalizedVelocity = Math.min(rawVelocity / 1500, 1);
+      smoothVelocity += (normalizedVelocity - smoothVelocity) * (1 - Math.exp(-dt * 6));
 
-      // Hero-bound visibility: canvas fades to 0 once user scrolls past hero
-      // so it doesn't compete with subsequent acts. Hero ≈ first 1.2 viewport
-      // heights (the pin duration).
       const heroExtent = window.innerHeight * 1.2;
-      const heroProgress = Math.min(window.scrollY / heroExtent, 1.4);
-      const targetVisibility = heroProgress < 0.7
-        ? 1
-        : Math.max(1 - (heroProgress - 0.7) / 0.3, 0);
-      visibilityOpacity += (targetVisibility - visibilityOpacity)
-        * (1 - Math.exp(-dt * 7));
+      const heroProgress = Math.min(Math.max(window.scrollY / heroExtent, 0), 1);
 
-      // Morph disabled for now — wordmark is the wow element. Particles drift
-      // upward (out of frame) as the user scrolls past the hero; fade-out
-      // handles the rest.
-      particles.setTargetMix(0);
-      particles.setUniform("uGlobal", state.global);
-      particles.setUniform("uOpacity", visibilityOpacity);
+      const targetHeroVis =
+        heroProgress < 0.7
+          ? 1
+          : Math.max(1 - (heroProgress - 0.7) / 0.3, 0);
 
-      // Mouse position lerp for smooth follow.
-      const lerpStep = 1 - Math.exp(-dt * 7);
-      state.mouse.x += (state.mouseTarget.x - state.mouse.x) * lerpStep;
-      state.mouse.y += (state.mouseTarget.y - state.mouse.y) * lerpStep;
+      const atp = scrollStateRef.current.actTwoProgress;
+      let actTwoVis = 0;
+      if (atp > 0 && atp < 1) {
+        if (atp < 0.05) actTwoVis = atp / 0.05;
+        else if (atp > 0.88) actTwoVis = (1 - atp) / 0.12;
+        else actTwoVis = 1;
+        actTwoVis *= 0.75;
+      }
 
-      // Pull strength decays smoothly when not refreshed.
-      const target = state.rippleProgress;
-      pullStrength += (target - pullStrength) * (1 - Math.exp(-dt * 3));
-      // Decay the trigger so the effect fades naturally between movements.
-      state.rippleProgress *= Math.exp(-dt * 1.4);
+      const bprog = scrollStateRef.current.breachProgress;
+      let breachVis = 0;
+      if (bprog > 0) {
+        if (bprog < 0.05) breachVis = 0.85 * (bprog / 0.05);
+        else if (bprog < 0.55) breachVis = 0.85;
+        else breachVis = 0.85 * Math.max(0, 1 - (bprog - 0.55) / 0.35);
+      }
 
-      particles.setMouse(state.mouse.x, state.mouse.y, pullStrength);
-      particles.step(t, 1);
+      const a3p = scrollStateRef.current.actThreeProgress;
+      let actThreeVis = 0;
+      if (a3p > 0 && a3p < 1) {
+        if (a3p < 0.05) actThreeVis = a3p / 0.05;
+        else if (a3p > 0.9) actThreeVis = (1 - a3p) / 0.1;
+        else actThreeVis = 1;
+      }
+
+      const a5p = scrollStateRef.current.actFiveProgress;
+      let actFiveVis = 0;
+      if (a5p > 0 && a5p < 1) {
+        if (a5p < 0.05) actFiveVis = a5p / 0.05;
+        else if (a5p > 0.9) actFiveVis = (1 - a5p) / 0.1;
+        else actFiveVis = 1;
+      }
+
+      const scrollDistortionTarget = Math.max(actThreeVis, actFiveVis);
+      scrollDistortionOpacity += (scrollDistortionTarget - scrollDistortionOpacity) * (1 - Math.exp(-dt * 7));
+
+      const targetVisibility = Math.max(targetHeroVis, actTwoVis, breachVis);
+      visibilityOpacity +=
+        (targetVisibility - visibilityOpacity) * (1 - Math.exp(-dt * 7));
+
+      lw.setOpacity(visibilityOpacity);
+      lw.step(t);
+      lw.setActTwoProgress(atp);
+      lw.setBreachProgress(bprog);
+
+      sd.setOpacity(scrollDistortionOpacity);
+      sd.setScrollVelocity(smoothVelocity);
+      sd.step(t);
 
       renderer.render(scene, camera);
 
@@ -222,10 +241,10 @@ export function PersistentCanvas() {
     return () => {
       if (rafId !== 0) cancelAnimationFrame(rafId);
       window.removeEventListener("resize", onResize);
-      window.removeEventListener("pointermove", onPointerMove);
       delete document.documentElement.dataset.canvasOn;
       delete document.documentElement.dataset.canvasTier;
-      particles.dispose();
+      lw.dispose();
+      sd.dispose();
       renderer.dispose();
       if (renderer.domElement.parentElement === container) {
         container.removeChild(renderer.domElement);
