@@ -60,7 +60,7 @@ export function ActThreeEngine() {
   const { scrollStateRef } = useCanvasStage();
 
   useActPin(containerRef, {
-    duration: "+=200%",
+    duration: "+=150%",
     scrub: 0.5,
     onUpdate: (progress) => {
       scrollStateRef.current.actThreeProgress = progress;

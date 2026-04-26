@@ -11,27 +11,14 @@ import { buttonVariants } from "@/components/ui/button";
 import { COPY } from "@/content/copy";
 import { DisplayHeading } from "@/components/ui/display-heading";
 import { cn } from "@/lib/cn";
-import { useCanvasStage } from "@/components/landing/canvas/use-canvas-stage";
-
-import { useActPin } from "./use-act-pin";
 import { MarketCell } from "./market-cell";
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger, useGSAP);
 }
 
-const ACT_DURATION = "+=120%";
-
 export function ActFiveMarkets() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { scrollStateRef } = useCanvasStage();
-
-  useActPin(containerRef, {
-    duration: ACT_DURATION,
-    onUpdate: (progress) => {
-      scrollStateRef.current.actFiveProgress = progress;
-    },
-  });
 
   useGSAP(
     () => {
@@ -53,7 +40,7 @@ export function ActFiveMarkets() {
         const tl = gsap.timeline({
           scrollTrigger: {
             trigger: root,
-            start: "top 65%",
+            start: "top 85%",
             once: true,
           },
           defaults: { ease: "power2.out" },
@@ -65,10 +52,7 @@ export function ActFiveMarkets() {
           .to(closer, { opacity: 1, y: 0, duration: 0.4 }, "-=0.15");
       });
 
-      return () => {
-        scrollStateRef.current.actFiveProgress = 0;
-        mm.revert();
-      };
+      return () => mm.revert();
     },
     { scope: containerRef },
   );
@@ -81,9 +65,9 @@ export function ActFiveMarkets() {
     <section
       ref={containerRef}
       aria-labelledby="act-five-heading"
-      className="relative isolate min-h-screen overflow-hidden bg-canvas text-ink"
+      className="relative isolate overflow-hidden bg-canvas text-ink"
     >
-      <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col justify-center gap-8 px-6 py-16 md:px-8 lg:gap-7 lg:py-12">
+      <div className="relative mx-auto flex max-w-6xl flex-col gap-8 px-6 py-24 md:px-8 md:py-32 lg:gap-7">
         <p
           className="font-mono text-xs uppercase tracking-[0.18em] text-forest"
           data-markets-eyebrow
