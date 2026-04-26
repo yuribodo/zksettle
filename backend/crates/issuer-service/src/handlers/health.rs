@@ -9,3 +9,14 @@ pub struct HealthResponse {
 pub async fn handler() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn health_returns_ok() {
+        let response = handler().await;
+        assert_eq!(response.0.status, "ok");
+    }
+}
