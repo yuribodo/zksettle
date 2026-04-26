@@ -1,3 +1,4 @@
+use sea_orm::prelude::Expr;
 use sea_orm::*;
 use zksettle_types::gateway::{DailyUsage, UsageRecord};
 
@@ -8,6 +9,8 @@ const PERIOD_SECS: u64 = 30 * 24 * 60 * 60;
 const DAY_SECS: u64 = 24 * 60 * 60;
 const MAX_DAILY_BUCKETS: u64 = 400;
 
+/// Unconditionally increment usage (no limit check). Used only in tests to seed data.
+#[cfg(test)]
 pub async fn increment(
     db: &DatabaseConnection,
     key_hash: &str,
@@ -34,16 +37,89 @@ pub async fn increment(
     ))
     .await?;
 
-    let day = day_start(now) as i64;
+    record_daily(db, key_hash, now).await?;
+    Ok(())
+}
 
-    db.execute(Statement::from_sql_and_values(
+/// Atomically reserve one request against the quota. Returns `true` if
+/// the reservation succeeded (count was strictly below `limit`), `false`
+/// if quota is exhausted. Allows exactly `limit` total requests per period.
+/// Handles period rollover.
+pub async fn try_reserve(
+    db: &DatabaseConnection,
+    key_hash: &str,
+    now: u64,
+    limit: u64,
+) -> Result<bool, GatewayError> {
+    let now_i = now as i64;
+    let period = PERIOD_SECS as i64;
+    let limit_i = limit as i64;
+
+    let result = db.execute(Statement::from_sql_and_values(
         DbBackend::Postgres,
-        r#"INSERT INTO daily_usage (key_hash, day_start, count)
-           VALUES ($1, $2, 1)
-           ON CONFLICT (key_hash, day_start) DO UPDATE SET count = daily_usage.count + 1"#,
-        [key_hash.into(), day.into()],
+        r#"INSERT INTO usage_records (key_hash, request_count, period_start, last_request)
+           VALUES ($1, 1, $2, $2)
+           ON CONFLICT (key_hash) DO UPDATE SET
+             request_count = CASE
+               WHEN $2 - usage_records.period_start >= $3 THEN 1
+               ELSE usage_records.request_count + 1
+             END,
+             period_start = CASE
+               WHEN $2 - usage_records.period_start >= $3 THEN $2
+               ELSE usage_records.period_start
+             END,
+             last_request = $2
+           WHERE $2 - usage_records.period_start >= $3
+              OR usage_records.request_count < $4"#,
+        [key_hash.into(), now_i.into(), period.into(), limit_i.into()],
     ))
     .await?;
+
+    Ok(result.rows_affected() > 0)
+}
+
+pub async fn release(
+    db: &DatabaseConnection,
+    key_hash: &str,
+) -> Result<(), GatewayError> {
+    usage_record::Entity::update_many()
+        .col_expr(
+            usage_record::Column::RequestCount,
+            Expr::cust("GREATEST(request_count - 1, 0)"),
+        )
+        .filter(usage_record::Column::KeyHash.eq(key_hash))
+        .exec(db)
+        .await?;
+    Ok(())
+}
+
+pub async fn record_daily(
+    db: &DatabaseConnection,
+    key_hash: &str,
+    now: u64,
+) -> Result<(), GatewayError> {
+    let day = day_start(now) as i64;
+
+    let row = daily_usage::ActiveModel {
+        key_hash: Set(key_hash.to_owned()),
+        day_start: Set(day),
+        count: Set(1),
+    };
+
+    daily_usage::Entity::insert(row)
+        .on_conflict(
+            sea_query::OnConflict::columns([
+                daily_usage::Column::KeyHash,
+                daily_usage::Column::DayStart,
+            ])
+            .value(
+                daily_usage::Column::Count,
+                Expr::col(daily_usage::Column::Count).add(1),
+            )
+            .to_owned(),
+        )
+        .exec(db)
+        .await?;
 
     prune_old_buckets(db, key_hash, now).await?;
 
@@ -119,7 +195,7 @@ async fn prune_old_buckets(
     key_hash: &str,
     now: u64,
 ) -> Result<(), GatewayError> {
-    let cutoff = (now.saturating_sub(MAX_DAILY_BUCKETS * DAY_SECS)) as i64;
+    let cutoff = (now.saturating_sub((MAX_DAILY_BUCKETS - 1) * DAY_SECS)) as i64;
 
     daily_usage::Entity::delete_many()
         .filter(daily_usage::Column::KeyHash.eq(key_hash))
@@ -373,5 +449,70 @@ mod tests {
         assert_eq!(civil_from_days(11_016), (2000, 2, 29));
         assert_eq!(civil_from_days(-719_468), (0, 3, 1));
         assert_eq!(civil_from_days(-719_469), (0, 2, 29));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn try_reserve_under_limit_succeeds() {
+        let db = test_db().await;
+        test_cleanup(&db).await;
+        let kh = seed_key(&db, "reserve-k1").await;
+        assert!(try_reserve(&db, &kh, 1000, 5).await.unwrap());
+        assert_eq!(current_count(&db, &kh, 1000).await.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn try_reserve_at_limit_fails() {
+        let db = test_db().await;
+        test_cleanup(&db).await;
+        let kh = seed_key(&db, "reserve-k2").await;
+        for i in 0..3 {
+            assert!(try_reserve(&db, &kh, 1000 + i, 3).await.unwrap());
+        }
+        assert_eq!(current_count(&db, &kh, 1003).await.unwrap(), 3);
+        assert!(!try_reserve(&db, &kh, 1004, 3).await.unwrap());
+        assert_eq!(current_count(&db, &kh, 1004).await.unwrap(), 3);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn try_reserve_period_rollover_resets() {
+        let db = test_db().await;
+        test_cleanup(&db).await;
+        let kh = seed_key(&db, "reserve-k3").await;
+        for i in 0..3 {
+            try_reserve(&db, &kh, 1000 + i, 3).await.unwrap();
+        }
+        assert!(!try_reserve(&db, &kh, 1004, 3).await.unwrap());
+        let after_period = 1000 + PERIOD_SECS + 1;
+        assert!(try_reserve(&db, &kh, after_period, 3).await.unwrap());
+        assert_eq!(current_count(&db, &kh, after_period).await.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn release_decrements() {
+        let db = test_db().await;
+        test_cleanup(&db).await;
+        let kh = seed_key(&db, "release-k1").await;
+        try_reserve(&db, &kh, 1000, 10).await.unwrap();
+        try_reserve(&db, &kh, 1001, 10).await.unwrap();
+        assert_eq!(current_count(&db, &kh, 1001).await.unwrap(), 2);
+        release(&db, &kh).await.unwrap();
+        assert_eq!(current_count(&db, &kh, 1001).await.unwrap(), 1);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn release_at_zero_stays_at_zero() {
+        let db = test_db().await;
+        test_cleanup(&db).await;
+        let kh = seed_key(&db, "release-k2").await;
+        try_reserve(&db, &kh, 1000, 10).await.unwrap();
+        release(&db, &kh).await.unwrap();
+        assert_eq!(current_count(&db, &kh, 1000).await.unwrap(), 0);
+        release(&db, &kh).await.unwrap();
+        assert_eq!(current_count(&db, &kh, 1000).await.unwrap(), 0);
     }
 }
