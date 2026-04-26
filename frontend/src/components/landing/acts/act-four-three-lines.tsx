@@ -1,11 +1,18 @@
 "use client";
 
+import { useGSAP } from "@gsap/react";
+import { gsap } from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useRef } from "react";
 
 import { COPY } from "@/content/copy";
 import { DisplayHeading } from "@/components/ui/display-heading";
 
 import { useActPin } from "./use-act-pin";
+
+if (typeof window !== "undefined") {
+  gsap.registerPlugin(ScrollTrigger, useGSAP);
+}
 
 const ACT_DURATION = "+=80%";
 
@@ -15,6 +22,43 @@ export function ActFourThreeLines() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useActPin(containerRef, { duration: ACT_DURATION });
+
+  useGSAP(
+    () => {
+      const root = containerRef.current;
+      if (!root) return;
+
+      const mm = gsap.matchMedia();
+      mm.add("(prefers-reduced-motion: no-preference)", () => {
+        const headline = root.querySelector("[data-three-lines-headline]");
+        const ruleTop = root.querySelector('[data-three-lines-rule="top"]');
+        const steps = root.querySelectorAll("[data-three-lines-step]");
+        const ruleBottom = root.querySelector('[data-three-lines-rule="bottom"]');
+        const footer = root.querySelector("[data-three-lines-footer]");
+
+        gsap.set([headline, ...Array.from(steps), footer], { opacity: 0, y: 12 });
+        gsap.set([ruleTop, ruleBottom], { scaleX: 0, transformOrigin: "left center" });
+
+        const tl = gsap.timeline({
+          scrollTrigger: {
+            trigger: root,
+            start: "top 70%",
+            once: true,
+          },
+          defaults: { ease: "power2.out" },
+        });
+
+        tl.to(headline, { opacity: 1, y: 0, duration: 0.35 })
+          .to(ruleTop, { scaleX: 1, duration: 0.28 }, "-=0.15")
+          .to(steps, { opacity: 1, y: 0, duration: 0.28, stagger: 0.08 }, "-=0.1")
+          .to(ruleBottom, { scaleX: 1, duration: 0.22 }, "-=0.1")
+          .to(footer, { opacity: 1, y: 0, duration: 0.2 }, "-=0.05");
+      });
+
+      return () => mm.revert();
+    },
+    { scope: containerRef },
+  );
 
   const { lines } = COPY.move.code;
 
@@ -38,6 +82,7 @@ export function ActFourThreeLines() {
           id="act-four-heading"
           level="l"
           className="text-center text-canvas"
+          data-three-lines-headline
         >
           Three lines.
         </DisplayHeading>
