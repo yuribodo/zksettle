@@ -1,0 +1,17 @@
+[package]
+name = "zksettle-rpc"
+version = "0.1.0"
+edition = "2021"
+description = "SolanaRpc trait abstraction for off-chain ZKSettle services"
+license = "Apache-2.0 OR MIT"
+
+[features]
+default = []
+# Expose MockSolanaRpc to downstream dev-dependencies.
+test-util = []
+
+[dependencies]
+solana-rpc-client = "2.3"
+solana-sdk = "2.3"
+thiserror = "2"
+tracing = "0.1"

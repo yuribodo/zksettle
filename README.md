@@ -120,8 +120,8 @@ sequenceDiagram
 |---|---|---|
 | **ZK Compliance Circuit** | Proves Merkle membership, sanctions exclusion, jurisdiction check, expiry, and nullifier — all in one Groth16 proof | `circuits/` (Noir) |
 
-> ℹ️ **Thin-slice in progress:** `circuits/src/main.nr` currently proves Merkle membership + nullifier only; sanctions, jurisdiction and expiry gates are still pending. The verifier key in `backend/programs/zksettle/src/generated_vk.rs` is regenerated from `default.vk` by `build.rs`, so any circuit change requires refreshing the VK before on-chain proofs will verify.
-| **Anchor program** | On-chain verifier. Exposes `register_issuer()`, `update_issuer_root()`, `verify_proof()`, `check_attestation()`, plus the hook flow: `init_extra_account_meta_list()`, `set_hook_payload()`, `settle_hook()`, `transfer_hook()` | `backend/programs/zksettle/` (Rust) |
+> ℹ️ The circuit implements all five compliance checks (Merkle membership, sanctions exclusion, jurisdiction, credential expiry, nullifier) with 11 public inputs. The verifier key in `backend/programs/zksettle/src/generated_vk.rs` is regenerated from `default.vk` by `build.rs`; any circuit change requires refreshing the VK before on-chain proofs will verify. The deployed VK currently binds 8 public inputs (indices 0–7); indices 8–10 (sanctions_root, jurisdiction_root, timestamp) await VK regeneration.
+| **Anchor program** | On-chain verifier. Exposes `init_attestation_tree()`, `register_issuer()`, `update_issuer_root()`, `verify_proof()`, `check_attestation()`, plus the hook flow: `init_extra_account_meta_list()`, `set_hook_payload()`, `settle_hook()`, `transfer_hook()` | `backend/programs/zksettle/` (Rust) |
 | **Transfer Hook** | Atomic Token-2022 compliance gate. Client stages a proof payload with `set_hook_payload`; Token-2022's Execute entry (or a direct `settle_hook` call) rebinds it to the live transfer, runs `verify_bundle`, and mints a compressed nullifier + attestation via Light CPI. Standalone calls are rejected via the `TransferHookAccount.transferring` flag. | `backend/programs/zksettle/` |
 | **Issuer service** | Credential issuance, Merkle tree maintenance, root publication | `backend/crates/issuer-service/` (Rust) |
 | **Indexer** | Consumes Helius webhooks, persists audit trail to Arweave | `backend/crates/indexer/` (Rust) |
@@ -141,10 +141,10 @@ sequenceDiagram
 | Layer | Technology | Rationale |
 |---|---|---|
 | Runtime | Solana + SBF | Only chain with `alt_bn128` pairing syscalls |
-| Program framework | Anchor 0.30+ | Standard Solana framework with Token-2022 helpers |
+| Program framework | Anchor 0.31 | Standard Solana framework with Token-2022 helpers |
 | Proof system | Groth16 over BN254 | 256-byte proofs, O(1) verification, native syscalls |
 | Circuit language | Noir + Sunspot compiler | Solana Foundation-supported toolchain |
-| Hash function | Poseidon | ZK-friendly, 100× fewer constraints than SHA-256 |
+| Hash function | Poseidon2 | ZK-friendly, 100× fewer constraints than SHA-256 |
 | Token standard | Token-2022 + Transfer Hooks | Atomic, non-bypassable compliance enforcement |
 | State compression | Light Protocol | 200–5000× cheaper nullifier storage |
 | Compressed NFT | Metaplex Bubblegum | Attestations as cNFTs for cross-program consumption |
@@ -191,7 +191,7 @@ zksettle/
 │   │   └── zksettle/             # Anchor program (verifier + transfer hook)
 │   ├── crates/
 │   │   ├── zksettle-types/       # Shared types between on-chain and off-chain
-│   │   ├── zksettle-crypto/      # Poseidon, Merkle, SMT wrappers
+│   │   ├── zksettle-crypto/      # Poseidon2, Merkle, SMT wrappers
 │   │   ├── issuer-service/       # HTTP service for credential emission
 │   │   ├── indexer/              # Helius webhook consumer → Arweave
 │   │   ├── api-gateway/          # Billing, rate limit, tier enforcement
@@ -210,10 +210,12 @@ zksettle/
 │   ├── src/
 │   └── package.json
 ├── tests/                        # End-to-end tests (Playwright)
+├── docs/                         # Internal specs and planning documents
 ├── pnpm-workspace.yaml           # JS/TS monorepo config
 ├── zksettle_prd.md               # Product Requirements Document
 ├── zksettle_adr.md               # Architecture Decision Records
 ├── zksettle_pitch.md             # Hackathon pitch document
+├── IMPLEMENTATION_STATUS.md      # Ground truth: code vs docs reconciliation
 └── README.md
 ```
 
@@ -227,7 +229,7 @@ zksettle/
 
 - Rust 1.80+ with 2024 edition
 - Solana CLI 1.18+
-- Anchor 0.30+
+- Anchor 0.31+
 - Node.js 20+ with pnpm
 - Noir (via `noirup`) + Sunspot compiler
 - Docker (for local PostgreSQL and Redis)
@@ -269,7 +271,7 @@ pnpm --filter e2e test                    # End-to-end (Playwright)
 | Document | Purpose |
 |---|---|
 | [`zksettle_prd.md`](./zksettle_prd.md) | Product Requirements Document — vision, users, use cases, requirements, MVP scope, metrics, 5-week plan |
-| [`zksettle_adr.md`](./zksettle_adr.md) | Architecture Decision Records — eight accepted decisions (ADR-001 through ADR-008) plus twelve proposed enhancements (ADR-009 through ADR-020) |
+| [`zksettle_adr.md`](./zksettle_adr.md) | Architecture Decision Records — eight accepted decisions (ADR-001 through ADR-008) plus proposed enhancements (ADR-009 through ADR-018) and three decided/implemented records (ADR-019 through ADR-022) |
 | [`zksettle_pitch.md`](./zksettle_pitch.md) | Hackathon pitch narrative |
 
 ---

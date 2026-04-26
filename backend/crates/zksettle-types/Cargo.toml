@@ -5,7 +5,12 @@ edition = "2021"
 description = "Shared type definitions for ZKSettle on-chain and off-chain components"
 license = "Apache-2.0 OR MIT"
 
+[features]
+default = ["borsh", "serde"]
+borsh = ["dep:borsh"]
+serde = ["dep:serde"]
+
 [dependencies]
-borsh = { version = "1", features = ["derive"] }
-serde = { version = "1", features = ["derive"] }
+borsh = { version = "1", features = ["derive"], optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
 thiserror = "2"

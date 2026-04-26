@@ -1,24 +1,38 @@
+#[cfg(feature = "borsh")]
 use borsh::{BorshDeserialize, BorshSerialize};
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::{Hash32, Pubkey};
 
-/// Event payload emitted on-chain (#[event]). Same fields as CompressedAttestation
-/// but represents a logged event, not persisted account state.
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+/// Event payload emitted on-chain (`#[event]` in `verify_proof` / hook settlement).
+/// Field order matches the program `ProofSettled` event (same binding tuple as
+/// `CompressedAttestation` in `zksettle-types` / on-chain compressed layout).
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "borsh", derive(BorshSerialize, BorshDeserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ProofSettled {
     pub issuer: Pubkey,
     pub nullifier_hash: Hash32,
     pub merkle_root: Hash32,
+    pub sanctions_root: Hash32,
+    pub jurisdiction_root: Hash32,
     pub mint: Pubkey,
     pub recipient: Pubkey,
     pub amount: u64,
     pub epoch: u64,
+    pub timestamp: u64,
     pub slot: u64,
     pub payer: Pubkey,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
+impl ProofSettled {
+    pub const LEN: usize = 32 * 8 + 8 * 4;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "borsh", derive(BorshSerialize, BorshDeserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AttestationChecked {
     pub issuer: Pubkey,
     pub nullifier_hash: Hash32,
@@ -29,19 +43,23 @@ pub struct AttestationChecked {
 mod tests {
     use super::*;
 
-    const PROOF_SETTLED_PAYLOAD_LEN: usize = 32 + 32 + 32 + 32 + 32 + 8 + 8 + 8 + 32;
+    const PROOF_SETTLED_PAYLOAD_LEN: usize = ProofSettled::LEN;
     const ATTESTATION_CHECKED_PAYLOAD_LEN: usize = 32 + 32 + 8;
 
+    #[cfg(feature = "borsh")]
     #[test]
     fn proof_settled_borsh_roundtrip() {
         let original = ProofSettled {
             issuer: [9u8; 32],
             nullifier_hash: [8u8; 32],
             merkle_root: [7u8; 32],
+            sanctions_root: [11u8; 32],
+            jurisdiction_root: [12u8; 32],
             mint: [5u8; 32],
             recipient: [4u8; 32],
             amount: 2_500_000,
             epoch: 7,
+            timestamp: 1_700_000_001,
             slot: 1_234,
             payer: [6u8; 32],
         };
@@ -51,6 +69,7 @@ mod tests {
         assert_eq!(decoded, original);
     }
 
+    #[cfg(feature = "borsh")]
     #[test]
     fn attestation_checked_borsh_roundtrip() {
         let original = AttestationChecked {

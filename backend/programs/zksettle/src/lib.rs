@@ -1,7 +1,10 @@
 pub mod constants;
+mod cu_probe;
 pub mod error;
 pub mod instructions;
 pub mod state;
+#[cfg(test)]
+mod test_utils;
 
 #[allow(dead_code, clippy::all)]
 mod generated_vk;
@@ -27,15 +30,26 @@ pub const LIGHT_CPI_SIGNER: CpiSigner =
 pub mod zksettle {
     use super::*;
 
-    pub fn register_issuer(ctx: Context<RegisterIssuer>, merkle_root: [u8; 32]) -> Result<()> {
-        instructions::register_issuer::register_handler(ctx, merkle_root)
+    pub fn init_attestation_tree(ctx: Context<InitAttestationTree>) -> Result<()> {
+        crate::instructions::init_attestation_tree::init_handler(ctx)
+    }
+
+    pub fn register_issuer(
+        ctx: Context<RegisterIssuer>,
+        merkle_root: [u8; 32],
+        sanctions_root: [u8; 32],
+        jurisdiction_root: [u8; 32],
+    ) -> Result<()> {
+        instructions::register_issuer::register_handler(ctx, merkle_root, sanctions_root, jurisdiction_root)
     }
 
     pub fn update_issuer_root(
         ctx: Context<UpdateIssuerRoot>,
         merkle_root: [u8; 32],
+        sanctions_root: [u8; 32],
+        jurisdiction_root: [u8; 32],
     ) -> Result<()> {
-        instructions::register_issuer::update_handler(ctx, merkle_root)
+        instructions::register_issuer::update_handler(ctx, merkle_root, sanctions_root, jurisdiction_root)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -120,6 +134,10 @@ pub mod zksettle {
         instructions::transfer_hook::settle_hook_handler(ctx, amount)
     }
 
+    pub fn close_hook_payload(ctx: Context<CloseHookPayload>) -> Result<()> {
+        instructions::transfer_hook::close_hook_payload_handler(ctx)
+    }
+
     /// Token-2022 transfer-hook `Execute` entry. Discriminator matches
     /// `sha256("spl-transfer-hook-interface:execute")[..8]` — value taken from
     /// `spl_transfer_hook_interface::instruction::ExecuteInstruction::SPL_DISCRIMINATOR`.
@@ -127,12 +145,9 @@ pub mod zksettle {
     /// Replay barrier: Light compressed-address collision on
     /// `[NULLIFIER_SEED, issuer, nullifier_hash]` (ADR-007 + ADR-020). The
     /// payload PDA is NOT closed here — SPL passes `owner` as read-only
-    /// (`AccountMeta::new_readonly`), blocking `close = owner`, and no other
-    /// account in the Execute layout is writable enough to accept the rent.
-    /// Rent overhead is bounded (one `HookPayload` per outstanding settlement)
-    /// and is reclaimed via `settle_hook` when that path is used. Collecting
-    /// hook-path payload rent is tracked as future work (add a writable TLV
-    /// extra-account to serve as the close target).
+    /// (`AccountMeta::new_readonly`), blocking `close = owner`. Authority
+    /// calls `close_hook_payload` after the transfer to reclaim rent and
+    /// unblock the next `set_hook_payload`.
     #[instruction(discriminator = &[105, 37, 101, 197, 75, 251, 102, 26])]
     pub fn transfer_hook<'info>(
         ctx: Context<'_, '_, '_, 'info, ExecuteHook<'info>>,

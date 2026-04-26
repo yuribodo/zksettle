@@ -1,0 +1,89 @@
+use reqwest::Client;
+use tracing::{info, warn};
+use zksettle_types::ProofSettled;
+
+use crate::error::IndexerError;
+use crate::irys::types::{build_tags, AttestationRecord};
+
+pub struct IrysClient {
+    node_url: String,
+    http: Client,
+    dry_run: bool,
+}
+
+impl IrysClient {
+    pub fn new(node_url: String, _wallet_key: Option<&str>, http: Client) -> Self {
+        let dry_run = _wallet_key.is_none();
+        if dry_run {
+            info!("irys client in dry-run mode (no wallet key)");
+        }
+        Self {
+            node_url,
+            http,
+            dry_run,
+        }
+    }
+
+    #[mutants::skip]
+    pub async fn upload(&self, event: &ProofSettled) -> Result<String, IndexerError> {
+        let record = AttestationRecord::from(event);
+        let tags = build_tags(event);
+
+        if self.dry_run {
+            info!(
+                nullifier = hex::encode(event.nullifier_hash),
+                slot = event.slot,
+                tags = tags.len(),
+                "dry-run: would upload attestation"
+            );
+            return Ok("dry-run".into());
+        }
+
+        let body = serde_json::to_vec(&record)
+            .map_err(|e| IndexerError::IrysUpload(e.to_string()))?;
+
+        let url = format!("{}/tx/solana", self.node_url);
+
+        let mut last_err = None;
+        for attempt in 0..3u32 {
+            if attempt > 0 {
+                let delay = std::time::Duration::from_millis(500 * 2u64.pow(attempt));
+                tokio::time::sleep(delay).await;
+            }
+
+            match self.http.post(&url)
+                .header("Content-Type", "application/json")
+                .body(body.clone())
+                .send()
+                .await
+            {
+                Ok(resp) if resp.status().is_success() => {
+                    let tx_id = resp
+                        .text()
+                        .await
+                        .unwrap_or_else(|_| "unknown".into());
+                    info!(tx_id = %tx_id, "uploaded attestation to irys");
+                    return Ok(tx_id);
+                }
+                Ok(resp) if resp.status().is_server_error() => {
+                    let status = resp.status();
+                    warn!(attempt, %status, "irys 5xx, retrying");
+                    last_err = Some(format!("irys returned {status}"));
+                }
+                Ok(resp) => {
+                    let status = resp.status();
+                    let text = resp.text().await.unwrap_or_default();
+                    return Err(IndexerError::IrysUpload(format!("{status}: {text}")));
+                }
+                Err(e) => {
+                    warn!(attempt, error = %e, "irys request failed, retrying");
+                    last_err = Some(e.to_string());
+                }
+            }
+        }
+
+        Err(IndexerError::IrysUpload(
+            last_err.unwrap_or_else(|| "unknown error".into()),
+        ))
+    }
+}

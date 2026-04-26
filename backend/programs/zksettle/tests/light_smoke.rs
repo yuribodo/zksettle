@@ -1,4 +1,4 @@
-#![cfg(feature = "light-tests")]
+#![cfg(all(feature = "light-tests", unix))]
 //! Smoke tests for the Light Protocol migration.
 //!
 //! Boots a `LightProgramTest` harness with the compiled `zksettle.so` and
@@ -22,60 +22,18 @@
 //! `backend/target/deploy/zksettle.so` so `ProgramTestConfig::new_v2` can
 //! load it by name.
 
-use anchor_lang::prelude::Pubkey;
-use anchor_lang::{system_program, InstructionData};
-use light_program_test::{utils::assert::assert_rpc_error, LightProgramTest, ProgramTestConfig, Rpc};
-use solana_instruction::{AccountMeta, Instruction};
-use solana_keypair::Keypair;
+mod helpers;
+
+use light_program_test::{utils::assert::assert_rpc_error, Rpc};
 use solana_signer::Signer;
 
 use zksettle::error::ZkSettleError;
-use zksettle::instruction::{
-    RegisterIssuer as RegisterIssuerIx, UpdateIssuerRoot as UpdateIssuerRootIx,
+use zksettle::state::Issuer;
+
+use helpers::{
+    boot_harness, funded_authority, issuer_pda, register_ix, update_ix,
+    ANCHOR_ERROR_CODE_OFFSET, CONSTRAINT_SEEDS,
 };
-use zksettle::state::{Issuer, ISSUER_SEED};
-
-const ANCHOR_ERROR_CODE_OFFSET: u32 = 6000;
-// Anchor built-in `ErrorCode::ConstraintSeeds`.
-const CONSTRAINT_SEEDS: u32 = 2006;
-
-fn issuer_pda(authority: &Pubkey) -> Pubkey {
-    Pubkey::find_program_address(&[ISSUER_SEED, authority.as_ref()], &zksettle::ID).0
-}
-
-fn register_ix(authority: &Pubkey, merkle_root: [u8; 32]) -> Instruction {
-    Instruction {
-        program_id: zksettle::ID,
-        accounts: vec![
-            AccountMeta::new(*authority, true),
-            AccountMeta::new(issuer_pda(authority), false),
-            AccountMeta::new_readonly(system_program::ID, false),
-        ],
-        data: RegisterIssuerIx { merkle_root }.data(),
-    }
-}
-
-fn update_ix(authority: &Pubkey, issuer: &Pubkey, merkle_root: [u8; 32]) -> Instruction {
-    Instruction {
-        program_id: zksettle::ID,
-        accounts: vec![
-            AccountMeta::new_readonly(*authority, true),
-            AccountMeta::new(*issuer, false),
-        ],
-        data: UpdateIssuerRootIx { merkle_root }.data(),
-    }
-}
-
-async fn boot_harness() -> LightProgramTest {
-    let config = ProgramTestConfig::new_v2(false, Some(vec![("zksettle", zksettle::ID)]));
-    LightProgramTest::new(config).await.expect("boot light harness")
-}
-
-async fn funded_authority(rpc: &mut LightProgramTest, lamports: u64) -> Keypair {
-    let kp = Keypair::new();
-    rpc.airdrop_lamports(&kp.pubkey(), lamports).await.expect("airdrop");
-    kp
-}
 
 #[tokio::test]
 async fn harness_boots_with_zksettle_program() {
@@ -171,4 +129,138 @@ async fn update_by_wrong_authority_rejects() {
 
     assert_rpc_error(result, 0, CONSTRAINT_SEEDS)
         .expect("expected ConstraintSeeds when attacker targets victim PDA");
+}
+
+#[tokio::test]
+async fn update_rejects_zero_root() {
+    let mut rpc = boot_harness().await;
+    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+
+    rpc.create_and_send_transaction(
+        &[register_ix(&authority.pubkey(), [1u8; 32])],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("register_issuer should succeed");
+
+    let issuer_key = issuer_pda(&authority.pubkey());
+    let result = rpc
+        .create_and_send_transaction(
+            &[update_ix(&authority.pubkey(), &issuer_key, [0u8; 32])],
+            &authority.pubkey(),
+            &[&authority],
+        )
+        .await;
+
+    assert_rpc_error(
+        result,
+        0,
+        ANCHOR_ERROR_CODE_OFFSET + ZkSettleError::ZeroMerkleRoot as u32,
+    )
+    .expect("expected ZeroMerkleRoot on zero-root update");
+}
+
+#[tokio::test]
+async fn double_register_same_authority_fails() {
+    let mut rpc = boot_harness().await;
+    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+
+    rpc.create_and_send_transaction(
+        &[register_ix(&authority.pubkey(), [1u8; 32])],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("first register should succeed");
+
+    let result = rpc
+        .create_and_send_transaction(
+            &[register_ix(&authority.pubkey(), [2u8; 32])],
+            &authority.pubkey(),
+            &[&authority],
+        )
+        .await;
+
+    assert!(result.is_err(), "second register with same authority must fail (PDA already exists)");
+}
+
+#[tokio::test]
+async fn register_then_update_preserves_authority_and_bump() {
+    let mut rpc = boot_harness().await;
+    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+
+    rpc.create_and_send_transaction(
+        &[register_ix(&authority.pubkey(), [3u8; 32])],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("register should succeed");
+
+    let issuer_key = issuer_pda(&authority.pubkey());
+    let before: Issuer = rpc
+        .get_anchor_account(&issuer_key)
+        .await
+        .expect("fetch")
+        .expect("exists");
+
+    rpc.create_and_send_transaction(
+        &[update_ix(&authority.pubkey(), &issuer_key, [4u8; 32])],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("update should succeed");
+
+    let after: Issuer = rpc
+        .get_anchor_account(&issuer_key)
+        .await
+        .expect("fetch")
+        .expect("exists");
+
+    assert_eq!(before.authority, after.authority);
+    assert_eq!(before.bump, after.bump);
+    assert_ne!(before.merkle_root, after.merkle_root);
+    assert_eq!(after.merkle_root, [4u8; 32]);
+}
+
+#[tokio::test]
+async fn update_advances_root_slot() {
+    let mut rpc = boot_harness().await;
+    let authority = funded_authority(&mut rpc, 10_000_000_000).await;
+
+    rpc.create_and_send_transaction(
+        &[register_ix(&authority.pubkey(), [1u8; 32])],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("register should succeed");
+
+    let issuer_key = issuer_pda(&authority.pubkey());
+    let before: Issuer = rpc
+        .get_anchor_account(&issuer_key)
+        .await
+        .expect("fetch")
+        .expect("exists");
+
+    rpc.create_and_send_transaction(
+        &[update_ix(&authority.pubkey(), &issuer_key, [2u8; 32])],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("update should succeed");
+
+    let after: Issuer = rpc
+        .get_anchor_account(&issuer_key)
+        .await
+        .expect("fetch")
+        .expect("exists");
+
+    assert!(
+        after.root_slot >= before.root_slot,
+        "root_slot must advance on update"
+    );
 }

@@ -105,16 +105,16 @@ O circuit prova simultaneamente:
 - **Expiry:** credential não expirou (timestamp válido)
 - **Nullifier:** anti-replay, esta proof não foi usada antes neste contexto
 
-**Inputs privados** (nunca saem do dispositivo): wallet address, credential data, Merkle path, índices  
-**Inputs públicos** (verificáveis on-chain): Merkle root do issuer, nullifier, timestamp, jurisdiction_set_hash
+**Inputs privados** (nunca saem do dispositivo): wallet address, credential data, Merkle paths (membership, sanctions, jurisdiction), path indices, private key, credential expiry  
+**Inputs públicos** (verificáveis on-chain, 11 campos): merkle_root, nullifier, mint_lo, mint_hi, epoch, recipient_lo, recipient_hi, amount, sanctions_root, jurisdiction_root, timestamp. Pubkeys são split em dois limbs de 128 bits para caber no scalar field BN254 (~254 bits).
 
 ### Componente 2 — Anchor Program
 
 Programa Rust/Anchor no Solana. Instruções principais:
 
 ```rust
-register_issuer(merkle_root: [u8; 32])
-update_issuer_root(merkle_root: [u8; 32])
+register_issuer(merkle_root: [u8; 32], sanctions_root: [u8; 32], jurisdiction_root: [u8; 32])
+update_issuer_root(merkle_root: [u8; 32], sanctions_root: [u8; 32], jurisdiction_root: [u8; 32])
 verify_proof(proof_and_witness, nullifier_hash, mint, epoch, recipient, amount, ...)
 check_attestation(nullifier_hash, ...)
 
@@ -161,7 +161,7 @@ Interface web para issuers e fintechs: live feed de proofs, transações bloquea
 | Token compliance | SPL Token Extensions + Transfer Hooks | Atomicidade garantida, não bypassável |
 | State compression | Light Protocol ZK Compression | Nullifiers 200× mais baratos |
 | SDK | TypeScript + @solana/web3.js | Stack do time, integração rápida |
-| Hash em circuits | Poseidon | ZK-friendly, 100× menos constraints que SHA-256 |
+| Hash em circuits | Poseidon2 | ZK-friendly, 100× menos constraints que SHA-256 |
 | Frontend | Vite + React + TypeScript | SPA dashboard, sem necessidade de SSR, bundle menor e dev loop mais rápido (alinhado ao README) |
 
 ---
@@ -286,9 +286,9 @@ ADR-001..008 só cobre root update. Revogação de credential exige republicar M
 
 Usuário gera 1 proof → deriva session token válido por N tx no mesmo contexto (ex: dia de trading). Circuit emite `session_commitment` como public input, hook aceita múltiplas tx até expiry. UX 100× melhor sem quebrar anti-replay — nullifier por sessão, não por tx.
 
-### 15.5 · Jurisdiction set como Merkle tree, não hash
+### 15.5 · Jurisdiction set como Merkle tree, não hash [IMPLEMENTADO — ADR-013 / circuit main.nr]
 
-PRD define `jurisdiction_set_hash` como public input. Se issuer adiciona/remove país do conjunto permitido, toda proof antiga invalida. Substituir por **Merkle root do conjunto permitido + proof de membership da jurisdiction do user**. Issuer atualiza lista sem invalidar proofs existentes.
+~~PRD define `jurisdiction_set_hash` como public input.~~ Implementado: circuit prova membership da jurisdiction do user via Merkle path contra `jurisdiction_root` (public input index 9). Issuer publica `jurisdiction_root` via `register_issuer` / `update_issuer_root`. Proofs antigas continuam válidas se jurisdiction ainda permitida.
 
 ### 15.6 · Transfer Hook com policy engine
 
@@ -310,13 +310,13 @@ Se circuit único estourar constraints ou exceder 10s no browser, separar em 2 s
 
 PRD define schema de credential custom. Adotar **W3C Verifiable Credentials** com signature BBS+ (selective disclosure nativa). Issuer reusa stack padrão da indústria, credentials portáveis entre protocolos. Posiciona ZKSettle como camada ZK de infra VC, não silo proprietário — narrativa de $100M+.
 
-### 15.11 · Attestation como cNFT (CPI-able primitive)
+### 15.11 · Attestation como cNFT (CPI-able primitive) [IMPLEMENTADO — ADR-019]
 
-Outros programas (Kamino, MarginFi) consumir `check_attestation(wallet)` via CPI acopla fortemente. Alternativa: emitir **compressed NFT via Bubblegum** como attestation no wallet do user. Qualquer program lê via account padrão sem CPI cross-program. Padrão Solana reconhecido. Desbloqueia UC-03/UC-04 sem mudar o core do program.
+Implementado: `init_attestation_tree` + Bubblegum `MintV1` CPI emitido após Light CPI em `verify_proof`, `settle_hook`, e `transfer_hook`. cNFT minted para `recipient` com metadados derivados de `hashv(issuer || nullifier || merkle_root || slot || expiry_slot)`. O caminho CPI `check_attestation` permanece para acoplamento on-chain direto.
 
-### 15.12 · Nullifier context explícito (mint + epoch)
+### 15.12 · Nullifier context explícito (mint + epoch) [IMPLEMENTADO — ADR-020]
 
-ADR-007 define `nullifier = Poseidon(sk, context_hash)` mas deixa `context` vago. Especificar: `nullifier = Poseidon(sk, mint_pubkey, epoch_index)` com `epoch = floor(now / 24h)`. User tem 1 proof por dia por token, não por tx. UX dramaticamente melhor, mantém anti-replay (forjar exigiria sk).
+Implementado: `nullifier = Poseidon2(sk, mint_lo, mint_hi, epoch, recipient_lo, recipient_hi, amount)` com `epoch = floor(unix_timestamp / 86400)`. Binding a `recipient` + `amount` previne front-running. `verify_proof` valida epoch freshness (`EpochInFuture` / `EpochStale`, `MAX_EPOCH_LAG = 1`).
 
 ### Top 3 para pitch
 

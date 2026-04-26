@@ -73,7 +73,7 @@ Proof generation no browser via `@noir-lang/backend_barretenberg` + `@noir-lang/
 
 ---
 
-## ADR-004 · Função hash em circuits: Poseidon
+## ADR-004 · Função hash em circuits: Poseidon2
 
 **Status:** Aceito
 
@@ -81,7 +81,7 @@ Proof generation no browser via `@noir-lang/backend_barretenberg` + `@noir-lang/
 Merkle trees, commitments, e nullifiers dentro de circuits ZK precisam de funções hash. A escolha afeta diretamente o número de constraints e a performance do circuit.
 
 ### Decisão
-**Poseidon hash** — ZK-friendly, nativo no Noir.
+**Poseidon2 hash** — ZK-friendly, usado via `poseidon2_permutation` no Noir. O circuit implementa um sponge sobre a permutação pública (`std::hash::poseidon2_permutation`) porque `Poseidon2::hash` é `pub(crate)` no Noir 1.0.0-beta.18.
 
 ### Por quê
 Poseidon foi projetado especificamente para ser eficiente em arithmetic circuits. Um hash Poseidon custa ~220 constraints vs ~25.000 constraints para SHA-256 dentro de um circuit ZK. Para uma Merkle tree de profundidade 20, isso significa a diferença entre ~4.400 e ~500.000 constraints — impacto direto no tempo de proof generation no browser.
@@ -193,7 +193,7 @@ Billing via Stripe ou similar off-chain inicialmente. On-chain billing via x402 
 | ADR-001 | Curva BN254 | BLS12-381 (sem syscalls) |
 | ADR-002 | Groth16 via Sunspot | halo2 (sem syscalls dedicadas) |
 | ADR-003 | Noir para circuits | circom (DX inferior) |
-| ADR-004 | Poseidon hash | SHA-256 (100× mais constraints) |
+| ADR-004 | Poseidon2 hash | SHA-256 (100× mais constraints) |
 | ADR-005 | Token Extensions + Transfer Hooks | SPL legacy + wrapper (bypassável) |
 | ADR-006 | Light Protocol compression | Manual compressed accounts |
 | ADR-007 | Nullifier on-chain | Timestamp expiry only (inseguro) |
@@ -280,7 +280,7 @@ Anti-replay preservado via nullifier por session. Requer UI no SDK para gerencia
 
 ## ADR-013 · Jurisdiction set como Merkle root
 
-**Status:** Proposto (PRD §15.5, substitui implicitamente decisão do PRD §7)
+**Status:** Decidido / implementado (circuit + issuer account; PRD §15.5)
 
 ### Contexto
 `jurisdiction_set_hash` como public input invalida todas proofs antigas quando issuer muda conjunto. Adicionar país = força re-prove global.
@@ -374,16 +374,21 @@ Issuers reusam stack existente. Credentials portáveis entre protocolos. Circuit
 
 ## ADR-019 · Attestation como compressed NFT (Bubblegum)
 
-**Status:** Proposto (PRD §15.11)
+**Status:** Decidido / implementado (suplementa Light compressed attestation; PRD §15.11)
 
 ### Contexto
-`check_attestation(wallet)` via CPI cross-program acopla consumers (Kamino, MarginFi) ao ZKSettle program. Fricção de integração.
+`check_attestation` via CPI continua disponível, mas wallets e integradores esperam ativos comprimidos endereçáveis por **DAS** (Helius, SolanaFM, etc.). Uma cNFT Bubblegum dá UX de “NFT no wallet” sem substituir o nullifier + `CompressedAttestation` na Light state tree (ADR-006 / ADR-007).
 
-### Decisão proposta
-Emitir attestation como **compressed NFT via Bubblegum** no wallet do user. Consumers leem account padrão, zero CPI para ZKSettle program.
+### Decisão
+- Instrução `init_attestation_tree`: cria o concurrent Merkle tree (SPL account-compression) + `TreeConfig` via CPI ao Metaplex Bubblegum; persiste `BubblegumTreeRegistry` PDA (semente `bubblegum-registry`) com endereço da árvore e bump do delegate programa.
+- Após **Light CPI** bem-sucedido em `verify_proof`, `settle_hook` e `transfer_hook` (tail TLV), o program emite **Bubblegum `MintV1`** para `recipient` (leaf owner), na mesma transação (rollback atômico se o mint falhar).
+- **Metadados URI** (`programs/zksettle/src/instructions/bubblegum_mint.rs`): template estável `https://zksettle.dev/meta/v1/{content_id}` onde `content_id` deriva de `hashv(issuer ‖ nullifier ‖ merkle_root ‖ slot ‖ expiry_slot)` (44 chars); `name` = `ZKS-{slot}`. **Expiry canônica** = `slot + MAX_ROOT_AGE_SLOTS` (432_000 slots, alinhado a `check_attestation` / ADR-021). JSON off-chain completo pode ser resolvido pelo `content_id`; binding on-chain permanece nos hashes Light + prova.
+- Contas Bubblegum em `verify_proof` / `settle_hook` são **campos nomeados**; no hook Token-2022, metas TLV extras para Bubblegum ficam **após** as contas Light para preservar índices em `StagedLightArgs`. `StagedLightArgs.bubblegum_tail` = `0` ou `9` (contagem `MintV1`).
 
 ### Consequências
-Padrão Solana reconhecido. Desbloqueia UC-03/UC-04 sem mudança do core. Requer Bubblegum setup + metadata schema. cNFT per attestation é barato via state compression.
+- **Leitura por outros programs on-chain:** não é “ler um SPL token account”; consumidores usam prova Merkle / DAS + política off-chain. O caminho CPI `check_attestation` permanece quando acoplamento on-chain é aceitável.
+- **CU / limites de tx:** Groth16 + Light + Bubblegum na mesma instrução pode exigir `SetComputeUnitLimit` acima do default; medição: compilar com `--features hook-cu-probe` e inspecionar logs `cu-probe pre/post-bubblegum-mint` (e estágios Light) no mesmo harness ADR-022.
+- **Compatibilidade:** IDs Bubblegum / account-compression são de cluster; o program usa constantes Metaplex/SPL atuais para mainnet/devnet.
 
 ---
 
@@ -449,7 +454,7 @@ Novo ceiling operacional: **<250K CU** por proof. A transação envelopa com `Se
 
 ### Addendum — caminho `transfer_hook`
 
-O mesmo `verify_bundle` roda sob o hook do Token-2022, mas o path adiciona: (a) parse + check de extensões do `source_token` (`TransferHookAccount.transferring`), (b) Light-CPI emitindo nullifier + attestation comprimidos na mesma tx. O ceiling de 250K cobre apenas o Groth16. Hook-path total ainda não foi medido; feature `hook-cu-probe` emite `sol_log_compute_units` antes/depois do `verify_bundle` e do Light CPI. TODO: registrar o número aqui após o primeiro run do harness com fixture gnark + mint Token-2022 configurado.
+O mesmo `verify_bundle` roda sob o hook do Token-2022, mas o path adiciona: (a) parse + check de extensões do `source_token` (`TransferHookAccount.transferring`), (b) Light-CPI emitindo nullifier + attestation comprimidos na mesma tx, (c) Bubblegum `MintV1` quando `bubblegum_tail` / contas nomeadas estão presentes (ADR-019). O ceiling de 250K cobre apenas o Groth16. Hook-path + mint total ainda não foi medido de ponta a ponta; a feature `hook-cu-probe` emite `sol_log_compute_units` em `pre/post-verify_bundle`, `post-light-cpi`, e `pre/post-bubblegum-mint` (também em `verify_proof`). TODO: registrar números aqui após o primeiro run do harness com fixture gnark + mint Token-2022 + árvore Bubblegum inicializada.
 
 ---
 
@@ -461,13 +466,13 @@ O mesmo `verify_bundle` roda sob o hook do Token-2022, mas o path adiciona: (a) 
 | ADR-010 | Schema versioning | Alta (produção) |
 | ADR-011 | Revocation SMT | Crítica (sanctions) |
 | ADR-012 | Session proofs | Média (UX) |
-| ADR-013 | Jurisdiction Merkle | Alta (produção) |
+| ADR-013 | Jurisdiction Merkle | Decidido (implementado) |
 | ADR-014 | Policy engine | Alta (pitch) |
 | ADR-015 | Witness caching | Baixa (DX) |
 | ADR-016 | Circuit split | Contingente (S1 bench) |
 | ADR-017 | Audit epoch merkleizado | Alta (produção) |
 | ADR-018 | W3C VC + BBS+ | Alta (pitch) |
-| ADR-019 | cNFT attestation | Média (UC-03/04) |
+| ADR-019 | cNFT attestation | Decidido (implementado) |
 | ADR-020 | Nullifier context explícito | Decidido (security) |
 | ADR-021 | Janela de frescor da Merkle root | Decidido (security) |
 | ADR-022 | Orçamento de CU pós-ADR-020 | Decidido (perf) |

@@ -1,0 +1,115 @@
+use std::sync::Arc;
+use std::time::Duration;
+
+use axum::http::{HeaderValue, Method};
+use axum::routing::{any, delete, get};
+use axum::Router;
+use tower_http::cors::{AllowOrigin, CorsLayer};
+use tower_http::trace::TraceLayer;
+use tracing::warn;
+
+pub mod auth;
+pub mod config;
+pub mod error;
+pub mod key_store;
+pub mod metering;
+pub mod proxy;
+pub mod rate_limit;
+pub mod routes;
+pub mod upstream;
+
+use config::Config;
+use key_store::KeyStore;
+use metering::Metering;
+use rate_limit::RateLimitStore;
+use upstream::HttpUpstream;
+
+pub struct AppState {
+    pub config: Config,
+    pub keys: KeyStore,
+    pub metering: Metering,
+    pub rate_limiter: RateLimitStore,
+    pub upstream: Arc<dyn HttpUpstream>,
+}
+
+pub fn build_router(state: Arc<AppState>) -> Router {
+    let cors = build_cors_layer(&state.config.cors_allowed_origins);
+
+    Router::new()
+        .route("/health", get(routes::health::health))
+        .route(
+            "/api-keys",
+            get(routes::keys::list_keys).post(routes::keys::create_key),
+        )
+        .route("/api-keys/{key_hash}", delete(routes::keys::delete_key))
+        .route("/usage", get(routes::usage::get_usage))
+        .route("/usage/history", get(routes::usage::get_usage_history))
+        .route("/v1/{*path}", any(proxy::proxy_to_upstream))
+        .layer(cors)
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
+}
+
+fn build_cors_layer(allowed_origins: &[String]) -> CorsLayer {
+    let base = CorsLayer::new()
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([
+            axum::http::header::AUTHORIZATION,
+            axum::http::header::CONTENT_TYPE,
+        ])
+        .max_age(Duration::from_secs(600));
+
+    if allowed_origins.is_empty() {
+        warn!(
+            "GATEWAY_CORS_ALLOWED_ORIGINS not set: browser callers will be blocked by CORS. \
+             Set it to a comma-separated origin list (e.g. https://app.example.com,http://localhost:3000)."
+        );
+        return base;
+    }
+
+    let parsed: Vec<HeaderValue> = allowed_origins
+        .iter()
+        .filter_map(|origin| match HeaderValue::from_str(origin) {
+            Ok(v) => Some(v),
+            Err(err) => {
+                warn!(%origin, %err, "ignoring invalid CORS origin");
+                None
+            }
+        })
+        .collect();
+
+    base.allow_origin(AllowOrigin::list(parsed))
+        .allow_credentials(false)
+}
+
+#[cfg(test)]
+pub fn test_state() -> Arc<AppState> {
+    let config = Config {
+        port: 4000,
+        upstream_url: "http://localhost:0".into(),
+        log_level: "error".into(),
+        admin_key: None,
+        allow_open_keys: true,
+        cors_allowed_origins: vec![],
+        indexer_url: None,
+    };
+    Arc::new(AppState {
+        config,
+        keys: KeyStore::new(),
+        metering: Metering::new(),
+        rate_limiter: RateLimitStore::new(),
+        upstream: Arc::new(upstream::ReqwestUpstream::new(reqwest::Client::new())),
+    })
+}
+
+#[cfg(test)]
+pub fn test_app() -> Router {
+    build_router(test_state())
+}
