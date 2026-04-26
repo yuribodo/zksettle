@@ -10,7 +10,7 @@ use zksettle_types::gateway::Tier;
 
 use crate::config::Config;
 use crate::error::GatewayError;
-use crate::key_store::generate_key;
+use crate::key_store;
 use crate::AppState;
 
 #[derive(Deserialize)]
@@ -51,10 +51,6 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
     a_hash.ct_eq(&b_hash).into()
 }
 
-/// Admin-auth gate shared by `POST /api-keys`, `GET /api-keys`, and `DELETE /api-keys/{hash}`.
-/// - `admin_key` set → require matching `Authorization: Bearer <admin_key>`.
-/// - `allow_open_keys` true → accept anonymous calls.
-/// - Otherwise → 500 Config (admin operations are disabled by deployment).
 fn verify_admin(config: &Config, headers: &HeaderMap) -> Result<(), GatewayError> {
     if let Some(ref admin_key) = config.admin_key {
         let provided = headers
@@ -84,15 +80,13 @@ pub async fn create_key(
 ) -> Result<Json<CreateKeyResponse>, GatewayError> {
     verify_admin(&state.config, &headers)?;
 
-    let raw_key = generate_key();
+    let raw_key = key_store::generate_key();
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
 
-    state
-        .keys
-        .insert(&raw_key, body.owner.clone(), Tier::Developer, now);
+    key_store::insert(&state.db, &raw_key, body.owner.clone(), Tier::Developer, now).await?;
 
     Ok(Json(CreateKeyResponse {
         api_key: raw_key,
@@ -107,9 +101,8 @@ pub async fn list_keys(
 ) -> Result<Json<ListKeysResponse>, GatewayError> {
     verify_admin(&state.config, &headers)?;
 
-    let mut keys: Vec<ListedKey> = state
-        .keys
-        .list()
+    let mut keys: Vec<ListedKey> = key_store::list(&state.db)
+        .await?
         .into_iter()
         .map(|r| ListedKey {
             key_hash: r.key_hash,
@@ -130,11 +123,11 @@ pub async fn delete_key(
 ) -> Result<Json<DeleteKeyResponse>, GatewayError> {
     verify_admin(&state.config, &headers)?;
 
-    let removed = state.keys.remove_by_hash(&key_hash);
+    let removed = key_store::remove_by_hash(&state.db, &key_hash).await?;
     if !removed {
         return Err(GatewayError::NotFound);
     }
-    state.metering.remove(&key_hash);
+    // CASCADE handles usage_records + daily_usage cleanup
     Ok(Json(DeleteKeyResponse {
         key_hash,
         deleted: true,
@@ -150,14 +143,14 @@ mod tests {
     use tower::ServiceExt;
 
     use crate::config::Config;
-    use crate::key_store::{hash_key, KeyStore};
-    use crate::metering::Metering;
     use crate::rate_limit::RateLimitStore;
-    use crate::{build_router, test_app, AppState};
+    use crate::{build_router, test_app, test_cleanup, test_db, AppState};
+    use serial_test::serial;
 
     #[tokio::test]
+    #[serial]
     async fn create_key_no_admin_key_configured_allows_open() {
-        let app = test_app();
+        let app = test_app().await;
         let resp = app
             .oneshot(
                 Request::builder()
@@ -178,7 +171,9 @@ mod tests {
         assert_eq!(body.owner, "alice");
     }
 
-    fn app_with_admin_key() -> (axum::Router, Arc<AppState>) {
+    async fn app_with_admin_key() -> (axum::Router, Arc<AppState>) {
+        let db = test_db().await;
+        test_cleanup(&db).await;
         let config = Config {
             port: 4000,
             upstream_url: "http://localhost:0".into(),
@@ -187,18 +182,20 @@ mod tests {
             allow_open_keys: false,
             cors_allowed_origins: vec![],
             indexer_url: None,
+            database_url: String::new(),
         };
         let state = Arc::new(AppState {
             config,
-            keys: KeyStore::new(),
-            metering: Metering::new(),
+            db,
             rate_limiter: RateLimitStore::new(),
             upstream: Arc::new(crate::upstream::ReqwestUpstream::new(reqwest::Client::new())),
         });
         (build_router(state.clone()), state)
     }
 
-    fn app_with_provisioning_disabled() -> axum::Router {
+    async fn app_with_provisioning_disabled() -> axum::Router {
+        let db = test_db().await;
+        test_cleanup(&db).await;
         let config = Config {
             port: 4000,
             upstream_url: "http://localhost:0".into(),
@@ -207,11 +204,11 @@ mod tests {
             allow_open_keys: false,
             cors_allowed_origins: vec![],
             indexer_url: None,
+            database_url: String::new(),
         };
         let state = Arc::new(AppState {
             config,
-            keys: KeyStore::new(),
-            metering: Metering::new(),
+            db,
             rate_limiter: RateLimitStore::new(),
             upstream: Arc::new(crate::upstream::ReqwestUpstream::new(reqwest::Client::new())),
         });
@@ -219,8 +216,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn create_key_rejects_without_admin_auth() {
-        let (app, _) = app_with_admin_key();
+        let (app, _) = app_with_admin_key().await;
         let resp = app
             .oneshot(
                 Request::builder()
@@ -237,8 +235,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn create_key_rejects_wrong_admin_key() {
-        let (app, _) = app_with_admin_key();
+        let (app, _) = app_with_admin_key().await;
         let resp = app
             .oneshot(
                 Request::builder()
@@ -256,8 +255,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn create_key_accepts_correct_admin_key() {
-        let (app, _) = app_with_admin_key();
+        let (app, _) = app_with_admin_key().await;
         let resp = app
             .oneshot(
                 Request::builder()
@@ -278,8 +278,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn list_keys_requires_admin_auth() {
-        let (app, _) = app_with_admin_key();
+        let (app, _) = app_with_admin_key().await;
         let resp = app
             .oneshot(
                 Request::builder()
@@ -293,14 +294,15 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn list_keys_returns_provisioned_records() {
-        let (app, state) = app_with_admin_key();
-        state
-            .keys
-            .insert("zks_a", "alice".into(), Tier::Developer, 100);
-        state
-            .keys
-            .insert("zks_b", "bob".into(), Tier::Startup, 200);
+        let (app, state) = app_with_admin_key().await;
+        key_store::insert(&state.db, "zks_a", "alice".into(), Tier::Developer, 100)
+            .await
+            .unwrap();
+        key_store::insert(&state.db, "zks_b", "bob".into(), Tier::Startup, 200)
+            .await
+            .unwrap();
 
         let resp = app
             .oneshot(
@@ -316,14 +318,14 @@ mod tests {
         let bytes = resp.into_body().collect().await.unwrap().to_bytes();
         let body: ListKeysResponse = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(body.keys.len(), 2);
-        // Sorted by created_at desc → bob first.
         assert_eq!(body.keys[0].owner, "bob");
         assert_eq!(body.keys[1].owner, "alice");
     }
 
     #[tokio::test]
+    #[serial]
     async fn list_keys_open_when_provisioning_open() {
-        let app = test_app(); // admin_key=None, allow_open_keys=true
+        let app = test_app().await;
         let resp = app
             .oneshot(
                 Request::builder()
@@ -337,8 +339,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn list_keys_500_when_provisioning_disabled() {
-        let app = app_with_provisioning_disabled();
+        let app = app_with_provisioning_disabled().await;
         let resp = app
             .oneshot(
                 Request::builder()
@@ -352,9 +355,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn delete_key_requires_admin_auth() {
-        let (app, _) = app_with_admin_key();
-        let hash = hash_key("zks_x");
+        let (app, _) = app_with_admin_key().await;
+        let hash = key_store::hash_key("zks_x");
         let resp = app
             .oneshot(
                 Request::builder()
@@ -369,8 +373,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn delete_key_404_for_unknown_hash() {
-        let (app, _) = app_with_admin_key();
+        let (app, _) = app_with_admin_key().await;
         let unknown = "0".repeat(64);
         let resp = app
             .oneshot(
@@ -387,15 +392,15 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn delete_key_evicts_and_invalidates_subsequent_auth() {
-        let (app, state) = app_with_admin_key();
+        let (app, state) = app_with_admin_key().await;
         let raw = "zks_to_delete";
-        state
-            .keys
-            .insert(raw, "carol".into(), Tier::Developer, 300);
-        let hash = hash_key(raw);
+        key_store::insert(&state.db, raw, "carol".into(), Tier::Developer, 300)
+            .await
+            .unwrap();
+        let hash = key_store::hash_key(raw);
 
-        // Confirm the key works for /usage initially.
         let resp = app
             .clone()
             .oneshot(
@@ -409,7 +414,6 @@ mod tests {
             .unwrap();
         assert_eq!(resp.status(), 200);
 
-        // Delete it.
         let resp = app
             .clone()
             .oneshot(
@@ -428,7 +432,6 @@ mod tests {
         assert_eq!(body.key_hash, hash);
         assert!(body.deleted);
 
-        // Now /usage with that key is 401.
         let resp = app
             .oneshot(
                 Request::builder()

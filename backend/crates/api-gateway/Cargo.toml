@@ -34,7 +34,10 @@ rand = "0.9"
 sha2 = "0.10"
 subtle = "2"
 mutants = "0.0.3"
+sea-orm = { version = "1", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
+api-gateway-migration = { path = "migration" }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+serial_test = "3"

@@ -5,9 +5,7 @@ use tokio::net::TcpListener;
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
-use api_gateway::config::Config;
-use api_gateway::key_store::KeyStore;
-use api_gateway::metering::Metering;
+use api_gateway::config::{db, Config};
 use api_gateway::rate_limit::RateLimitStore;
 use api_gateway::upstream::ReqwestUpstream;
 use api_gateway::{build_router, AppState};
@@ -24,6 +22,11 @@ async fn main() -> anyhow::Result<()> {
         .json()
         .init();
 
+    info!("connecting to database and running migrations");
+    let db = db::connect_and_migrate(&config.database_url)
+        .await
+        .context("database setup")?;
+
     let http = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .connect_timeout(std::time::Duration::from_secs(10))
@@ -32,8 +35,7 @@ async fn main() -> anyhow::Result<()> {
 
     let state = Arc::new(AppState {
         config: config.clone(),
-        keys: KeyStore::new(),
-        metering: Metering::new(),
+        db,
         rate_limiter: RateLimitStore::new(),
         upstream: Arc::new(ReqwestUpstream::new(http)),
     });

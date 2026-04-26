@@ -42,6 +42,20 @@ impl std::fmt::Display for Tier {
     }
 }
 
+impl std::str::FromStr for Tier {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "developer" => Ok(Self::Developer),
+            "startup" => Ok(Self::Startup),
+            "growth" => Ok(Self::Growth),
+            "enterprise" => Ok(Self::Enterprise),
+            other => Err(format!("unknown tier: {other}")),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ApiKeyRecord {
@@ -110,6 +124,28 @@ mod tests {
         assert_eq!(Tier::Startup.to_string(), "startup");
         assert_eq!(Tier::Growth.to_string(), "growth");
         assert_eq!(Tier::Enterprise.to_string(), "enterprise");
+    }
+
+    #[test]
+    fn tier_from_str_valid() {
+        assert_eq!("developer".parse::<Tier>().unwrap(), Tier::Developer);
+        assert_eq!("startup".parse::<Tier>().unwrap(), Tier::Startup);
+        assert_eq!("growth".parse::<Tier>().unwrap(), Tier::Growth);
+        assert_eq!("enterprise".parse::<Tier>().unwrap(), Tier::Enterprise);
+    }
+
+    #[test]
+    fn tier_from_str_roundtrips_with_display() {
+        for tier in [Tier::Developer, Tier::Startup, Tier::Growth, Tier::Enterprise] {
+            assert_eq!(tier.to_string().parse::<Tier>().unwrap(), tier);
+        }
+    }
+
+    #[test]
+    fn tier_from_str_rejects_unknown() {
+        assert!("unknown".parse::<Tier>().is_err());
+        assert!("DEVELOPER".parse::<Tier>().is_err());
+        assert!("".parse::<Tier>().is_err());
     }
 
     #[test]

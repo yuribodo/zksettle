@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use zksettle_types::gateway::{DailyUsage, Tier, UsageRecord};
 
 use crate::auth::AuthenticatedKey;
+use crate::error::GatewayError;
+use crate::metering;
 use crate::AppState;
 
 const DEFAULT_HISTORY_DAYS: u32 = 30;
@@ -34,25 +36,25 @@ pub struct UsageHistoryResponse {
 pub async fn get_usage(
     State(state): State<Arc<AppState>>,
     AuthenticatedKey(record): AuthenticatedKey,
-) -> Json<UsageResponse> {
+) -> Result<Json<UsageResponse>, GatewayError> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    let usage = state.metering.get(&record.key_hash, now);
+    let usage = metering::get(&state.db, &record.key_hash, now).await?;
 
-    Json(UsageResponse {
+    Ok(Json(UsageResponse {
         tier: record.tier,
         monthly_limit: record.tier.monthly_limit(),
         usage,
-    })
+    }))
 }
 
 pub async fn get_usage_history(
     State(state): State<Arc<AppState>>,
     AuthenticatedKey(record): AuthenticatedKey,
     Query(q): Query<HistoryQuery>,
-) -> Json<UsageHistoryResponse> {
+) -> Result<Json<UsageHistoryResponse>, GatewayError> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -61,13 +63,13 @@ pub async fn get_usage_history(
         .days
         .unwrap_or(DEFAULT_HISTORY_DAYS)
         .clamp(1, MAX_HISTORY_DAYS);
-    let history = state.metering.daily_history(&record.key_hash, now, days);
+    let history = metering::daily_history(&state.db, &record.key_hash, now, days).await?;
 
-    Json(UsageHistoryResponse {
+    Ok(Json(UsageHistoryResponse {
         tier: record.tier,
         monthly_limit: record.tier.monthly_limit(),
         history,
-    })
+    }))
 }
 
 #[cfg(test)]
@@ -78,11 +80,20 @@ mod tests {
     use http_body_util::BodyExt;
     use tower::ServiceExt;
 
-    use crate::{build_router, test_state};
+    use crate::{build_router, key_store, test_cleanup, test_state};
+    use serial_test::serial;
+
+    async fn cleanup_and_seed(state: &Arc<crate::AppState>, raw_key: &str, owner: &str) {
+        test_cleanup(&state.db).await;
+        key_store::insert(&state.db, raw_key, owner.into(), Tier::Developer, 1000)
+            .await
+            .unwrap();
+    }
 
     #[tokio::test]
+    #[serial]
     async fn usage_requires_auth() {
-        let state = test_state();
+        let state = test_state().await;
         let app = build_router(state);
         let resp = app
             .oneshot(
@@ -97,14 +108,11 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn usage_returns_zero_for_new_key() {
-        let state = test_state();
-
-        // Insert key directly via state
+        let state = test_state().await;
         let raw_key = "test-key-for-usage";
-        state
-            .keys
-            .insert(raw_key, "bob".into(), Tier::Developer, 1000);
+        cleanup_and_seed(&state, raw_key, "bob").await;
 
         let app = build_router(state);
         let resp = app
@@ -126,8 +134,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn usage_history_requires_auth() {
-        let state = test_state();
+        let state = test_state().await;
         let app = build_router(state);
         let resp = app
             .oneshot(
@@ -142,12 +151,11 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn usage_history_defaults_to_30_days() {
-        let state = test_state();
+        let state = test_state().await;
         let raw_key = "key-history";
-        state
-            .keys
-            .insert(raw_key, "carol".into(), Tier::Developer, 1000);
+        cleanup_and_seed(&state, raw_key, "carol").await;
 
         let app = build_router(state);
         let resp = app
@@ -171,12 +179,11 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn usage_history_respects_days_param() {
-        let state = test_state();
+        let state = test_state().await;
         let raw_key = "key-history-7";
-        state
-            .keys
-            .insert(raw_key, "dave".into(), Tier::Developer, 1000);
+        cleanup_and_seed(&state, raw_key, "dave").await;
 
         let app = build_router(state);
         let resp = app
@@ -197,12 +204,11 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn usage_history_clamps_max_days() {
-        let state = test_state();
+        let state = test_state().await;
         let raw_key = "key-history-cap";
-        state
-            .keys
-            .insert(raw_key, "eve".into(), Tier::Developer, 1000);
+        cleanup_and_seed(&state, raw_key, "eve").await;
 
         let app = build_router(state);
         let resp = app
@@ -222,12 +228,11 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn usage_history_clamps_zero_to_one_day() {
-        let state = test_state();
+        let state = test_state().await;
         let raw_key = "key-history-zero";
-        state
-            .keys
-            .insert(raw_key, "frank".into(), Tier::Developer, 1000);
+        cleanup_and_seed(&state, raw_key, "frank").await;
 
         let app = build_router(state);
         let resp = app
