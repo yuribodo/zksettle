@@ -9,6 +9,7 @@ import { DisplayHeading } from "@/components/ui/display-heading";
 import { cn } from "@/lib/cn";
 
 import { useActPin } from "./use-act-pin";
+import { MarketCell } from "./market-cell";
 
 const ACT_DURATION = "+=120%";
 
@@ -47,16 +48,7 @@ export function ActFiveMarkets() {
           data-markets-grid
         >
           {markets.map((m, i) => (
-            <div
-              key={m.name}
-              className="min-h-[200px] rounded-[8px] border border-forest/30 p-6 text-canvas"
-              data-markets-cell
-            >
-              <p className="font-mono text-[10px] uppercase tracking-[0.14em] tabular-nums text-canvas/40">
-                {String(i + 1).padStart(2, "0")}/06
-              </p>
-              <p className="mt-10 font-display text-2xl text-canvas md:text-3xl">{m.name}</p>
-            </div>
+            <MarketCell key={m.name} market={m} index={i} total={markets.length} />
           ))}
         </div>
 
