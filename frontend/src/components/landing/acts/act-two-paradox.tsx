@@ -35,8 +35,9 @@ export function ActTwoParadox() {
   return (
     <section
       ref={containerRef}
+      id="act-two-paradox"
       aria-labelledby="act-two-heading"
-      className="relative isolate min-h-screen overflow-hidden bg-canvas"
+      className="relative isolate min-h-screen overflow-hidden"
     >
       {/* Stage: each phase is absolutely centered. Only one (or transitioning) is visible at a time. */}
       <div className="absolute inset-0 mx-auto max-w-6xl px-5 md:px-8">

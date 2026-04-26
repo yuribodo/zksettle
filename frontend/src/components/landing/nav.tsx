@@ -32,7 +32,7 @@ export function Nav() {
         "border-b transition-all duration-300 ease-[var(--ease-brand)]",
         scrolled
           ? "border-border-subtle bg-canvas/80 backdrop-blur-md"
-          : "border-transparent bg-transparent",
+          : "border-transparent bg-canvas/40 backdrop-blur-md",
       )}
     >
       <div className="mx-auto flex h-full w-full max-w-6xl items-center justify-between px-5 md:px-8">

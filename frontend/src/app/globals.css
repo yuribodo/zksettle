@@ -111,6 +111,37 @@ em {
   background: var(--color-muted);
 }
 
+@keyframes hero-scroll-bar {
+  0% {
+    transform: scaleY(0);
+    transform-origin: top;
+  }
+  50% {
+    transform: scaleY(1);
+    transform-origin: top;
+  }
+  50.01% {
+    transform-origin: bottom;
+  }
+  100% {
+    transform: scaleY(0);
+    transform-origin: bottom;
+  }
+}
+
+.animate-hero-scroll-bar {
+  animation: hero-scroll-bar 1.8s ease-in-out infinite;
+}
+
+@keyframes terminal-cursor {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.animate-veil-cursor {
+  animation: terminal-cursor 1s steps(1) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

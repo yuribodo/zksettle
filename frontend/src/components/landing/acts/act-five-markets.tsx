@@ -71,27 +71,18 @@ export function ActFiveMarkets() {
     <section
       ref={containerRef}
       aria-labelledby="act-five-heading"
-      className="relative isolate min-h-screen overflow-hidden bg-ink text-canvas"
+      className="relative isolate min-h-screen overflow-hidden bg-canvas text-ink"
     >
-      <div
-        aria-hidden
-        className="absolute inset-0"
-        style={{
-          backgroundImage:
-            "radial-gradient(ellipse 80% 60% at 75% 25%, rgba(12,61,46,0.40), transparent 70%), radial-gradient(ellipse 60% 50% at 20% 80%, rgba(12,61,46,0.22), transparent 65%)",
-        }}
-      />
-
-      <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col justify-center gap-14 px-6 py-24 md:px-8">
+      <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col justify-center gap-8 px-6 py-16 md:px-8 lg:gap-7 lg:py-12">
         <p
-          className="font-mono text-xs uppercase tracking-[0.18em] text-canvas/55"
+          className="font-mono text-xs uppercase tracking-[0.18em] text-forest"
           data-markets-eyebrow
         >
           One primitive. Six markets.
         </p>
 
         <div
-          className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3"
+          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-3"
           data-markets-grid
           onMouseLeave={() => setHoveredIndex(null)}
         >
@@ -111,45 +102,44 @@ export function ActFiveMarkets() {
         </div>
 
         <div
-          className="h-px w-full bg-forest/30"
+          className="h-px w-full bg-border-subtle"
           style={{
             backgroundImage:
-              "repeating-linear-gradient(to right, rgba(12,61,46,0.5) 0 8px, transparent 8px 14px)",
+              "repeating-linear-gradient(to right, var(--color-border) 0 8px, transparent 8px 14px)",
             backgroundColor: "transparent",
           }}
           data-markets-divider
         />
 
-        <div data-markets-closer>
+        <div
+          className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-end lg:gap-10"
+          data-markets-closer
+        >
           <DisplayHeading
             id="act-five-heading"
             level="m"
-            className="max-w-[20ch] text-canvas"
+            className="max-w-[18ch] text-ink"
           >
             {closer.headline}
           </DisplayHeading>
-          <p className="mt-4 max-w-[40ch] text-base leading-relaxed text-canvas/65">
-            {closer.sub}
-          </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link
-              href={closer.ctas.primary.href}
-              className={cn(
-                buttonVariants({ variant: "primary", size: "lg" }),
-                "shadow-[0_8px_30px_-10px_rgba(12,61,46,0.6)]",
-              )}
-            >
-              {closer.ctas.primary.label}
-            </Link>
-            <Link
-              href={closer.ctas.secondary.href}
-              className={cn(
-                buttonVariants({ variant: "ghost", size: "lg" }),
-                "border border-canvas/15 text-canvas hover:bg-canvas/5",
-              )}
-            >
-              {closer.ctas.secondary.label}
-            </Link>
+          <div>
+            <p className="max-w-[38ch] text-sm leading-relaxed text-quill md:text-base">
+              {closer.sub}
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Link
+                href={closer.ctas.primary.href}
+                className={cn(buttonVariants({ variant: "primary", size: "md" }))}
+              >
+                {closer.ctas.primary.label}
+              </Link>
+              <Link
+                href={closer.ctas.secondary.href}
+                className={cn(buttonVariants({ variant: "ghost", size: "md" }))}
+              >
+                {closer.ctas.secondary.label}
+              </Link>
+            </div>
           </div>
         </div>
       </div>

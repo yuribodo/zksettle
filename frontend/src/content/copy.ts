@@ -58,10 +58,6 @@ export interface Market {
 }
 
 export interface MoveCopy {
-  readonly code: {
-    readonly label: string;
-    readonly lines: readonly [string, string, string];
-  };
   readonly markets: readonly Market[];
   readonly closer: {
     readonly headline: string;
@@ -83,12 +79,12 @@ export interface LandingCopy {
 
 export const COPY: LandingCopy = {
   hero: {
-    eyebrow: "ZKSETTLE · COMPLIANCE INFRASTRUCTURE",
-    headline: "Settle in 181ms, audit for life.",
-    sub: "Zero-knowledge proofs for stablecoin compliance on Solana. Travel rule, sanctions, jurisdiction — proven on-chain, never revealed.",
+    eyebrow: "COMPLIANCE FOR PROGRAMMABLE MONEY",
+    headline: "Prove without showing.",
+    sub: "Stablecoins moved $9.3T last year. Compliance is still spreadsheets. zksettle lets every transfer carry its own audit — cryptographic, instant, private.",
     ctas: {
-      primary: { label: "Try the demo →", href: "#demo" },
-      secondary: { label: "Read the spec", href: "https://github.com/zksettle" },
+      primary: { label: "See a live proof →", href: "#act-three-engine" },
+      secondary: { label: "How it works", href: "#act-two-paradox" },
     },
   },
 
@@ -146,14 +142,6 @@ export const COPY: LandingCopy = {
 
   // ── Act 4: Move ───────────────────────────────────────────────────────────
   move: {
-    code: {
-      label: "Three lines.",
-      lines: [
-        "$ npm i @zksettle/sdk",
-        "→ zksettle.prove(credential)",
-        "→ zksettle.wrap(transferIx, proof)",
-      ] as const,
-    },
     markets: [
       { name: "Remittances",   descriptor: "Cross-border value, sub-second." },
       { name: "Payroll",       descriptor: "Salaries on-chain, amounts off-record." },

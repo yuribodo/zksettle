@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 
-import { Hero } from "@/components/landing/hero/hero";
+import { HeroCopy } from "@/components/landing/hero/hero-copy";
 
 import { useActPin } from "./use-act-pin";
 
@@ -15,7 +15,7 @@ export function ActOneHero() {
 
   return (
     <div ref={containerRef} className="relative">
-      <Hero />
+      <HeroCopy />
     </div>
   );
 }

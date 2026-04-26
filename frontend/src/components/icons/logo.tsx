@@ -22,8 +22,8 @@ export function Logo({
   className,
 }: LogoProps) {
   const tokens = VARIANT_CLASSES[variant];
-  const gap = size * 0.4;
-  const wordmarkFontSize = size * 0.5;
+  const gap = size * 0.36;
+  const wordmarkFontSize = size * 0.52;
 
   const containerClass = ["inline-flex items-center align-middle", className]
     .filter(Boolean)
@@ -31,7 +31,7 @@ export function Logo({
 
   const wordmarkStyle: CSSProperties = {
     fontSize: `${wordmarkFontSize}px`,
-    letterSpacing: "-0.01em",
+    letterSpacing: "-0.025em",
   };
 
   return (
@@ -45,7 +45,7 @@ export function Logo({
       {showWordmark ? (
         <span
           aria-hidden={false}
-          className={`font-display font-normal leading-none ${tokens.wordmark}`}
+          className={`font-display font-normal leading-[0.92] ${tokens.wordmark}`}
           style={wordmarkStyle}
         >
           ZKSettle
@@ -67,33 +67,31 @@ function Seal({ size, className }: { size: number; className: string }) {
       className={className}
       shapeRendering="geometricPrecision"
     >
-      <circle cx="24" cy="24" r="22" stroke="currentColor" strokeWidth="1.25" />
-      <text
-        x="24"
-        y="24"
-        textAnchor="middle"
-        dominantBaseline="central"
-        fontFamily="Georgia, 'Times New Roman', serif"
-        fontSize="26"
-        fontStyle="normal"
-        fontWeight="400"
-        fill="currentColor"
-      >
-        Z
-      </text>
-      <line
-        x1="10.5"
-        y1="24"
-        x2="37.5"
-        y2="24"
+      <rect
+        x="6"
+        y="6"
+        width="36"
+        height="36"
+        rx="9"
         stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="butt"
+        strokeWidth="1.5"
       />
-      <line x1="24" y1="0.5" x2="24" y2="3.5" stroke="currentColor" strokeWidth="1.25" />
-      <line x1="47.5" y1="24" x2="44.5" y2="24" stroke="currentColor" strokeWidth="1.25" />
-      <line x1="24" y1="47.5" x2="24" y2="44.5" stroke="currentColor" strokeWidth="1.25" />
-      <line x1="0.5" y1="24" x2="3.5" y2="24" stroke="currentColor" strokeWidth="1.25" />
+      <path
+        d="M15 16H32.5L15 32H33"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="square"
+        strokeLinejoin="miter"
+      />
+      <path
+        d="M18 24H30"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="square"
+        opacity="0.45"
+      />
+      <circle cx="15" cy="16" r="2" fill="currentColor" />
+      <circle cx="33" cy="32" r="2" fill="currentColor" />
     </svg>
   );
 }

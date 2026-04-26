@@ -1,0 +1,40 @@
+<svg width="1200" height="750" viewBox="0 0 1200 750" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="750" rx="34" fill="#FAFAF7"/>
+  <rect x="42" y="42" width="1116" height="666" rx="28" fill="#F5F3EE" stroke="#E8E5DF"/>
+  <path d="M92 142H1108" stroke="#E8E5DF"/>
+  <text x="92" y="105" fill="#8A8880" font-family="JetBrains Mono, ui-monospace, monospace" font-size="18" letter-spacing="4">VERIFY ONCE</text>
+  <text x="92" y="202" fill="#1A1917" font-family="Georgia, serif" font-size="72" letter-spacing="-3">Credential becomes a root.</text>
+  <text x="94" y="248" fill="#4A4640" font-family="Arial, sans-serif" font-size="26">An issuer signs KYC once. ZKSettle stores only the cryptographic root.</text>
+  <rect x="112" y="336" width="316" height="218" rx="20" fill="#FAFAF7" stroke="#C8C4BC"/>
+  <text x="140" y="388" fill="#8A8880" font-family="JetBrains Mono, ui-monospace, monospace" font-size="15" letter-spacing="3">CREDENTIAL</text>
+  <rect x="140" y="426" width="160" height="12" rx="6" fill="#C8C4BC"/>
+  <rect x="140" y="462" width="232" height="12" rx="6" fill="#E8E5DF"/>
+  <rect x="140" y="498" width="194" height="12" rx="6" fill="#E8E5DF"/>
+  <circle cx="360" cy="378" r="34" fill="#E8F2EE" stroke="#0C3D2E" stroke-width="2"/>
+  <path d="M343 378H377M360 361V395" stroke="#0C3D2E" stroke-width="2"/>
+  <text x="140" y="542" fill="#0C3D2E" font-family="JetBrains Mono, ui-monospace, monospace" font-size="18">issuer: signed</text>
+  <path d="M456 445H610" stroke="#0C3D2E" stroke-width="3" stroke-linecap="square"/>
+  <path d="M586 421L612 445L586 469" stroke="#0C3D2E" stroke-width="3" fill="none"/>
+  <g stroke="#6B6762" stroke-width="2">
+    <line x1="742" y1="386" x2="686" y2="466"/>
+    <line x1="742" y1="386" x2="798" y2="466"/>
+    <line x1="686" y1="466" x2="642" y2="542"/>
+    <line x1="686" y1="466" x2="730" y2="542"/>
+    <line x1="798" y1="466" x2="754" y2="542"/>
+    <line x1="798" y1="466" x2="842" y2="542"/>
+  </g>
+  <g fill="#FAFAF7" stroke="#0C3D2E" stroke-width="3">
+    <circle cx="742" cy="386" r="24"/>
+    <circle cx="686" cy="466" r="18"/>
+    <circle cx="798" cy="466" r="18"/>
+  </g>
+  <g fill="#F5F3EE" stroke="#C8C4BC" stroke-width="2">
+    <circle cx="642" cy="542" r="16"/>
+    <circle cx="730" cy="542" r="16"/>
+    <circle cx="754" cy="542" r="16"/>
+    <circle cx="842" cy="542" r="16"/>
+  </g>
+  <rect x="882" y="388" width="206" height="116" rx="18" fill="#E8F2EE" stroke="#0C3D2E"/>
+  <text x="912" y="436" fill="#0C3D2E" font-family="JetBrains Mono, ui-monospace, monospace" font-size="16" letter-spacing="2">ROOT</text>
+  <text x="912" y="474" fill="#1A1917" font-family="JetBrains Mono, ui-monospace, monospace" font-size="22">0x9a...41</text>
+</svg>
