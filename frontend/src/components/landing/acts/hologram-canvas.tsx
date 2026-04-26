@@ -142,6 +142,22 @@ export function HologramCanvas({ paused = false }: { paused?: boolean }) {
       aria-hidden
       className="absolute inset-0 z-0"
       style={{ contain: "strict" }}
-    />
+    >
+      {/* CSS fallback — hidden once WebGL canvas is appended */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: "radial-gradient(ellipse at center, rgba(10,40,35,0.4) 0%, rgba(5,5,5,1) 70%)",
+          backgroundSize: "100% 100%",
+        }}
+      >
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,200,0.015) 2px, rgba(0,255,200,0.015) 4px)",
+          }}
+        />
+      </div>
+    </div>
   );
 }
