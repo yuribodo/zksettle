@@ -27,8 +27,6 @@ pub mod mock {
 
     use super::*;
 
-    /// In-memory `IrysUploader` for tests. Records uploads, lets tests
-    /// inject one-shot errors, and returns a configurable canned tx_id.
     pub struct MockIrysUploader {
         recorded: Mutex<Vec<ProofSettled>>,
         tx_id: Mutex<String>,
@@ -136,13 +134,7 @@ mod tests {
         assert_eq!(mock.upload_count(), 1);
     }
 
-    /// Exercises the `IrysUploader` trait impl on `IrysClient` through a
-    /// `dyn IrysUploader` indirection. The inherent `IrysClient::upload`
-    /// already has its own dry-run test, but the trait-impl wrapper at
-    /// `mod.rs:19` is a separate function that mutation testing flagged as
-    /// uncovered: replacing the body with `Ok(String::new())` or
-    /// `Ok("xyzzy".into())` would otherwise pass undetected. Asserting the
-    /// exact `"dry-run"` marker (not just `is_ok()`) kills both.
+    // Covers trait-impl wrapper at mod.rs:19 — mutation testing flagged it uncovered.
     #[tokio::test]
     async fn trait_dispatch_on_irys_client_returns_dry_run_marker() {
         use std::sync::Arc;

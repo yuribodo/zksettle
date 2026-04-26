@@ -11,7 +11,7 @@ use reqwest::Client;
 
 use crate::error::GatewayError;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct UpstreamRequest {
     pub method: Method,
     pub url: String,
@@ -108,10 +108,6 @@ pub mod mock {
     use axum::body::Bytes;
     use axum::http::{HeaderMap, StatusCode};
 
-    /// In-memory `HttpUpstream` for tests. Holds a FIFO queue of canned
-    /// responses; each `send` consumes one. Records every request for
-    /// post-hoc assertions. `queue_error` injects a one-shot upstream
-    /// failure to exercise error branches.
     pub struct MockHttpUpstream {
         responses: Mutex<VecDeque<UpstreamResponse>>,
         sent: Mutex<Vec<UpstreamRequest>>,
@@ -127,12 +123,10 @@ pub mod mock {
             }
         }
 
-        /// Queue a response for the next `send` call. Calls drain in FIFO order.
         pub fn queue_response(&self, resp: UpstreamResponse) {
             self.responses.lock().unwrap().push_back(resp);
         }
 
-        /// Convenience: queue a 200 OK with empty body.
         pub fn queue_ok(&self) {
             self.queue_response(UpstreamResponse {
                 status: StatusCode::OK,
@@ -141,7 +135,6 @@ pub mod mock {
             });
         }
 
-        /// Cause the next `send` to fail with this error, then reset.
         pub fn queue_error(&self, error: GatewayError) {
             *self.pending_error.lock().unwrap() = Some(error);
         }
@@ -151,12 +144,7 @@ pub mod mock {
         }
 
         pub fn last_sent(&self) -> Option<UpstreamRequest> {
-            self.sent.lock().unwrap().last().map(|r| UpstreamRequest {
-                method: r.method.clone(),
-                url: r.url.clone(),
-                headers: r.headers.clone(),
-                body: r.body.clone(),
-            })
+            self.sent.lock().unwrap().last().cloned()
         }
     }
 
@@ -272,14 +260,7 @@ mod tests {
         assert_eq!(mock.sent_count(), 1);
     }
 
-    /// Tests for the production `ReqwestUpstream` size guard. We can't use
-    /// the mock here — the guard lives inside `ReqwestUpstream::send`. So we
-    /// spin up a raw TCP server that emits hand-crafted HTTP/1.1 responses
-    /// (no axum/hyper involved) and point reqwest at it. This lets us
-    /// independently exercise:
-    ///   - the `1024 * 1024` constant (line 60)
-    ///   - the Content-Length guard (line 69)
-    ///   - the body-length guard reached only when CL is absent (line 84)
+    // ReqwestUpstream size guard tests — raw TCP server to exercise CL and body-length guards.
     mod size_guard {
         use super::*;
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -287,8 +268,6 @@ mod tests {
 
         const MAX_BYTES: usize = 1024 * 1024;
 
-        /// Spin up a tokio TCP server that sends `response_bytes` verbatim
-        /// for every accepted connection, then closes. Returns its port.
         async fn spawn_raw_server(response_bytes: Vec<u8>) -> u16 {
             let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let port = listener.local_addr().unwrap().port();
@@ -320,12 +299,7 @@ mod tests {
             }
         }
 
-        /// Body well above the `*→+` mutation's MAX (=2048) but well under
-        /// the real MAX (=1MB) succeeds. Kills:
-        ///   - line 60 `*` → `+` (mutated MAX=2048; 4KB rejected)
-        ///   - line 60 `*` → `/` (mutated MAX=1; 4KB rejected)
-        ///   - line 69 `>` → `<` (mutated: 4KB < 1MB true → reject)
-        ///   - line 84 `>` → `<` (same logic on body.len())
+        // Kills: *→+, *→/ on MAX constant; >→< on CL and body guards
         #[tokio::test]
         async fn under_limit_response_succeeds() {
             let body = vec![b'a'; 4096];
@@ -343,10 +317,7 @@ mod tests {
             assert_eq!(result.body.len(), 4096);
         }
 
-        /// Content-Length header above MAX is rejected before reading the
-        /// body. Kills:
-        ///   - line 69 `>` → `==` (mutated: 2MB == 1MB false → no error)
-        ///   - line 69 `>` → `<`  (mutated: 2MB < 1MB false → no error)
+        // Kills: >→==, >→< on CL guard
         #[tokio::test]
         async fn oversized_content_length_header_is_rejected() {
             // Lie about CL: claim 2MB, send empty body, close. Reqwest will
@@ -367,10 +338,7 @@ mod tests {
             );
         }
 
-        /// Boundary case: body exactly at MAX must succeed. Kills:
-        ///   - line 69 `>` → `>=` (mutated: 1MB >= 1MB true → reject)
-        ///   - line 69 `>` → `==` (mutated: 1MB == 1MB true → reject)
-        ///   - line 84 `>` → `>=` (same boundary on body.len())
+        // Kills: >→>=, >→== on CL and body guards (boundary)
         #[tokio::test]
         async fn exactly_max_size_response_succeeds() {
             let body = vec![0u8; MAX_BYTES];
@@ -390,10 +358,7 @@ mod tests {
             assert_eq!(result.body.len(), MAX_BYTES);
         }
 
-        /// Without a Content-Length header, the line-69 guard cannot trip,
-        /// so the line-84 body-length guard becomes the only defense. Kills:
-        ///   - line 84 `>` → `==` (mutated: oversized != MAX → no error)
-        ///   - line 84 `>` → `<`  (mutated: oversized < MAX false → no error)
+        // Kills: >→==, >→< on body-length guard (no CL header)
         #[tokio::test]
         async fn oversized_body_without_content_length_is_rejected() {
             let body = vec![0u8; MAX_BYTES + 1];
