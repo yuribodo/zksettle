@@ -4,6 +4,11 @@ export type ScrollState = {
   mouse: { x: number; y: number };
   rippleProgress: number;
   targetLuminance: number;
+  actTwoProgress: number;
+  breachProgress: number;
+  scrollVelocity: number;
+  actThreeProgress: number;
+  actFiveProgress: number;
 };
 
 export function createScrollState(): ScrollState {
@@ -13,13 +18,18 @@ export function createScrollState(): ScrollState {
     mouse: { x: 0, y: 0 },
     rippleProgress: 0,
     targetLuminance: 0,
+    actTwoProgress: 0,
+    breachProgress: 0,
+    scrollVelocity: 0,
+    actThreeProgress: 0,
+    actFiveProgress: 0,
   };
 }
 
 export type CanvasTier = "high" | "mid" | "low";
 
 export const TIER_PARAMS = {
-  high: { particles: 50_176, fbo: 224, dither: "full", ripple: true },
-  mid: { particles: 25_600, fbo: 160, dither: "full", ripple: false },
-  low: { particles: 12_544, fbo: 112, dither: "static", ripple: false },
+  high: { dpr: 2.0 },
+  mid: { dpr: 1.5 },
+  low: { dpr: 1.0 },
 } as const;
