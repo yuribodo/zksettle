@@ -38,6 +38,14 @@ impl KeyStore {
         let hash = hash_key(raw_key);
         self.keys.remove(&hash).is_some()
     }
+
+    pub fn remove_by_hash(&self, key_hash: &str) -> bool {
+        self.keys.remove(key_hash).is_some()
+    }
+
+    pub fn list(&self) -> Vec<ApiKeyRecord> {
+        self.keys.iter().map(|r| r.value().clone()).collect()
+    }
 }
 
 pub fn hash_key(raw: &str) -> String {
@@ -77,6 +85,31 @@ mod tests {
         store.insert("key", "bob".into(), Tier::Startup, 2000);
         assert!(store.remove("key"));
         assert!(store.lookup("key").is_none());
+    }
+
+    #[test]
+    fn remove_by_hash_returns_false_when_unknown() {
+        let store = KeyStore::new();
+        assert!(!store.remove_by_hash("0".repeat(64).as_str()));
+    }
+
+    #[test]
+    fn remove_by_hash_evicts_existing() {
+        let store = KeyStore::new();
+        store.insert("k", "owner".into(), Tier::Developer, 1);
+        let hash = hash_key("k");
+        assert!(store.remove_by_hash(&hash));
+        assert!(store.lookup("k").is_none());
+    }
+
+    #[test]
+    fn list_returns_all_records() {
+        let store = KeyStore::new();
+        store.insert("a", "alice".into(), Tier::Developer, 100);
+        store.insert("b", "bob".into(), Tier::Startup, 200);
+        let mut owners: Vec<String> = store.list().into_iter().map(|r| r.owner).collect();
+        owners.sort();
+        assert_eq!(owners, vec!["alice".to_string(), "bob".to_string()]);
     }
 
     #[test]

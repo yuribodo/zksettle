@@ -66,6 +66,8 @@ mod tests {
                 log_level: "error".into(),
                 admin_key: None,
                 allow_open_keys: true,
+                cors_allowed_origins: vec![],
+                indexer_url: None,
             },
             keys,
             metering: Metering::new(),

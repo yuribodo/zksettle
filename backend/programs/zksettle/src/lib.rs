@@ -1,3 +1,5 @@
+#![allow(deprecated)] // anchor 0.31 macro emits AccountInfo::realloc; fixed in anchor 1.0
+
 pub mod constants;
 mod cu_probe;
 pub mod error;

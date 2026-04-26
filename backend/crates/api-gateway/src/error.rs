@@ -24,6 +24,9 @@ pub enum GatewayError {
     #[error("forbidden")]
     Forbidden,
 
+    #[error("not found")]
+    NotFound,
+
     #[error("configuration error: {0}")]
     Config(String),
 }
@@ -39,6 +42,7 @@ impl IntoResponse for GatewayError {
             Self::Unauthorized | Self::KeyNotFound => StatusCode::UNAUTHORIZED,
             Self::RateLimited | Self::QuotaExhausted => StatusCode::TOO_MANY_REQUESTS,
             Self::Forbidden => StatusCode::FORBIDDEN,
+            Self::NotFound => StatusCode::NOT_FOUND,
             Self::Upstream(_) => StatusCode::BAD_GATEWAY,
             Self::Config(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
