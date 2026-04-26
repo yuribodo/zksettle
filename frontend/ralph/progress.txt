@@ -1,0 +1,891 @@
+# Ralph Progress Log
+Started: sáb 18 abr 2026 22:51:13 -03
+---
+
+## Codebase Patterns
+- Scroll-locked per-row dissolve pattern (US-015): wrap section in `<PinnedSection onProgress={setProgress}>`, compute each row's local `rowProgress(progress, index, total)` with a 0.4-wide window and stride `(1-span)/(total-1)` so row 0 → [0, 0.4] ... row N-1 → [1-0.4, 1]. `dissolve(value, p)` replaces `Math.ceil(p * len)` leading characters with `▓` (U+2593). Force `effectiveProgress = 1` when `useReducedMotion()` is true so the final state renders with no rAF/scroll subscription. Use `aria-label` on each `<dd>` with the canonical value + `aria-hidden="true"` on the visual span — SRs never hear the intermediate ▓-mixed states. Reuse for any future "value morphs" (policy rules, audit redactions, etc.).
+- Landing copy lives in `src/content/copy.ts` (COPY: LandingCopy) and `src/content/use-cases.ts` (USE_CASES: readonly UseCase[]). All section components (US-011 onwards) MUST consume strings from these modules — never inline copy in JSX. Every leaf is typed via explicit interfaces; no `as const` needed, and `readonly` modifiers prevent accidental mutation during motion work.
+- Next.js 15 must be pinned to a patched 15.x (e.g. 15.5.15 via backport tag). 15.1.6 is flagged for CVE-2025-66478 — do not use.
+- A parent `pnpm-lock.yaml` lives at `/home/mario/pnpm-lock.yaml` which Next detects as a rival workspace root. Set `outputFileTracingRoot: path.join(__dirname)` in `next.config.ts` to silence the warning.
+- Repo's root `.gitignore` already excludes `node_modules/`. Frontend-specific ignores go in `frontend/.gitignore`.
+- pnpm globally installed is 10.32.1 and corepack is NOT available. The `packageManager: pnpm@9.12.0` field is informational only — install works under pnpm 10 because `managePackageManagerVersions` defaults to false in pnpm 9+.
+- The `ralph/` directory inside `frontend/` is excluded from tsconfig.json `exclude`; keep it out of all tsc/next build globs so ralph scripts don't pollute type-checking. Also add `ralph/**` to the `ignores` block of `eslint.config.mjs`.
+- Exact dep versions shipped in US-001 for reference: next 15.5.15, react/react-dom 19.0.0, typescript 5.9.x, tailwindcss + @tailwindcss/postcss 4.x, @types/node 22.x, @types/react 19.x.
+- ESLint 9 uses flat config. `eslint-config-next` is still legacy extends-style, so compose it via `FlatCompat` from `@eslint/eslintrc`. Template: `compat.extends("next/core-web-vitals", "next/typescript")`.
+- `next lint` is deprecated in Next 15 — the `lint` script calls `eslint .` directly instead.
+- Vitest exits 1 when no test files match; keep `--passWithNoTests` on the `test` script until at least one test exists so CI stays green between stories.
+- `@vitest/ui` must match the `vitest` major version exactly (pin `@vitest/ui@^2` while on vitest 2).
+- `motion` is the modern package name (was `framer-motion`). The PRD calls for "motion v11" but npm currently ships v12 as the latest line — v11 is deprecated. Use `motion@^12`; the React import surface (`motion`, `useScroll`, `useInView`, etc.) is identical.
+- `three`'s `@types/three` minor version must match the installed `three` minor (e.g. both 0.184.x). Pin them in lockstep; out-of-sync majors break Three's typed scene/object APIs.
+- Tailwind v4 `@theme` tokens MUST use category prefixes: `--color-*`, `--font-*`, `--radius-*`, `--ease-*`. Reference via utility classes (`bg-forest`, `text-ink`, `font-display`) or `var(--color-forest)` — NEVER `var(--forest)` bare; that resolves undefined. The Design Spec uses short names for readability; translate to prefixed names when writing CSS.
+- `--font-sans` / `--font-mono` in `globals.css` cascade through `var(--font-geist-sans)` / `var(--font-jetbrains-mono)` — those are the CSS variables US-005's `next/font` registration will expose on `<body className>`. Keep the `ui-sans-serif` / `ui-monospace` fallbacks so the page stays readable between stories.
+- `--font-display` is hard-coded to Georgia (Design Spec D8). To upgrade to PP Editorial New later, change ONLY `--font-display` in `globals.css` — no other file touches that variable.
+- The global `prefers-reduced-motion` block in `globals.css` only neutralizes CSS animations + transitions + scroll-behavior. JS-driven motion (GSAP ScrollTrigger, motion/react, Three.js rAF loops) must ALSO short-circuit explicitly via `useReducedMotion()` from US-012 — the CSS rule is a safety net, not a replacement.
+- Tailwind v4 auto-generates utilities from every `@theme` token — so `--font-display` gives `font-display`, `--color-quill` gives `text-quill`/`bg-quill`, `--radius-3` gives `rounded-[var(--radius-3)]` (radii utilities require the bracket form since Tailwind doesn't auto-emit `rounded-3`). Prefer utilities over inline `var(...)` references in className.
+- Geist is registered via `geist/font/sans` (CSS variable `--font-geist-sans` is hard-coded, not configurable). Other fonts come from `next/font/google` with an explicit `variable:` option. Both patterns compose on `<html>`: `<html className={\`\${GeistSans.variable} \${otherFont.variable}\`}>`.
+- `metadata.metadataBase` must be set once in `src/app/layout.tsx` or Next warns on every build with relative OG image paths. Source from `process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"` so prod deployments get the correct origin without code changes.
+- Skip-to-content anchor pattern: first child of `<body>`, `className="sr-only focus:not-sr-only ..."`, `href="#main-content"`, paired with `<main id="main-content">` on every page. Do not move this into a component that's conditionally rendered; it must always be the first focusable element.
+- Custom SVG icons (The Seal, commitment glyph) live in `src/components/icons/`. Pattern: SVG uses `currentColor` for stroke/fill and an outer wrapper applies a text-color utility (`text-ink`, `text-forest`, `text-surface`) — this is how variant colors cascade without inline hex. Match Iconoir's 1.5px stroke convention; The Seal uses 1.25px ring + 2.5px settlement bar per Design Spec §3.1. Prefer `shapeRendering="geometricPrecision"` for curves; `aria-hidden="true"` on decorative SVGs.
+- Shared utilities live in `src/lib/`. `cn()` = clsx + tailwind-merge (shadcn canonical); `truncateWallet`/`fmtAmount`/`fmtCompact` in `format.ts` use `Intl.NumberFormat` en-US (not custom math) — any future currency/compact tweaks go there. Deterministic randomness via `createPrng(seed)` (mulberry32) in `prng.ts` with `next`/`range`/`pick` methods — use this wherever you'd reach for `Math.random()` in demos, live feeds, or mock data so output stays reproducible across SSR/client/tests. PRNG state is `>>>= 0` coerced on each step; `pick` throws on empty array (don't swallow — surface the bug).
+- Vitest co-locates tests: `src/**/<name>.test.ts`. `format.test.ts` + `prng.test.ts` are the first real tests in the repo; the `--passWithNoTests` flag on the `test` script is still harmless but no longer load-bearing. For PRNG determinism tests, instantiate two prngs with the same seed and `expect(sequenceA).toEqual(sequenceB)` — testing the internal state directly is brittle.
+- All UI primitives live in `src/components/ui/` and use `cva()` + `VariantProps<typeof variantsFn>` for multi-variant components (Button, Badge). Single-shape primitives (Input, Select, Slider) compose `cn()` directly. Every primitive uses `forwardRef` + explicit `displayName`, and interactive elements expose `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest` (never plain `focus:` — that flashes on mouse clicks). Radii per Design Spec §3.5: buttons/selects/inputs/sliders = `rounded-[var(--radius-3)]` for buttons and `rounded-[var(--radius-2)]` for inputs/status pills/badges. Tabs is a `"use client"` compound component (Tabs / TabsList / TabsTrigger / TabsContent) with `useId()`-scoped ARIA ids and full Arrow/Home/End keyboard nav — import it from server components without needing "use client" in the caller.
+- Native `<input type="range">` styling requires vendor-prefixed pseudo-elements in `globals.css` under a `.zks-slider` opt-in class (webkit + moz track AND thumb). Tailwind v4 can't express `::-moz-range-thumb` cleanly, so keep range styles centralized there. Native `<select>` needs `appearance-none` + a manually positioned chevron SVG with `pointer-events-none` — otherwise the OS caret ignores tokens.
+- Demo routes use top-level App Router paths (`/ui` for primitives). Reserve `/demo` for the US-015 Interactive Demo; if you add more sandbox pages later, nest them under `/ui/<topic>` instead of taking new top-level routes.
+- Display typography lives in `src/components/ui/display-heading.tsx` (`DisplayHeading level="xl|l|m" as?`). Default tag mapping xl→h1, l→h2, m→h3 — override `as` to preserve a11y heading rank when nesting inside an existing section. NEVER manually class up a `<h1 className="font-display text-[clamp(...)]">` in landing/dashboard sections; always go through DisplayHeading so the type tokens stay synced with Design Spec §3.4. Inline `<em>` inside is the canonical brand-emphasis treatment (forest italic via the global `em {}` rule in globals.css) — do not add `text-forest italic` manually; do not use `<em>` for non-emphasis italics (use `<i>` or a span if you ever need that).
+- Tailwind v4 fluid typography pattern: `text-[clamp(MIN,VW,MAX)]` for size, `leading-[N]` for line-height, `tracking-[Nem]` for letter-spacing. Letter-spacing percentages from the Design Spec MUST be translated to em (`-3.5%` → `tracking-[-0.035em]`) because CSS `letter-spacing` does not accept `%` and `tracking-[-3.5%]` silently no-ops. Same translation rule applies anywhere else in the codebase that copies type-stack values out of the spec.
+- Landing composition lives entirely under `src/components/landing/`. The shared `Section` wrapper in `section.tsx` enforces the 96/160 vertical rhythm (`py-24 md:py-40`) AND the 20px outer gutter (`px-5 md:px-8`) AND the `max-w-6xl` container in one place — every new section should default to `<Section>` instead of re-declaring the padding/width triad. Full-bleed panels (Numbers bg-surface, Closing CTA bg-forest) either pass a different `className` to `<Section>` or skip it entirely and do their own outer wrapper. Paired `SectionHeader` component renders the eyebrow pattern (mono forest + 20px forest rule + DisplayHeading) — always pass `headline={<span id="section-heading">…</span>}` and `aria-labelledby` on the `<Section>` for keyboard/AT navigation.
+- Landing nav (`src/components/landing/nav.tsx`) is a `"use client"` component because it toggles a scroll-based border. Pattern: `useState` for `scrolled` + `useEffect` registering a passive scroll listener with the `() => setScrolled(window.scrollY > 8)` pattern. The listener is passive and cleaned up on unmount — don't replace this with a `motion.useScroll()` hook just to shave lines; the plain listener is 1/10 the runtime cost on a landing page with ScrollTrigger already pending in US-014.
+- When a `<Link>` needs to look like a `<Button>`, import `buttonVariants` from `@/components/ui/button` and pass it through `cn(buttonVariants({ variant, size }))`. DON'T wrap `<Button asChild>` — that API doesn't exist in this codebase. DON'T render a `<Button>` inside a `<Link>` — that produces invalid nested interactive DOM and React will warn.
+- For inverted panels (forest bg, canvas text) the design system's `buttonVariants` still works for ghost but needs a `border-canvas text-canvas hover:bg-canvas hover:text-forest focus-visible:outline-canvas` override. For the inverted primary (canvas bg, forest text) it's cleaner to write a one-off class list than to add a 6th variant to `buttonVariants` — revisit if/when a 2nd inverted section shows up.
+- React hooks live under `src/hooks/use-<name>.ts` with the `"use client"` directive at the TOP of every file (not just the tests). Importing a "use client" hook from a server component is fine — Next's bundler splits at the boundary. Co-locate tests next to the hook (`use-<name>.test.ts`) and prepend `// @vitest-environment jsdom` to each hook test file; the global vitest default stays `node` so lib/* tests don't pay the jsdom startup cost.
+- React testing is via `@testing-library/react@^16` + `@testing-library/dom@^10` (v16 is the React 19 line; earlier majors pin to React 17/18 and will throw on render). Use `renderHook(() => myHook())` — it flushes effects synchronously inside an implicit `act()` wrapper, so `result.current` is the post-mount value. Wrap explicit `rerender()` calls in `act(() => rerender())` to keep React 19's scheduler quiet. Don't reach for `react-test-renderer` or `@testing-library/react-hooks` — both are deprecated for React 19.
+- To mock `window.matchMedia` in jsdom tests, use `Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: vi.fn().mockReturnValue(mql) })` where `mql` exposes `matches` + `addEventListener('change', handler)` + `removeEventListener(...)` + a helper like `dispatchChange(matches)` for simulating media-query flips. jsdom does ship a stub `matchMedia` by default, but it returns `matches: false` with no-op listeners — override it when your test needs to assert on changes.
+- Three.js (~120 kB gz minified) MUST ship in a lazy chunk, not the landing's first-load bundle — otherwise the landing blows past the US-032 220 kB budget. Pattern: the actual `"use client"` Three component (e.g. `veil-canvas.tsx`) is imported via a sibling `*-lazy.tsx` wrapper that calls `next/dynamic(() => import("./x").then(m => m.X), { ssr: false })`. `next/dynamic({ ssr: false })` can only be called from a Client Component — the `-lazy.tsx` file IS the client boundary; server components (Hero) import the lazy wrapper, not the canvas. Verified in bundle: landing stayed at 117 kB first-load with the veil chunk shipping separately.
+- Three.js uses named imports only (`import { Scene, WebGLRenderer } from "three"`) so webpack tree-shakes to the ~20 modules actually used — not the full 600 KB bundle. NEVER `import * as THREE from "three"`. Same tree-shaking rule applies to `three/examples/jsm/*` helpers when we need them later (OrbitControls, etc.) — always named imports.
+- With Three.js `ShaderMaterial`, strict TS + `noUncheckedIndexedAccess` makes `material.uniforms.uX.value` mutation noisy because the uniform record type is `{ [k: string]: IUniform | undefined }`. Best practice: hold direct `const uProgress = { value: 0 }` references outside the uniforms dict and pass them INTO `uniforms: { uProgress, ... }` — Three sees the same object, and strict TS sees a non-nullable field. Cleaner than per-access `!` assertions in the rAF loop.
+- For decorative Three.js particle fields, use `OrthographicCamera` + a `Points` mesh in normalized [-aspect, aspect] × [-1, 1] space. Simpler math than perspective, no frustum-culling surprises (also set `points.frustumCulled = false` — bounding box maths on a 12k vertex attribute is a per-frame waste when you know the whole field is in view). Pass `position` attribute as a placeholder (Three still reads it for bbox) even when the vertex shader ignores it.
+- FPS-driven particle downgrade pattern: preallocate MAX_PARTICLES once, then scale render count via `geometry.setDrawRange(0, tierCount)` — no geometry rebuild, no GPU upload, tier switch is free. Track frames in a rolling 2s window; if fps < threshold AND tierIndex < TIERS.length-1, bump tier. Tiers 12000 → 6000 → 3000 gives ~4× headroom for low-power GPUs.
+- rAF scroll-sync pattern: compute scroll progress into a mutable `let targetProgress` inside the effect, then critically-damped interpolate inside the rAF tick via `1 - Math.exp(-dt * k)` where `dt` is seconds since last frame. This decouples scroll event rate (up to 120 Hz on trackpads) from render rate (60 Hz) and survives scroll spikes without rubber-banding. Do NOT use `useScrollProgress()` for this — that hook's `setState` causes React re-renders for each scroll tick, which is exactly what you want to avoid inside a Three.js canvas.
+- Three.js renderer cleanup on unmount is three calls in order: `cancelAnimationFrame(rafId)` → remove DOM listeners → `scene.remove(mesh)` → `geometry.dispose()` → `material.dispose()` → `renderer.dispose()` → `container.removeChild(renderer.domElement)`. React StrictMode's double-invoke in dev means this cleanup runs twice per mount — idempotency matters (use `if (parent === container)` guard on the removeChild call).
+- `useReducedMotion()` short-circuits a Three scene to a single `renderer.render(scene, camera)` call AFTER setting the final uniforms (uProgress = current scroll, uTime = 0, no drift). No rAF loop is started, so there's zero ongoing CPU/GPU cost for reduced-motion users. The CSS `prefers-reduced-motion` rule in globals.css does NOT cover rAF loops — per-component JS short-circuit is mandatory.
+- Mobile fallback pattern for WebGL: check `window.innerWidth < 768` on mount + resize; below the breakpoint, return a static SVG placeholder (ring + whatever glyph matches) instead of mounting the Three scene at all. This saves the full 120 kB Three chunk from even loading on phones — next/dynamic's SSR: false means the import resolves lazily, and if the effect never runs (isMobile branch), the chunk stays in the network queue only until the user crosses 768px.
+- GLSL shader strings live in `src/components/landing/*/veil-shaders.ts` (or similar) as tagged `/* glsl */` template literals — the comment is a hint for editor highlighting, not parsed by TypeScript. Export VERTEX_SHADER + FRAGMENT_SHADER as const strings so ShaderMaterial can reference them directly. Use attribute names prefixed with `a` (aStart, aTarget) and uniform names prefixed with `u` (uProgress, uTime) to match the Three.js community convention — makes shader grep-ability trivial.
+- Particle-field glyph encoding trick: split 12k particles between "glyph" (on the target silhouette) and "ambient" (drift-only) roles by encoding membership in the SIGN of the `aSize` attribute — negative = ambient, positive = glyph. The fragment shader reads `step(0.0, aSize)` into a `vGlyph` varying (0 or 1) and uses it to gate color shift + alpha fade per particle. Saves one attribute slot vs carrying a dedicated `aRole` attribute.
+- GSAP registration lives ONCE in `src/lib/gsap.ts` (`"use client"` pragma at top) — idempotent `ensureRegistered()` guard + `typeof window !== "undefined"` check so `gsap.registerPlugin(ScrollTrigger)` never runs during SSR. Never `gsap.registerPlugin` in component files — always import `gsap`/`ScrollTrigger` from `@/lib/gsap` so registration happens exactly once. Re-registering isn't harmful but multiplying the import surface is.
+- Typed matchMedia helper `brandMatchMedia(setup)` in `@/lib/gsap` wraps `gsap.matchMedia` with three fixed breakpoints (isDesktop = `min-width:768px AND prefers-reduced-motion:no-preference`, isMobile = `max-width:767px`, isReduced = `prefers-reduced-motion:reduce`). The setup fn receives a typed `BreakpointConditions` object (booleans for all three, never undefined) plus the raw `gsap.Context` for `.add()` access. Reduced-motion users fall into isReduced (not isDesktop) — so any desktop-only pin/scrub code inside `if (conditions.isDesktop)` is automatically reduced-motion-safe without a second check.
+- `PinnedSection` (`src/components/motion/pinned-section.tsx`) is the canonical pin/scrub primitive. Pattern: `const mm = brandMatchMedia((conditions) => { if (!conditions.isDesktop) return; const trigger = ScrollTrigger.create({trigger: node, start: "top top", end: () => `+=${window.innerHeight * pinDuration}`, pin: true, scrub: true, invalidateOnRefresh: true, onUpdate: (self) => { ... self.progress ... }}); return () => trigger?.kill(); })`; cleanup = `mm.kill()` (which runs the returned teardown AND disposes the matchMedia context). `invalidateOnRefresh: true` so ScrollTrigger re-queries `window.innerHeight * pinDuration` on viewport resize. The `end` value MUST be a function (not a string/number) for invalidateOnRefresh to actually re-read it.
+- onProgress callback pattern for scroll-driven client components: hold the callback in a `useRef` and sync via a separate `useEffect([onProgress])`. Main effect's dep array stays `[pinDuration]` (or similar stable deps) so the ScrollTrigger isn't torn down + re-created every render when the parent passes a new handler each render. Without the ref indirection, any parent that doesn't memoize `onProgress` re-mounts the pin on every render — visible as scroll rubber-banding.
+- Landing first-load JS budget check (US-032 target ≤ 220 kB gzipped): pre-US-014 was 117 kB. GSAP + ScrollTrigger added ~46 kB → 163 kB. US-016 CountUp (motion v12 `useInView`) added ~3 kB → 166 kB. Remaining headroom ~54 kB for US-017 FadeIn (motion v12 `whileInView` — shares chunk with useInView, near-zero incremental weight), plus US-019 demo runtime. Shiki (US-020) is server-only so no client impact. Re-measure after every motion-adding story; if a single story threatens the budget, revisit lazy-loading of GSAP via a `*-lazy.tsx` wrapper (the Three.js pattern from US-013).
+- GSAP-using components can be server-side-rendered safely IFF they're marked `"use client"` AND the gsap module's top-level code is a guarded registration (see `ensureRegistered()` above). Do NOT reach for `next/dynamic({ ssr: false })` on every GSAP component — unlike Three.js (120 kB), GSAP (~46 kB) should ship in a shared first-load chunk so multiple sections (PinnedSection, FadeIn, CountUp) reuse it. One chunk, many sections = better caching than per-section lazy chunks.
+- Function props cannot cross a Server Component → Client Component boundary — React throws `Functions cannot be passed directly to Client Components` at prerender time (not typecheck). When a client primitive (`CountUp`, future `FadeIn`, etc.) needs a formatter/callback configured per instance, create a thin `"use client"` wrapper (pattern: `src/components/landing/benchmark-number.tsx`) that holds the per-instance config internally and accepts only serializable props (strings, numbers, primitives). Do NOT mark configs as `"use server"` — that's for RPC actions, not display helpers. Do NOT flip entire sections to `"use client"` just to pass a callback — the wrapper keeps the surrounding section RSC-static.
+- `pnpm build` catches RSC-serialization bugs that `pnpm typecheck` cannot — always run `pnpm build` after adding a new client component that's consumed from a server component. Typecheck is necessary but not sufficient for Next 15 App Router work.
+- Animated-value SSR pattern (CountUp, future typewriters, dashboard stat cards): default the state to `teaseTo` (so the animation has a starting value once mounted), but render `formatter(target)` on the first paint via a `useMounted()` gate. After mount, if `useInView` is true and reduced-motion is false, animate `teaseTo → target` via rAF with ease-out-expo (`1 - Math.pow(2, -10*t)`) over ~1800 ms. Reduced-motion short-circuits to `target` immediately. A11y: outer span gets `aria-label={formatter(target)}` + inner span `aria-hidden="true"` so screen readers only hear the canonical value — same pattern as US-015 dissolve.
+- motion v12 `useInView` trigger tuning: `{ once: true, amount: 0.5 }` is the sweet spot for entry-once reveals. `amount: 1` never fires on viewports shorter than the element; `amount: 0` fires on any pixel of overlap (too eager). Use 0.5 unless you have a specific reason to deviate.
+- `FadeIn` primitive (`src/components/motion/fade-in.tsx`, `"use client"`) is the canonical entry-fade wrapper — wraps children in motion.{as} with `initial={{opacity:0, y:8}} whileInView={{opacity:1, y:0}} viewport={{once:true, amount:0.3}} transition={{duration:0.6, delay, ease: BRAND_EASE}}`. Use it instead of rolling per-section IntersectionObserver code. `as` prop (`div | p | li | article | section | span`) covers the HTML semantics we actually need; no need to expose every JSX element. `useReducedMotion()` short-circuits to a plain JSX element with no motion wrapper, no animation — this is what the spec wants for "immediate render" and keeps the SSR snapshot clean for reduced-motion users. Use amount 0.3 (not 0.5) for sections taller than the viewport so the fade kicks in as the section starts scrolling in, not when it's already half-present.
+- motion `whileInView` primitives are self-managing on unmount: React StrictMode double-invoke is idempotent, and route navigation just unmounts the motion component (no GSAP trigger leaks). This is why we prefer motion/react for simple entry fades over ScrollTrigger-based solutions — less cleanup code, less chance of stale triggers. Reserve GSAP ScrollTrigger for pin/scrub patterns (PinnedSection US-014/US-015) where motion doesn't offer a native solution.
+- SVG diagram reveal via stroke-dasharray = motion.path/motion.circle/motion.rect with `initial={{pathLength:0, opacity:0}} whileInView={{pathLength:1, opacity:1}}`. motion animates `pathLength` by setting `strokeDasharray + strokeDashoffset` internally so you don't need to precompute path lengths. Works for `<path>`, `<circle>`, `<rect>`, `<ellipse>`, `<line>`, `<polyline>`, `<polygon>`. Stagger per-shape with `delay: baseDelay + shapeDelay` for a "draw itself" effect. Under reduced motion, render plain SVG elements with no motion wrappers at all (not motion elements with `initial={false}` — that still pulls motion into the bundle).
+- motion v12 + strict SVG typing: `React.SVGAttributes<SVGElement>` conflicts with `SVGMotionProps` on `onAnimationStart` (DOM event vs motion callback). When spreading props generically into motion.{svg-element}, the TypeScript error points at onAnimationStart. Cheapest fix: explicit per-element JSX rather than a shapes-array + spread. Slightly more verbose but TypeScript-clean with no casts. If you must spread, use `SVGMotionProps<T>` (from motion/react) for motion elements and a separately-typed plain shape for the reduced-motion branch.
+- motion `motion[as]` access lets a primitive accept a polymorphic `as` prop, but TypeScript narrowing gets thorny. Pragmatic: cast the result to `React.ComponentType<HTMLMotionProps<"div">>` — all motion HTML factories share the same props shape at runtime, so one cast lets the same component handle `as="div" | "p" | "li" | ...` without per-tag branches.
+- Bundle impact of FadeIn + StepDiagram: introducing `motion.div / motion.p / motion.li / motion.article / motion.section / motion.span` (FadeIn) plus `motion.circle / motion.rect / motion.path` (StepDiagram) pushed landing first-load from 166 kB → 206 kB (+40 kB). The motion proxy factory + whileInView pipeline is the heavier-than-useInView-alone cost. Still under the US-032 220 kB budget with 14 kB headroom — tight. Before adding another motion-heavy primitive in future stories, either (a) consolidate to reuse FadeIn instead of reaching for motion directly, or (b) audit whether a CSS-only entry-fade suffices for that one section.
+- Sticky editorial headlines: `md:sticky md:top-24 md:self-start` on a grid column pins the header while the sibling body scrolls past. Pair with `FadeIn` stagger on the body paragraphs for the classic "headline pins, body reveals" pattern. Split body strings at sentence boundaries via `body.split(/(?<=\.)\s+/).map(s => s.trim()).filter(Boolean)` — lookbehind keeps the period attached. Works for our punctuation-standard copy; for question marks or exclamation points, extend to `/(?<=[.!?])\s+/`.
+- Demo simulation constants live in `src/lib/proof-bytes.ts` (VALID_PROOF, NULLIFIER, EXPIRED_PROOF_ERROR, EXPIRED_BLOCK, DEVNET_TX_HASH, SOLSCAN_URL) and `src/lib/demo-script.ts` (DEMO_STEPS, EXPIRED_DEMO_STEPS, `DemoStep { label, durationMs, status, error? }`). ALL demo UI (US-019 proof console + any future demo widget) must import from these modules — never inline hex strings, durations, or error copy in JSX. Swap real proof bytes / real devnet tx hash in-place here; the rest of the tree picks them up automatically. Reuse the same pattern if we ever need a second demo flow (e.g. "show a revoked credential") — add a third readonly `*_DEMO_STEPS` export, don't parameterize with a function.
+- PRD vs plan divergence rule: the PRD acceptance criteria are the contract for `passes: true`; the implementation plan under `docs/superpowers/plans/` is guidance. When they disagree on shape or naming (US-018: PRD wants `DEMO_STEPS` constant, plan wants `buildDemoScript()` fn), follow the PRD. Future iterations will read what shipped and adapt their imports accordingly — do not try to satisfy both surfaces at once with alias exports, which just adds dead code.
+- SetTimeout-driven state machines (proof console US-019, any future "real wall-clock timer" demo) MUST store all active timeout IDs in a `useRef<ReturnType<typeof setTimeout>[]>([])`. Every `schedule(delay, fn)` pushes the id onto the array; the callback filters itself off post-fire. A `clearTimers()` helper iterates + `clearTimeout` + resets to `[]`; call it (a) at the top of every new flow (so starting a new generation cancels any pending ones), and (b) inside a `useEffect(() => clearTimers, [clearTimers])` return so zombie timers never fire after unmount/route navigation. Design spec §6 forbids animation-library tweening for the proof console — real `setTimeout(step.durationMs)` is the contract.
+- Interactive landing sections: a pure `<form onSubmit>` with one `type="submit"` Button is the minimum viable keyboard-accessible control surface. Routing everything through a single `ctaAction()` ref (Enter on any input ALSO fires onSubmit) means you never wire per-button click handlers. Don't double up with `onClick={preventDefault + action}` on the submit button — the form's onSubmit is the single source of truth and the click event bubbles there. Keep the `preventDefault()` in onSubmit to stop the default form POST navigation.
+- Phase-state CTAs: encode the button label + action as a `switch` over the phase enum, not as per-phase booleans. One switch, one source of truth for "what does this button do right now?", trivially extensible when new phases (e.g., revoked credential) get added. The form `disabled` state is derived (`isWorking || phase === 'generated'` in the proof console — locks inputs while running AND while a proof is awaiting submission). Don't overload the CTA to mean "submit OR reset" based on hidden flags; make every state's label + action explicit.
+- Typed console line records for terminal-style UIs: `export type ConsoleLine = { kind: 'ok'; text: string } | { kind: 'fail'; text: string } | ...` + a `const LINE_CLASS: Record<ConsoleLine['kind'], string>` mapping kinds to Tailwind color utilities. Render via `<ol>` + `<li className={LINE_CLASS[line.kind]}>`. Add a `'success'` variant with an extra `href: string` for link-in-terminal rows (Solscan confirm) — TypeScript narrows the href on `kind === 'success'` branches. Don't use a `type: string` free-form field — the exhaustive union + map pattern makes future kinds visible at compile time.
+- Outbound links in client components: use a plain `<a href target="_blank" rel="noreferrer noopener">` for external URLs (Solscan, GitHub, etc.). Next `<Link>` accepts external hrefs but offers no prefetching benefit, and `rel="noreferrer noopener"` is still mandatory for `target="_blank"` to avoid tabnabbing. Focus-visible outline uses the same `outline-forest` token pattern as `buttonVariants`.
+- Shiki SSR pattern (US-020): `src/lib/shiki.ts` is a server-only module that defines a brand `ThemeRegistration` using design tokens (forest keywords, emerald types/constants, stone strings, ink identifiers, quill punctuation/params, muted italic comments, surface-deep bg) and exposes an async `codeToHtml(code, lang)` helper that lazy-initializes a singleton `createHighlighter` promise and caches it in module scope. Heavy Shiki code stays behind an async Server Component (`src/components/ui/code-block.tsx`) that `await`s the HTML and renders via `dangerouslySetInnerHTML`. Verify zero client bundle impact after adding Shiki: `grep -l 'shiki\\|createHighlighter\\|codeToHtml' .next/static/chunks/*.js` must return empty. The `server-only` npm package is NOT hoisted in this monorepo (Next vendors it internally), so don't try `import "server-only"` — rely on the Server Component boundary + keep shiki imports confined to async RSC files. Only add new language loaders (`rust`, etc.) to the `langs:` array when actually used; each adds ~5-10 KB to server memory at first render.
+- Async Server Components through client boundaries: `<ClientComponent><ServerAsyncComponent /></ClientComponent>` works in Next 15 because the server tree is flattened before the RSC payload crosses to the client — the server component's rendered output is serialized as `children`. Use this for Tabs + CodeBlock: `<TabsContent value="..."><CodeBlock ... /></TabsContent>` renders the highlighted HTML server-side and delivers a pre-baked subtree to the client Tabs shell. Do NOT reach for `next/dynamic` here — async Server Components + children props already give you what you need.
+- Extending Tabs for content-per-tab: pass TabsTrigger + TabsContent pairs with a shared `value` string (lowercase, no spaces). The underlying `<button role="tab">` and `<div role="tabpanel">` wire up via `useId()`-scoped ARIA ids automatically — never hand-write `aria-controls` / `aria-labelledby`. Use a literal tuple (`const TAB_VALUES = [...] as const`) zipped with the copy array to keep trigger labels in COPY.ts while tab values stay typed.
+
+## 2026-04-18 - US-001 - Initialize Next.js 15 project with TypeScript strict
+- Scaffolded Next.js 15.5.15 App Router project in `frontend/` with TypeScript strict, Tailwind v4, src/ layout, and `@/*` alias.
+- Files added:
+  - `frontend/package.json` (scripts: dev/build/start/typecheck/lint/test/test:watch, engines.node>=20.10, packageManager pnpm@9.12.0)
+  - `frontend/tsconfig.json` (strict, noUncheckedIndexedAccess, noImplicitOverride, forceConsistentCasingInFileNames, `@/*` → `./src/*`, excludes `ralph`)
+  - `frontend/next.config.ts` (reactStrictMode + outputFileTracingRoot pinned to frontend/ to silence multi-lockfile warning)
+  - `frontend/postcss.config.mjs` (wires @tailwindcss/postcss)
+  - `frontend/src/app/{layout.tsx,page.tsx,globals.css}` (minimal App Router boot; globals imports `tailwindcss`)
+  - `frontend/.gitignore` (Next/Vercel/pnpm defaults)
+  - `frontend/README.md` (stack + pnpm dev + scripts table)
+- Verification:
+  - `pnpm install` ✅ (59 packages)
+  - `pnpm build` ✅ (static /, /_not-found; ~102 kB first-load JS; no warnings)
+  - `pnpm typecheck` ✅
+- **Learnings for future iterations:**
+  - Always pin to a backport-tagged 15.x; Next's `next` dist-tags show `backport: 15.5.15` for the latest patched 15.x.
+  - Multi-lockfile detection bites any Next project under `/home/mario/…` — set `outputFileTracingRoot` up front.
+  - `pnpm` on this machine is 10.32.1, corepack is absent; don't rely on `corepack prepare` or auto-switch.
+  - Keep `tsconfig.json` `exclude` list including `ralph` so agent scripts never land in `tsc`.
+  - The landing page UI (hero text, Georgia display font, forest tokens, etc.) has NOT been built yet — US-001 intentionally left `src/app/page.tsx` as a minimal placeholder. US-004/US-005/US-011 will replace this content.
+  - Lint and test scripts exist but will only run once US-002 installs eslint-config-next, typescript-eslint, vitest, etc.
+---
+
+## 2026-04-18 - US-002 - Install ESLint flat config + Prettier + Vitest
+- Installed dev deps: eslint@9.39.4, eslint-config-next@15.5.15, typescript-eslint@8.58.2, prettier@3.8.3, prettier-plugin-tailwindcss@0.7.2, vitest@2.1.9, @vitest/ui@2.1.9, jsdom@29.0.2.
+- Files added:
+  - `frontend/eslint.config.mjs` — flat config: js.recommended + tseslint.configs.recommended + `compat.extends("next/core-web-vitals", "next/typescript")`; ignores .next, node_modules, out, ralph, next-env.d.ts, tsconfig.tsbuildinfo.
+  - `frontend/.prettierrc` — semi: true, singleQuote: false, trailingComma: all, printWidth: 100, plugins: ["prettier-plugin-tailwindcss"].
+  - `frontend/vitest.config.ts` — node environment, `@` alias → `./src`, include `src/**/*.{test,spec}.{ts,tsx}`.
+- Files modified:
+  - `frontend/package.json` — `lint: "eslint ."` (replaces deprecated `next lint`); `test: "vitest run --passWithNoTests"` so empty runs exit 0.
+- Verification:
+  - `pnpm lint` ✅ (no issues)
+  - `pnpm test` ✅ (exits 0, "No test files found")
+  - `pnpm typecheck` ✅
+  - `pnpm build` ✅ (landing still 102 kB first-load JS)
+- **Learnings for future iterations:**
+  - `eslint-config-next@15.5.15` is still legacy extends-style — it must be loaded through `FlatCompat` from `@eslint/eslintrc` (already a transitive dep of eslint 9, no extra install needed).
+  - `typescript-eslint` (the meta-package) exposes both `tseslint.config()` helper and `tseslint.configs.recommended` array — prefer these over importing `@typescript-eslint/eslint-plugin` + `@typescript-eslint/parser` directly.
+  - Installing `@vitest/ui` via `^2` is required; the latest tag (4.x) conflicts with vitest@2's peer range.
+  - Do NOT set `environment: "jsdom"` as the default — it's opt-in per-test file via `// @vitest-environment jsdom`. Default stays `node` so Node-only helpers (format/prng) run fast.
+  - Always include `--passWithNoTests` in the `test` script while the suite has zero tests; remove it only once real tests land (US-008 / US-012).
+---
+
+## 2026-04-18 - US-003 - Install runtime dependencies (fonts, Iconoir, motion, GSAP, Three, Shiki)
+- Installed runtime deps (production): geist 1.7.0, iconoir-react 7.11.0, motion 12.38.0, three 0.184.0, gsap 3.15.0, shiki 4.0.2, clsx 2.1.1, tailwind-merge 3.5.0, class-variance-authority 0.7.1.
+- Installed dev deps: @types/three 0.184.0.
+- Files added:
+  - `frontend/public/fonts/.gitkeep` (placeholder so Berkeley Mono / Geist self-hosted fallback files have a parking spot for US-005).
+- Files modified:
+  - `frontend/package.json` (dependencies + devDependencies sections grew; lockfile updated).
+- Verification:
+  - `pnpm ls geist iconoir-react motion three @types/three gsap shiki clsx tailwind-merge class-variance-authority` ✅ all listed at the versions above.
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (still no test files; --passWithNoTests covers it)
+  - `pnpm build` ✅ (landing route still 102 kB first-load — none of the new deps are imported yet, so they tree-shake out of the bundle).
+- **Learnings for future iterations:**
+  - The PRD spec says "motion v11" but the npm `motion` package is on v12 (v11 is in maintenance/deprecated). The React API surface (`motion`, `useScroll`, `useInView`, `useReducedMotion`, etc.) is unchanged, so v12 is the safe default.
+  - `geist` is the official package and exposes both `geist/font/sans` and `geist/font/mono`. Berkeley Mono is the design system display mono — there's no public npm for it, hence `public/fonts/.gitkeep` to host the .woff2 once licensed (Berkeley Mono is paid; for development a JetBrains Mono fallback via next/font is fine — see US-005).
+  - `iconoir-react` 7.11.0 ships ESM-first; tree-shaking works only with named imports (`import { Check } from "iconoir-react"`). Do not `import * as Icons` or you'll bloat the bundle. US-032 will flip the `experimental.optimizePackageImports` switch in next.config.ts.
+  - `tailwind-merge` 3.x is the current major; works with Tailwind v4 token output. Pair with `clsx` inside `cn()` — that's the standard shadcn pattern and what US-008 will codify.
+  - `shiki` 4.x dropped the deprecated `getHighlighter` in favor of `createHighlighter`. The Shiki SSR work in US-020 should use `createHighlighter` and import only the languages/themes it needs (not the full bundle).
+  - `class-variance-authority` 0.7.x is required for shadcn-style `cva()` variant maps in US-009 primitives.
+  - Even though `three` ships its own bundled `examples/jsm/` modules, prefer named imports from the root (`import { Scene, PerspectiveCamera, Mesh } from "three"`) for tree-shaking; only reach into `three/examples/jsm/...` for one-off helpers (see US-013 plans).
+---
+
+## 2026-04-18 - US-004 - Author design tokens in globals.css
+- Replaced placeholder `src/app/globals.css` with a Tailwind v4 `@theme` block defining the full ZKSettle token system — 20 color tokens, 3 font tokens, 4 radii, brand easing — plus global body, em, ::selection, and prefers-reduced-motion rules per Design Spec §3.
+- Files changed:
+  - `frontend/src/app/globals.css` — imports tailwindcss; declares all `--color-*`, `--font-*`, `--radius-*`, `--ease-*` tokens inside `@theme`; html/body apply canvas bg + ink + font-sans + antialiased; em rule forest italic inherit-weight; ::selection forest/canvas; prefers-reduced-motion kills animations + transitions + scroll-behavior.
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (still `--passWithNoTests`)
+  - `pnpm build` ✅ (landing first-load JS unchanged at 102 kB; CSS utilities now available for future components).
+- **Learnings for future iterations:**
+  - Tailwind v4's `@theme` directive requires category prefixes on token names: `--color-<name>`, `--font-<name>`, `--radius-<name>`, `--ease-<name>`. The Design Spec uses short names like `--canvas` and `--forest`, but inside `@theme` they MUST be `--color-canvas` / `--color-forest` — Tailwind derives utilities (`bg-canvas`, `text-forest`) from that prefix. Downstream components should prefer utility classes or `var(--color-forest)`; don't hand-write `var(--forest)` or it will resolve to undefined.
+  - `--font-sans` / `--font-mono` intentionally reference `var(--font-geist-sans)` and `var(--font-jetbrains-mono)` — those are the names US-005 will register via `next/font`. Until then, the chain falls back to `ui-sans-serif` / `ui-monospace`, so the page still renders.
+  - `--font-display` is hard-coded to `Georgia, "Times New Roman", serif` on purpose — the whole point of picking Georgia is zero FOUT and zero font-licensing risk. If/when PP Editorial New is licensed, swap only this one variable (Design Spec D8 / Risk R3).
+  - The `prefers-reduced-motion` block applies to `*, *::before, *::after` and zeroes out animation/transition duration + scroll-behavior. This is a global safety net — per-component motion (GSAP, motion/react, Three.js) must STILL short-circuit explicitly because this CSS rule only covers CSS animations/transitions, not JS-driven rAF loops.
+  - `::selection` is intentionally reversed (forest bg / canvas text). Keep this — it's the brand's signature text-highlight treatment and the acceptance criteria pins it.
+---
+
+## 2026-04-18 - US-005 - Root layout with fonts, metadata, and skip link
+- Registered Geist Sans via `geist/font/sans` (exposes `GeistSans.variable` → `--font-geist-sans`) and JetBrains Mono via `next/font/google` with `variable: "--font-jetbrains-mono"` and `display: "swap"`. Both variable classes attached to `<html>` so the CSS custom properties cascade everywhere.
+- Metadata: title default + template (`%s · ZKSettle`), description, openGraph (title/description/type=website/images: ["/og"]), twitter (summary_large_image + title/description/images). `metadataBase` defaults to `NEXT_PUBLIC_SITE_URL` or `http://localhost:3000` — silences Next's multiline warning about relative OG images.
+- `<html lang="en" suppressHydrationWarning>`; `<body className="font-sans antialiased">`; skip-to-content anchor is the first body child (`sr-only` until focus; visible with forest bg + canvas text + focus outline).
+- `src/app/page.tsx` rewritten to a Georgia display headline with inline `<em>` (forest italic) + Geist body copy + mono eyebrow so you can eyeball the font stack; `<main>` gets `id="main-content"` as the skip-link target.
+- Files changed:
+  - `frontend/src/app/layout.tsx` (fonts, metadata, skip link, font variable classes on <html>)
+  - `frontend/src/app/page.tsx` (display headline + em + mono eyebrow + id="main-content")
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (still `--passWithNoTests`)
+  - `pnpm build` ✅ (landing first-load JS still ~102 kB — next/font doesn't add client bundle)
+  - `pnpm dev` + `curl http://localhost:3000` → `<html lang="en" class="…geistsans…variable …jetbrains_mono…variable">`, `<body class="font-sans antialiased">` with skip link markup, `og:title`/`og:image`/`twitter:card` meta present, `og:image=http://localhost:3000/og` (metadataBase resolved).
+- **Learnings for future iterations:**
+  - The `geist` npm package exposes `GeistSans` / `GeistMono` with the CSS variable name hard-coded to `--font-geist-sans` / `--font-geist-mono`. You cannot rename these via the `variable` option the way `next/font/google` lets you — so globals.css must reference `--font-geist-sans` exactly (it does).
+  - Mixing `geist/font/sans` and `next/font/google` in the same `<html>` is fine: each exports its own `.variable` class. Compose them with a template literal: `<html className={\`\${GeistSans.variable} \${jetbrainsMono.variable}\`}>`.
+  - Tailwind v4 auto-generates utilities from `@theme` tokens, including `font-display` (from `--font-display`), `font-sans`, `font-mono`, `text-quill`, `text-muted`, `bg-forest`, `text-canvas`, etc. Prefer these utilities over hand-writing `font-[family-name:var(--font-display)]` — the former is shorter AND tree-shakable with prettier-plugin-tailwindcss sorting.
+  - `metadataBase` is REQUIRED when metadata.openGraph.images contains a relative path; otherwise Next emits a build-time warning and falls back to `http://localhost:3000`. Use `NEXT_PUBLIC_SITE_URL` or `VERCEL_URL` so prod gets the real origin. US-031 (OG route) will replace the `/og` placeholder with the actual image endpoint — don't remove the `metadataBase` line then.
+  - The skip-to-content anchor MUST target an element that actually receives focus. Using `tabIndex={-1}` on `<main id="main-content">` would let the link move focus even though `<main>` isn't natively focusable — for now the natural flow (skip link → first focusable child inside main) is fine because the landing hero has no interactive elements yet. Revisit once US-011 lands the nav + CTA buttons.
+  - `suppressHydrationWarning` on `<html>` silences class-name mismatches that arise when the server and client inject font variables at slightly different times. It's safe here because next/font is fully deterministic; don't pile it onto arbitrary elements — it hides real bugs.
+---
+
+## 2026-04-18 - US-006 - Build The Seal logo SVG component
+- Authored `src/components/icons/logo.tsx` exporting `Logo({variant, size=48, showWordmark=true, className})` plus an internal `Seal` primitive. SVG uses viewBox 48×48 with circle ring (cx=24, cy=24, r=22, stroke=1.25), centered Georgia `<text>Z</text>` at fontSize 26 with fontWeight 400 + textAnchor="middle" + dominantBaseline="central", a 2.5px horizontal settlement bar rendered AFTER the Z (so it cancels the glyph visually) spanning x=10.5→37.5 at y=24, and 4 registration ticks (stroke 1.25, 3px length) at 12/3/6/9 crossing the ring.
+- Variants map to token classes: `canvas-ink` → text-ink seal + text-ink wordmark; `surface-forest` → text-forest seal + text-ink wordmark; `forest-surface` → text-surface seal + text-surface wordmark. The seal SVG uses `currentColor` so the variant class on the wrapper drives both stroke and fill.
+- Wordmark renders `ZKSettle` in `font-display` (Georgia via the --font-display token) at fontSize = size × 0.5, letterSpacing = -1%, fontWeight 400, lineHeight 1. Seal-to-wordmark gap = size × 0.4 per Design Spec §3.1 lockup rule (flex `gap` inline style).
+- Accessibility: when wordmark is visible, the outer span has no role and the SVG is `aria-hidden="true"` (text does the labelling). When `showWordmark=false` (favicon / compact contexts), the wrapper sets `role="img"` + `aria-label="ZKSettle"`.
+- Imported into `src/app/page.tsx` as a temporary nav header (size 32, canvas-ink variant) above the hero — US-011 will relocate this into the dedicated `components/landing/nav.tsx`.
+- Files changed:
+  - `frontend/src/components/icons/logo.tsx` (new)
+  - `frontend/src/app/page.tsx` (wraps hero with a `<header>` rendering `<Logo size={32} />`)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (still --passWithNoTests)
+  - `pnpm build` ✅ (landing route still 120 B route-specific, 102 kB first-load JS — Logo is a static Server Component, no client bundle impact)
+  - `pnpm dev` + `curl http://localhost:3000` → `<svg viewBox="0 0 48 48">`, `<circle>`, Georgia Z `<text>`, and two "ZKSettle" occurrences (header logo + hero — wait, just one; the second was the default doc title). Confirmed seal + wordmark render.
+- **Learnings for future iterations:**
+  - When a wrapper's `color` class drives an SVG's stroke/fill, the SVG children MUST use `currentColor` explicitly. Tailwind's `text-*` utilities set `color`, and `currentColor` in SVG resolves to that color — so a single `text-forest` on the wrapper cascades to every `stroke="currentColor"` and `fill="currentColor"` inside. This is how we avoid repeating variant logic per SVG element.
+  - SVG `<text>` inherits the document font stack but fonts in `next/font` are scoped via CSS variables on `<html>`. Inside an SVG, the cleanest pattern is to declare `fontFamily="Georgia, 'Times New Roman', serif"` directly on the `<text>` element rather than relying on CSS inheritance — ensures correct glyph geometry in the SSR snapshot and in environments where the wrapping CSS hasn't loaded (favicon, OG image, static SVG files).
+  - The settlement bar must be rendered AFTER the Z in SVG document order so it paints on top and "cancels" the glyph. SVG z-index follows source order — reversing them produces a Z with the bar hidden behind it (looks like an un-cancelled Z with a disconnected bar).
+  - For a React `Logo` component with a wordmark, use an outer `<span>` (not `<div>`) with `display: inline-flex` so the logo can sit inline in headers, CTAs, and text without breaking the line. `align-middle` helps baseline-align the seal with adjacent text.
+  - The Seal SVG viewBox is 48×48 and strokes scale with `size` — at 16px the 1.25 stroke becomes ~0.42px, at 200px it becomes ~5.2px. That's the intended hairline→poster behavior; do NOT add `vector-effect="non-scaling-stroke"` or you'll get a chunky 1.25px ring even at 200px (wrong for hero placement).
+  - When a downstream story (e.g. US-011 nav) imports the Logo, pass `size={32}` for nav (matches the spec's 56px nav row with breathing room) and `size={200}` for hero placements. Variant choice: `surface-forest` for surfaces (cards, nav on surface), `forest-surface` for inverted panels (closing CTA, OG image), default `canvas-ink` everywhere else.
+---
+
+## 2026-04-19 - US-007 - Landing copy single source of truth
+- Authored `src/content/copy.ts` — exports typed `COPY: LandingCopy` with 11 section entries (hero, paradox, twoRealities, howItWorks, numbers, demo, useCases, developers, momentum, closingCta, footer). Every section has its own `readonly` interface (HeroCopy, ParadoxCopy, TwoRealitiesCopy, TwoRealitiesRow/Side, HowItWorksCopy/Step, NumbersCopy/NumberTuple, DemoCopy/DemoFormField, UseCasesCopy, DevelopersCopy, MomentumCopy/Column, ClosingCtaCopy, FooterCopy). All strings lifted verbatim from Design Spec §4.
+- Authored `src/content/use-cases.ts` — exports `USE_CASES: readonly UseCase[]` of 5 items (Travel rule, Proof of solvency, ZK credit score, AML by behavior, Proof of reserves). `UseCase` interface = {name, tagline, footnote}. `COPY.useCases.items` re-exposes USE_CASES so both imports resolve to the same array.
+- Numbers block exposes `{label, number, sub}` tuples for each of <5s, <$0.001, 0, 256 bytes. Labels are human-readable ("Proving time", "Verify cost", "PII leaked", "Proof size") — US-016 CountUp will use `number` as the end-state string and derive numeric targets locally.
+- TwoRealities rows carry BOTH `value` and `redacted` fields ("Maria Silva" / "▓▓▓▓▓▓▓") so the US-015 dissolve animation can interpolate between states without re-deriving redactions.
+- Demo form field definitions include defaults (recipient "5g8H4nP3eR...", amount 100-10000 default 1200, jurisdiction US from ["US","EU","UK","BR"]), CTA labels (generate/submit/expired toggle), honestyFooter, and expiredError strings — US-019 will consume these directly.
+- Developers.code stores the 3-line SDK snippet as a multi-line string (joined from a 5-element array for source clarity). Shiki (US-020) consumes it via COPY.developers.code.
+- Files changed:
+  - `frontend/src/content/copy.ts` (new)
+  - `frontend/src/content/use-cases.ts` (new)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (still --passWithNoTests)
+  - `pnpm build` ✅ (landing still 102 kB first-load JS; content modules tree-shake out until imported by US-011 sections)
+- **Learnings for future iterations:**
+  - `readonly` + explicit interface beats `as const` for copy modules: IDE autocomplete still narrows to literal types when exported from a `readonly` interface, and downstream consumers can destructure `const { hero } = COPY` without TS complaining about mutability mismatches that `as const` sometimes triggers through index signatures.
+  - `src/content/use-cases.ts` is imported by `src/content/copy.ts` via the `@/content/use-cases` alias — keep the alias pattern consistent across content files. Do NOT reverse the dependency (copy → use-cases is fine; use-cases must stay leaf because the UseCase interface is referenced by COPY's UseCasesCopy).
+  - The spec text uses the character `·` (middle dot U+00B7) as a separator (e.g. "GENIUS Act · MiCA Q3"). Preserve it verbatim in copy strings — it's a brand typography signal (Design Spec §3.4). Don't swap for `|` or `-`.
+  - "AML by behavior" intentionally has `footnote: ""` — the spec line omits the third bullet. An empty string (not `null` / `undefined` / omitted key) keeps the UseCase interface homogeneous and lets components render `{footnote && <span>…</span>}` uniformly without optional-chaining the shape.
+  - Copy strings with apostrophes/quotes (e.g. `"It's an SDK."`, the `// Click "Generate proof"` terminal prompt) must use paired quote types to keep the file ESLint-clean. Use double quotes for the outer string + single/escaped quotes inside, or vice versa. eslint-config-next + typescript-eslint won't object; prettier preserves the choice.
+  - The SDK code block string joins an array on `\n` rather than a template literal with real newlines — this sidesteps indentation ambiguity (template literals pick up the leading spaces of the file's indentation), keeps prettier happy, and reads identically in source and runtime.
+  - Place copy constants in `src/content/`, NOT `src/lib/`. `lib/` is for code utilities (format, prng, gsap, shiki helpers); `content/` is for data/strings. This separation lets downstream consumers grep for copy changes in one folder.
+---
+
+## 2026-04-19 - US-008 - Utility lib — cn, format, seeded PRNG
+- Authored the three shared lib modules that later UI + data stories will depend on:
+  - `src/lib/cn.ts` — `cn(...inputs: ClassValue[])` composes `clsx` + `twMerge` (the canonical shadcn utility). Single-function module, named export.
+  - `src/lib/format.ts` — `truncateWallet(address, head=4, tail=4)` inserts `…` (U+2026) between head/tail and returns the raw address when it's shorter than head+tail; `fmtAmount(value, currency="USDC")` uses `Intl.NumberFormat("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2})` + space-joined currency label; `fmtCompact(n)` uses Intl compact notation with `maximumFractionDigits: 1`.
+  - `src/lib/prng.ts` — `createPrng(seed: number): Prng` returns `{ next, range, pick }`. Algorithm is mulberry32 (state coerced with `>>>= 0`, Math.imul bit-mix, divided by 2^32). `range(min,max)` returns `min + next() * (max - min)` (inclusive min, exclusive max). `pick<T>(array)` throws when array is empty (surfaces the bug rather than returning undefined).
+- Tests:
+  - `src/lib/format.test.ts` — 3 describe blocks × 3 assertions each (9 tests): truncateWallet ellipsis default / custom head-tail / shorter-than-total passthrough; fmtAmount default USDC / rounding / custom currency; fmtCompact thousands→K / larger → K / small-passthrough.
+  - `src/lib/prng.test.ts` — 6 tests: range [0,1) over 100 iterations, determinism across two same-seed instances, different seeds diverge, range(min,max) bounds over 50 iterations, pick() determinism + in-array, pick() throws on empty array.
+- Files changed:
+  - `frontend/src/lib/cn.ts` (new)
+  - `frontend/src/lib/format.ts` (new)
+  - `frontend/src/lib/format.test.ts` (new)
+  - `frontend/src/lib/prng.ts` (new)
+  - `frontend/src/lib/prng.test.ts` (new)
+- Verification:
+  - `pnpm test` ✅ (15 tests passing across 2 files)
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm build` ✅ (landing still 102 kB first-load — lib utilities tree-shake until imported by sections/dashboard)
+- **Learnings for future iterations:**
+  - `tsconfig.json` has `noUncheckedIndexedAccess: true`, so `array[index]` types as `T | undefined`. In `prng.pick` the bounds are checked first (throw on empty), so a `!` non-null assertion is acceptable and communicates the invariant. Avoid silent `?? fallbackValue` patterns when you can prove safety — prefer an explicit guard or assertion.
+  - `Intl.NumberFormat` with locale `"en-US"` is the right default for financial demos (comma thousands, dot decimal). If the design spec ever adds locale-aware currency formatting, extend these helpers with a `locale` param — DON'T fork them into `fmtAmountEu` etc.
+  - `fmtCompact` with `maximumFractionDigits: 1` rounds 23481 → "23.5K" (not "23K" or "23,481"). Be aware of that rounding when writing display copy; if the design spec ever pins an exact display string (e.g. "23,481 events"), use `Intl.NumberFormat` directly instead of `fmtCompact`.
+  - mulberry32 is the right choice for demo PRNG: tiny (~6 lines), no dependency, deterministic across Node/browsers, and high-quality enough for shuffles + pseudo-realtime tickers. Don't reach for `seedrandom` (adds 7kB) or crypto-hash-based PRNGs (overkill + slower). The state is a 32-bit unsigned int coerced with `>>>= 0`; seeding with a double works because the shift coerces.
+  - `Math.imul(a, b)` exists specifically for 32-bit signed integer multiplication (wraps on overflow). Native multiply would lose bits. Keep `Math.imul` — don't "simplify" to `a * b`.
+  - vitest co-locates tests next to source via `src/**/*.{test,spec}.{ts,tsx}`. Both files here are `node` environment (default), so no `// @vitest-environment jsdom` pragma. When US-012 writes hook tests, it'll need that pragma per file.
+---
+
+## 2026-04-19 - US-009 - Reusable UI primitives (Button, Input, Select, Slider, Badge, Tabs)
+- Authored six token-driven primitives in `src/components/ui/`:
+  - `button.tsx` — CVA variants: primary (bg-forest + text-canvas + hover:bg-forest-hover), ghost (border-ink + hover:bg-ink hover:text-canvas), link (text-forest underline + decoration-forest). Sizes sm (h-8)/md (h-10)/lg (h-12). Radius `var(--radius-3)`. Compound variants collapse link to `h-auto px-1` at any size. `forwardRef` + `displayName` + `type="button"` default to prevent accidental form submits.
+  - `input.tsx` — h-10, radius-2 border-subtle, hover:border-border, focus-visible:border-forest + 2px forest outline/offset.
+  - `select.tsx` — native `<select>` with appearance-none + absolute inline chevron SVG (16×16, stroke=1.5, currentColor=quill). Wraps in `relative inline-flex w-full` so caller controls width.
+  - `slider.tsx` — thin wrapper on `<input type="range">` that tags it with `.zks-slider`. Track + thumb styled via vendor-prefixed pseudo-elements appended to `src/app/globals.css` (track = 2px border, thumb = 16px circle forest w/ 2px canvas border). `disabled:` pseudos degrade thumb to muted.
+  - `badge.tsx` — CVA pill variants: default/success/mint/warning/danger/info/forest. Uses font-mono uppercase tracking +8% per Design Spec eyebrow convention. Radius-2 (status pill radius per spec).
+  - `tabs.tsx` — compound component with Context holding `value`, `setValue`, `useId()`-scoped `baseId`. Works uncontrolled (`defaultValue`) or controlled (`value` + `onValueChange`). Keyboard nav (Arrow/Home/End) focuses + activates sibling triggers. ARIA roles `tablist`/`tab`/`tabpanel`, `aria-selected`, `aria-controls`, roving `tabIndex`. Active trigger colored `text-ink` + `border-forest` via `data-[state=active]`.
+- Added vendor-prefixed range slider styles to `globals.css` (`::-webkit-slider-runnable-track`, `::-moz-range-track`, `::-webkit-slider-thumb`, `::-moz-range-thumb` + `:hover` scale + `:disabled` desaturation).
+- Demo route at `src/app/ui/page.tsx` renders every primitive × variant × size inside sectioned rows. Layout reuses landing display/forest rule vocabulary so the page doubles as a mini style guide.
+- Files changed:
+  - `frontend/src/components/ui/button.tsx` (new)
+  - `frontend/src/components/ui/input.tsx` (new)
+  - `frontend/src/components/ui/select.tsx` (new)
+  - `frontend/src/components/ui/slider.tsx` (new)
+  - `frontend/src/components/ui/badge.tsx` (new)
+  - `frontend/src/components/ui/tabs.tsx` (new — "use client" directive at top)
+  - `frontend/src/app/ui/page.tsx` (new demo route)
+  - `frontend/src/app/globals.css` (added `.zks-slider` pseudo-element block)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (15 tests still passing)
+  - `pnpm build` ✅ — new `/ui` route shows as 9.71 kB / 112 kB first-load. Landing `/` unchanged at 102 kB first-load.
+  - `pnpm dev` + `curl http://localhost:3000/ui` → HTTP 200. Grepped rendered HTML for "Primary/Ghost/Small/Verified/Live/Proof/Settlement/Audit" labels (all present), `role="tab"` × 3, `role="tablist"` × 1, `role="tabpanel"` × 1, `aria-selected="true"` × 1, `bg-forest` token × 36, `outline-forest` × 50, `rounded-[var(--radius-3)]` × 16. Agent-browser CLI is not installed on this machine, so no screenshot was captured — manual browser verification from a human reviewer is still recommended.
+- **Learnings for future iterations:**
+  - `class-variance-authority` is already installed (US-003), so every multi-variant primitive should use `cva()` + `VariantProps<typeof variantsFn>` instead of hand-rolled ternaries. The pattern: `cva(baseClasses, { variants: { variant: {...}, size: {...} }, compoundVariants: [...], defaultVariants: {...} })` + `type Props = Native & VariantProps<typeof buttonVariants>`.
+  - Native `<input type="range">` styling needs vendor-prefixed pseudo-elements on BOTH `::-webkit-slider-runnable-track` / `::-moz-range-track` AND `::-webkit-slider-thumb` / `::-moz-range-thumb`. There is no cross-browser Tailwind utility for this — the track styles live in `globals.css` under a `.zks-slider` class and the component just opts into it. Do NOT try to inline track styles via Tailwind arbitrary selectors; Tailwind v4's arbitrary variant syntax doesn't cleanly express `::-moz-range-thumb`.
+  - `<select>` needs `appearance-none` + manual chevron — otherwise the native caret ignores all tokens. The chevron is positioned `absolute top-1/2 right-3 -translate-y-1/2` with `pointer-events-none` so click-through works. If the chevron ever gets swapped for an Iconoir glyph, keep the pointer-events-none.
+  - Tabs as a compound component MUST be a client component (`"use client"` at file top). Context, `useId`, state, and `onKeyDown` all rely on client runtime. Server components can still import the module — Next splits at the "use client" boundary — so landing/dashboard sections don't need to be `use client` themselves to use `<Tabs>`.
+  - `useId()` gives every Tabs instance a stable per-render base id; combine with suffixes like `${baseId}-trigger-${value}` for deterministic `id`/`aria-controls` pairs. Don't roll your own counter — it breaks under StrictMode's double render.
+  - Keyboard nav pattern for tabs: listen on the trigger, find siblings via `event.currentTarget.parentElement.querySelectorAll('button[role="tab"]:not([disabled])')`, index the current one, compute next with modular arithmetic, then `.focus()` + `.click()`. The click handler calls `ctx.setValue` which is what actually activates the panel.
+  - "Focus state: 2px forest outline + 2px offset" is expressed with `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest`. Prefer `focus-visible:` over `focus:` so mouse clicks don't flash an outline — every primitive in this codebase uses `focus-visible`.
+  - Badges are label-only (no `tabIndex={0}`). The "focus state on every primitive" acceptance criterion just pins the visual style; it doesn't mandate tab-focusability on non-interactive tokens.
+  - The demo route lives at `/ui` (not `/demo` — that route is reserved for US-015 Interactive Demo). If you add another sandbox later, use a parallel name like `/ui/typography` or move this one to `/ui/primitives` to free the top path for a future overview.
+  - When the dev server is already running on port 3000, starting another `next dev` would fail silently — check with `pgrep -fa "next dev"` before invoking.
+---
+
+## 2026-04-19 - US-010 - DisplayHeading helper with forest em support
+- Authored `src/components/ui/display-heading.tsx` exporting `DisplayHeading({ level, as, children, className, ...rest })`. Three levels via cva: xl/l/m mapped to clamp-based fluid type per Design Spec §3.4. Default tag mapping: xl → h1, l → h2, m → h3; `as` prop overrides for polymorphic use (`h1|h2|h3|h4|p|span|div`).
+- Sizes:
+  - xl → `text-[clamp(56px,7vw,128px)] leading-[0.95] tracking-[-0.035em]`
+  - l  → `text-[clamp(40px,5vw,72px)] leading-[1.03] tracking-[-0.035em]`
+  - m  → `text-[clamp(32px,4vw,48px)] leading-[1.05] tracking-[-0.02em]`
+- Base classes apply `font-display font-normal text-ink`. Forest italic on `<em>` flows from the global `em { font-style: italic; color: var(--color-forest); font-weight: inherit; }` rule already declared in `globals.css` (US-004) — no per-component override needed.
+- Demo: added a `DisplayHeading` Section to `src/app/ui/page.tsx` rendering all three levels, each with an inline `<em>` to prove the forest-em cascade, plus a polymorphic `as="p"` example.
+- Files changed:
+  - `frontend/src/components/ui/display-heading.tsx` (new)
+  - `frontend/src/app/ui/page.tsx` (DisplayHeading demo section added at top of primitives list)
+  - `frontend/ralph/prd.json` (US-010 passes=true)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (15 tests still passing)
+  - `pnpm build` ✅ — `/ui` route grew to 9.71 kB / 112 kB first-load (component is tree-shakable, near zero runtime cost).
+  - `pnpm dev` + `curl http://localhost:3000/ui` → confirmed rendered DOM has `<h1 class="…clamp(56px,7vw,128px) leading-[0.95] tracking-[-0.035em]">…<em>everywhere</em>…</h1>`, `<h2 …clamp(40px,5vw,72px)…<em>anywhere</em></h2>`, `<h3 …clamp(32px,4vw,48px)…<em>real time</em></h3>`, and `<p …clamp(32px,4vw,48px)…<em>shared</em></p>`. Agent-browser CLI is still not installed on this machine, so a visual screenshot was not captured — manual browser verification at http://localhost:3000/ui still recommended (the inline `<em>` color should be `--color-forest` #0c3d2e).
+- **Learnings for future iterations:**
+  - Tailwind v4 supports arbitrary fluid type via the `text-[clamp(MIN,VW,MAX)]` bracket form. There is no native `text-display-xl` utility — clamp lives inside the bracket. Pair with `leading-[N]` and `tracking-[Nem]` brackets for the rest of the type-stack tokens. Translate Design Spec percentages to em (e.g., -3.5% → -0.035em) since CSS `letter-spacing` does not accept percentages directly — `tracking-[-3.5%]` would silently no-op.
+  - Default level mapping (xl→h1, l→h2, m→h3) keeps the most common landing copy semantically correct without callers having to think about heading order. Use `as` to override when nesting (e.g., a display-xl in the middle of a section that already has an h1) to preserve heading-rank a11y.
+  - Polymorphism via `as` + cast to `ElementType` is sufficient for our use cases; don't reach for the `as` polymorphic-component generic gymnastics (`PolymorphicRef<As>`, `PolymorphicComponentPropsWithRef`) unless callers complain. The current API trades one cast for a much smaller, easier-to-read type surface.
+  - The em styling is a global cascade rule. Resist the urge to add a `<em className="text-forest italic">` per usage — that violates DRY AND breaks the design-spec contract that any inline `<em>` is the brand emphasis treatment everywhere on the site. If a one-off non-emphasis italic is ever needed, use `<i>` or an explicit utility class on a span.
+  - `display-m`'s spec said "32-48px" without an explicit vw breakpoint; interpreted as `clamp(32px,4vw,48px)` to maintain the same fluid pattern as xl/l. If the design team wants display-m to be non-fluid, swap to `text-3xl md:text-5xl` later — the cva structure makes the change one-liner.
+  - The demo Row label format ("display-xl · h1 default · clamp(56–128px) / 0.95 / -3.5%") doubles as inline documentation — future devs eyeballing /ui can map the rendered glyph back to the spec immediately. Keep this convention if you add more typography demos.
+---
+
+## 2026-04-19 - US-011 - Landing nav + 10 section shells composed in page.tsx
+- Built the first real composition of the landing page: the sticky nav, a shared Section/SectionHeader helper, all 10 narrative section shells, and a footer — all rendered from the COPY module with zero inlined strings.
+- Files added:
+  - `frontend/src/components/landing/nav.tsx` (`"use client"` — 56px sticky header, Seal size={28}, Demo/SDK/GitHub link row hidden <md, forest "Try demo" pill styled via buttonVariants, scroll listener toggles border-border-subtle bottom after scrollY>8)
+  - `frontend/src/components/landing/section.tsx` (shared `Section` wrapper: `py-24 md:py-40` + `max-w-6xl` + `px-5 md:px-8`; `SectionHeader` helper: mono forest eyebrow + 20px-wide 1px forest rule + DisplayHeading level=l, tone='surface' flips to canvas-on-forest for inverted panels)
+  - `frontend/src/components/landing/hero/hero.tsx` (min-h-[calc(100vh-56px)] display-xl hero, primary+secondary CTA)
+  - `frontend/src/components/landing/paradox-section.tsx` (2-col header/body grid, headline left + 55ch paragraph right)
+  - `frontend/src/components/landing/two-realities-section.tsx` (`RealityCard` helper renders left = plain values + danger Badge, right = ▓ redacted + forest Badge + proof line in mono forest; italic font-display caption below)
+  - `frontend/src/components/landing/how-it-works-section.tsx` (3-col hairline-bordered list, mono index + display title + quill body)
+  - `frontend/src/components/landing/numbers-section.tsx` (bg-surface, 2×2 grid, display-xl numbers with mono forest eyebrow label + stone sub-label)
+  - `frontend/src/components/landing/demo-section.tsx` (static 2-col form + proof console; Input/Select/Slider primitives populated with COPY.demo.form defaults; readonly/disabled for US-011 — interactivity lands in US-019; terminal placeholder div with initialTerminal copy)
+  - `frontend/src/components/landing/use-cases-section.tsx` (bg-surface, 5 UseCase cards laid out 3 + 2 from USE_CASES with empty tail cell padding the final row)
+  - `frontend/src/components/landing/developers-section.tsx` (7/5 grid: left tabs row visually styling TypeScript active forest-underline / Rust & Anchor CPI muted, plus `<pre><code>` block on surface-deep — Shiki highlighting lands in US-020; right aside with install command, version, GitHub ghost button, license line)
+  - `frontend/src/components/landing/momentum-section.tsx` (3 hairline-divided columns with footnote)
+  - `frontend/src/components/landing/closing-cta.tsx` (full-bleed bg-forest text-canvas panel; primary CTA = canvas bg + forest text, secondary = ghost with canvas outline)
+  - `frontend/src/components/landing/footer.tsx` (wordmark + tagline top row, links ul, mono uppercase bottomLine)
+- Files modified:
+  - `frontend/src/app/page.tsx` (now composes Nav → main id=main-content ( Hero · Paradox · TwoRealities · HowItWorks · Numbers · Demo · UseCases · Developers · Momentum · ClosingCta ) → Footer in Design Spec §4 order)
+  - `frontend/ralph/prd.json` (US-011 passes=true + notes)
+  - `frontend/ralph/progress.txt` (Codebase Patterns entries for Section wrapper + Nav scroll pattern + Link-as-Button pattern + inverted panel button pattern)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (15 tests still passing)
+  - `pnpm build` ✅ — landing route now 5.42 kB / **116 kB first-load** (still well under the 220 kB budget from US-032). Only the Nav is a client component; everything else is a Server Component so there's no bundle hit for content.
+  - `pnpm dev` + `curl http://localhost:3000` grepped for all 9 eyebrows (ZKSETTLE · COMPLIANCE, THE PROBLEM, WITH ZK · WITHOUT ZK, HOW IT WORKS, BENCHMARKS, TRY IT, USE CASES, SDK, WHY NOW), all 11 headlines, all 5 use-case names (Travel rule / Proof of solvency / ZK credit score / AML by behavior / Proof of reserves), nav links (Demo / SDK / GitHub / Try demo), ARIA hooks (`role="tablist"`, `role="tab"`, `role="group"`), sticky nav class (`sticky top-0`), Two Realities pills (VIOLATES GDPR, COMPLIANT · VERIFIED), proof line (`Proof: 0xa3f8`) — all present in SSR output. Agent-browser CLI not installed → no screenshot.
+- **Learnings for future iterations:**
+  - A shared `Section` wrapper + `SectionHeader` pair removes 90% of the padding/width/eyebrow boilerplate across 10 sections. Every new section below the fold should reach for this first; only break out of it for full-bleed panels (Numbers bg-surface, Closing CTA bg-forest) where the outer `<section>` needs its own bg + unconstrained width.
+  - The "20px forest rule above headline" spec line reads as a decorative widget — I implemented it as `<span aria-hidden className="inline-block h-px w-5 bg-forest">` between eyebrow and headline. That's the cleanest SSR-only rendering; if US-014 animates the rule on scroll, the same span can hook into an IntersectionObserver without structural changes.
+  - `Link` styled as a button must go through `cn(buttonVariants({ variant, size }))`. The `Button` primitive is `<button type="button">` and cannot be used for navigation; wrapping it in `<Link>` would nest two interactive roles and break keyboard semantics. Resist the urge to add an `asChild` slot API to Button just for landings — the variant export already solves the use case.
+  - For the closing CTA's inverted primary (canvas bg + forest text) I wrote the class list inline rather than extending `buttonVariants`. A single inverted spot doesn't warrant a 6th variant; if US-013 hero or US-031 OG image also need this treatment, promote it to `buttonVariants.variant.inverted` at that point — DRY at the third usage, not the first.
+  - For the scroll-state nav, a plain `useEffect` + passive scroll listener + `useState` is the right tool. `motion.useScroll()` or `useReducedMotion` aren't needed here — scrolled is a boolean edge, not an animated scalar. Save the framework-level scroll hooks for real animations (US-013 Veil, US-014 PinnedSection, US-015 Two Realities dissolve).
+  - The AC asked for 10 section shells but the COPY module defines 11 top-level keys (hero · paradox · twoRealities · howItWorks · numbers · demo · useCases · developers · momentum · closingCta · footer). Landing has 10 narrative sections + 1 footer; the footer is NOT one of the 10 shells (it's site chrome, like the nav). I put `footer.tsx` in `components/landing/` alongside the sections so all site chrome lives in one directory — if dashboard ever grows a different footer, we can rename to `components/chrome/landing-footer.tsx`.
+  - For the Two Realities static shell I rendered the left card with plain values + right card with ▓ redacted values as the "final" post-animation state. US-015 will wire this into a scroll-scrubbed dissolve where the right card starts equal to the left and fades its values to ▓ as scroll progresses. The COPY already carries both `value` and `redacted` fields per row (US-007 pre-wired this), so US-015 only needs to animate, not to reshape data.
+  - The Developers section tabs row is static HTML with `role="tablist"/"tab"` and `aria-selected={i===0}`. It looks like a real tablist to ATs, but clicks do nothing — US-020 will swap it for the real `<Tabs>` client component from `components/ui/tabs.tsx`. Leaving the ARIA in place now means the swap is drop-in and the accessibility tree stays stable during the upgrade.
+  - When pulling options off COPY.demo.form.jurisdiction.options, cast to `String` for `defaultValue` (since the interface allows `string | number`). Same for `form.recipient.defaultValue`. `noUncheckedIndexedAccess` + the union shape means you can't just spread — explicit `String(x ?? "US")` is the safest pattern and future demo fields can reuse it.
+  - Imports are ordered: external packages → `@/components/landing/*` (shell) → `@/components/ui/*` (primitives) → `@/content/*` (copy) → `@/lib/*` (utilities). This is the implicit convention used by earlier stories; eslint-config-next doesn't enforce it but prettier-plugin-tailwindcss doesn't touch import order, so keeping it consistent by hand makes diffs readable.
+---
+
+## 2026-04-19 - US-012 - Reduced-motion + scroll-progress + mounted hooks
+- Authored three client hooks under `src/hooks/`:
+  - `use-reduced-motion.ts` — reads `window.matchMedia('(prefers-reduced-motion: reduce)')` inside `useEffect`. Initial state is `false` so SSR stays stable; the client reconciles after the first effect. Subscribes with `addEventListener('change', handler)` + cleans up with `removeEventListener` on unmount. Guards `typeof window` and `typeof window.matchMedia` for exotic SSR/test environments.
+  - `use-mounted.ts` — flips `false → true` inside a zero-dep `useEffect`. Minimal but invaluable for gating client-only UI (e.g. the US-013 Three.js canvas) so server markup stays stable.
+  - `use-scroll-progress.ts` — accepts a `RefObject<HTMLElement | null>` and returns 0–1 progress across `(viewport + element height)`. Registers passive scroll + resize listeners, recomputes with `getBoundingClientRect()`, and clamps with a local `clamp01()` helper. Cleans up listeners on unmount. `noUncheckedIndexedAccess` means `ref.current` is typed `HTMLElement | null`, so we early-return on null.
+- Tests (vitest + jsdom):
+  - `use-mounted.test.ts` — 2 tests: returns `true` after effects flush; remains `true` across re-renders. `// @vitest-environment jsdom` pragma at top.
+  - `use-reduced-motion.test.ts` — 2 tests: reads initial `matches` on mount; propagates `change` events. Stubs `window.matchMedia` via `Object.defineProperty` with a listener-tracking MQL and a `dispatchChange(matches)` helper. Uses `vi.restoreAllMocks()` in `afterEach`. Pragma at top.
+- Dev deps added: `@testing-library/react@^16`, `@testing-library/dom@^10` (v16 is the React 19-compatible line).
+- Files changed:
+  - `frontend/src/hooks/use-reduced-motion.ts` (new)
+  - `frontend/src/hooks/use-mounted.ts` (new)
+  - `frontend/src/hooks/use-scroll-progress.ts` (new)
+  - `frontend/src/hooks/use-reduced-motion.test.ts` (new)
+  - `frontend/src/hooks/use-mounted.test.ts` (new)
+  - `frontend/package.json` + `pnpm-lock.yaml` (devDeps bump)
+  - `frontend/ralph/prd.json` (US-012 passes=true + notes)
+  - `frontend/ralph/progress.txt` (this entry + 3 Codebase Pattern lines)
+- Verification:
+  - `pnpm test` ✅ — 19 tests pass across 4 files (`format.test.ts`, `prng.test.ts`, `use-mounted.test.ts`, `use-reduced-motion.test.ts`).
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm build` ✅ — landing still 116 kB first-load; hooks tree-shake until imported by US-013/US-014/US-015/US-016/US-017.
+- **Learnings for future iterations:**
+  - `renderHook` from `@testing-library/react@^16` flushes effects inside an implicit `act()` wrapper — `result.current` is the POST-mount value, not the initial render. If you ever need to assert the initial/pre-effect state, you'd have to roll a custom renderer; for this codebase's hooks we only care about the post-mount behavior, which is what downstream components see.
+  - jsdom's built-in `matchMedia` stub returns `{ matches: false, addEventListener: () => {} }` by default — meaning change events never fire. Any test asserting on media-query updates MUST override `window.matchMedia` via `Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: vi.fn()... })`. Use `afterEach(() => vi.restoreAllMocks())` to keep tests isolated — `vi.fn()` mocks are restored but `defineProperty` assignments persist; since we rewrite `window.matchMedia` at the top of each test, this is fine in practice.
+  - `RefObject<T | null>` vs `RefObject<T>` matters: with `noUncheckedIndexedAccess` + React 19 typings, `useRef<HTMLElement>(null)` actually produces `RefObject<HTMLElement | null>`. So `useScrollProgress(ref)` must accept the nullable form — if the acceptance-criterion reads as just "ref", the safest API surface is `RefObject<HTMLElement | null>` and an internal null guard. Do NOT `ref.current!` — explicit early-return is clearer.
+  - The scroll-progress formula `(viewport - rect.top) / (rect.height + viewport)` hits 0 when the element's top is just entering from below the viewport bottom and 1 when its bottom has just exited the top. Two common alternatives: `(viewport - rect.top) / viewport` (0→1 as element passes viewport, used by some parallax libs — ignores element height) and `-rect.top / rect.height` (enters at top, exits at bottom — only maps between 0 and 1 while pinned). The chosen formula is the most symmetric and matches what GSAP ScrollTrigger's `scrub` progress gives you between `top bottom` and `bottom top` triggers — so US-014/US-015 can use the hook OR ScrollTrigger progress interchangeably.
+  - `useScrollProgress` uses `{ passive: true }` on `scroll` specifically to keep the compositor thread happy — React 19's concurrent renderer + a non-passive scroll listener can produce 20–30ms jank per frame. If you ever need `event.preventDefault()` in a scroll handler (you don't here), use a separate non-passive listener for that purpose.
+  - Every hook file starts with `"use client"` (double quotes — matches Next.js docs and the house style). When a server component imports a client hook, Next's bundler splits at the boundary; the server component stays server-rendered. No need to mark every page `"use client"`.
+  - Never ship a React hook without a named export from a `use-<name>.ts` file. `export default` breaks refactor tooling and mangles import names across the codebase; named exports make grep-for-usage trivial.
+---
+
+## 2026-04-19 - US-013 - Veil canvas — Three.js hero particle shader
+- Authored the hero's generative background: a Three.js `Points` mesh of up to 12,000 particles scattered across the hero viewport that converge into a central forest commitment glyph (ring + settlement bar) as the page scrolls through the hero section. GLSL shaders lerp aStart → aTarget with brand-eased progress; ambient particles fade out at full convergence so the glyph reads clean.
+- Files changed:
+  - `src/components/landing/hero/veil-shaders.ts` — exports VERTEX_SHADER + FRAGMENT_SHADER as tagged GLSL strings. Vertex shader: brand-eased (ease-out-quint approximation of cubic-bezier(0.32,0.72,0,1)) mix of aStart+drift → aTarget, gl_PointSize scales by uPixelRatio and shrinks 35% as particles converge, sign of aSize encodes glyph vs ambient membership into a vGlyph varying. Fragment shader: soft-disc anti-aliased point via smoothstep on gl_PointCoord, color tints warm ash → forest only for glyph particles (vGlyph-gated), ambient alpha fades to 15% at full convergence.
+  - `src/components/landing/hero/veil-canvas.tsx` — `"use client"` component that mounts a WebGLRenderer into an absolute-positioned div behind the hero text. Uses OrthographicCamera with aspect-aware bounds, uScale uniform keeps the glyph proportionate across viewports. Geometry attributes built once via `createPrng(0x5e1)` for SSR/client/HMR determinism: 12k particles allocated in the ratio 58% ring / 12% settlement bar / 30% ambient. Renderer uses antialias:false + alpha:true + powerPreference:'low-power' + setPixelRatio(min(DPR, 2)). Scroll progress computed locally (not via useScrollProgress — the rAF loop needs a mutable ref, not a setState subscription) and critically-damped interpolated inside rAF via `1 - exp(-dt * 6)`. FPS monitor: rolling 2s window; if avg fps < 50 and tierIndex < 2, bump tier and `geometry.setDrawRange(0, PARTICLE_TIERS[tier])` drops to the next tier (12k → 6k → 3k). useReducedMotion short-circuits to a single `renderer.render()` call after setting uProgress directly — no rAF loop starts. Viewport <768px returns a static SVG fallback (forest ring + settlement bar) and never mounts Three at all. Cleanup on unmount disposes renderer/geometry/material, removes the canvas from the DOM, cancels rAF, and unregisters scroll+resize listeners — StrictMode-safe (idempotent).
+  - `src/components/landing/hero/veil-canvas-lazy.tsx` — tiny `"use client"` wrapper that calls `next/dynamic(() => import("./veil-canvas"), { ssr: false })`. This is the indirection Next.js requires to use dynamic-with-ssr:false from a server-component caller (Hero). Splits Three into its own ~139 kB chunk so the landing's first-load JS stays at 117 kB.
+  - `src/components/landing/hero/hero.tsx` — now imports VeilCanvasLazy and drops the canvas as the first child of the `<section>` with `pointer-events-none absolute inset-0 -z-10`. The content div gets `relative` so stacking context makes the text paint above the canvas.
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (19 tests pass, 4 files)
+  - `pnpm build` ✅ — landing: 6.23 kB route / 117 kB first-load (was 116 kB before US-013). Separate lazy chunk for Three renders when hydrated.
+  - `pnpm dev` + `curl http://localhost:3000` → HTTP 200, hero-heading + main-content + bg-canvas + font-display all render; no server-side errors in dev logs.
+- **Learnings for future iterations:**
+  - Three.js first-load impact is huge (~120 kB gz). ANY component that imports from `three` must be lazy-loaded via a `*-lazy.tsx` wrapper using `next/dynamic({ ssr: false })`. next/dynamic's ssr:false flag can only be called from Client Components, so the lazy wrapper file itself must be `"use client"`.
+  - `next/dynamic` + Server Component caller: pattern works because the lazy wrapper IS a client boundary. The server component (Hero) stays server-rendered; only the lazy chunk streams in after hydration.
+  - Three's uniform dictionary typing `{ [key: string]: IUniform | undefined }` fights `noUncheckedIndexedAccess`. Workaround: declare each uniform as a `const uX = { value: initial }` OUTSIDE the uniforms object and pass them into it by reference. Three stores the same object reference, and TS sees a non-nullable .value when you mutate later. Avoids the `material.uniforms.uProgress!.value` spray throughout the rAF tick.
+  - `PARTICLE_TIERS = [12_000, 6_000, 3_000] as const` is a readonly tuple; indexed access with a dynamic `tierIndex` still widens to `T | undefined` under strict mode. We know the index is always in-bounds (start at 0, increment only while `< length - 1`) so a `!` assertion is both correct and the shortest fix — non-null here is a provable invariant.
+  - `OrthographicCamera(-aspect, aspect, 1, -1, 0.01, 100)` with `camera.position.z = 5` gives a clean 2D particle playground where world-space [-1..1] maps to a unit glyph radius regardless of viewport aspect. uScale uniform then stretches or compresses the glyph for narrow aspects (uScale = min(aspect, 1) * 0.9 + 0.1 keeps it readable on portrait tablets).
+  - `geometry.setDrawRange(0, N)` is the zero-cost particle-count reducer. Geometry stays in VRAM; only the draw call's element count changes. Ideal for the FPS-adaptive tier-down pattern.
+  - Encoding boolean metadata (glyph vs ambient) in the SIGN of a float attribute (aSize) avoids allocating an extra attribute slot. Shader reads `step(0.0, aSize)` — returns 1.0 for positive, 0.0 for negative. Saves 12k floats of GPU memory and one `setAttribute` call.
+  - `useReducedMotion()` short-circuit for Three scenes = render one frame at current progress, then return. No rAF loop, no drift uniform update. The CSS `@media (prefers-reduced-motion: reduce)` in globals.css kills CSS transitions/animations but does NOTHING for rAF loops — always short-circuit explicitly.
+  - M1-class 60fps verification and visual WebGL rendering verification require a real browser — agent-browser CLI is not installed on this machine (per US-009 learnings). Build + typecheck + dev server smoke test are the best signal we can give automatically; manual Chromium spot-check is still on the shopping list for US-033.
+  - The scroll-progress hook (`useScrollProgress`) is NOT a good fit for driving rAF uniforms — its setState causes React re-renders at scroll-event rate (up to 120 Hz), which fights with Three's render loop. Inside a Three effect, compute progress into a `let targetProgress` and read it from the rAF tick directly. The useScrollProgress hook stays useful for section-pin progress (US-014/US-015) where you DO want React to re-render on progress change.
+---
+
+## 2026-04-19 - US-014 - GSAP setup + PinnedSection primitive
+- Wired GSAP + ScrollTrigger globally and built the canonical pin/scrub primitive that US-015/US-017 will consume. Registration happens exactly once in `src/lib/gsap.ts` via an idempotent `ensureRegistered()` guard behind `typeof window !== "undefined"`; component files import `gsap`/`ScrollTrigger` from `@/lib/gsap` and never register the plugin themselves.
+- Files added:
+  - `frontend/src/lib/gsap.ts` — `"use client"` module. Imports `gsap` + `gsap/ScrollTrigger`, registers the plugin + sets `gsap.defaults({ ease: "power2.out" })` once (SSR-safe guard). Exports `gsap`, `ScrollTrigger`, `BRAND_EASE` (tuple `[0.32, 0.72, 0, 1]`) + `BRAND_EASE_CSS` (`cubic-bezier(...)`). Also exports `brandMatchMedia(setup)` — a typed wrapper around `gsap.matchMedia` with three fixed breakpoints: `isDesktop` = `(min-width:768px) AND (prefers-reduced-motion:no-preference)`, `isMobile` = `(max-width:767px)`, `isReduced` = `(prefers-reduced-motion:reduce)`. The setup callback receives a typed `BreakpointConditions` object (all three booleans, never undefined) plus the raw `gsap.Context` for callers that need `.add()` / deeper control. Returning a teardown function from setup is how per-breakpoint triggers dispose when the context changes.
+  - `frontend/src/components/motion/pinned-section.tsx` — `"use client"` component, accepts `{children, pinDuration=1.5, onProgress, showProgress=false, className}`. On desktop ONLY: creates a `ScrollTrigger.create({trigger: ref.current, start: "top top", end: () => \`+=\${window.innerHeight * pinDuration}\`, pin: true, pinSpacing: true, scrub: true, invalidateOnRefresh: true, onUpdate: (self) => { setProgress(self.progress); onProgressRef.current?.(self.progress) }})`. `end` is a function so `invalidateOnRefresh` re-queries viewport height on resize. On mobile and reduced-motion: no-op pass-through (returns from setup before creating the trigger). onProgress is held in a `useRef` and synced in a separate effect so parents can pass non-memoized handlers without forcing the pin to recreate. Cleanup = `mm.kill()` which disposes the matchMedia context AND runs the per-breakpoint teardown (trigger.kill + state reset). Progress indicator (rendered only when `showProgress && md:block`): 40×1px border-subtle track with a forest bar scaled via `transform: scaleX(progress)` plus a "Scroll progress · N%" mono caption underneath. `data-pinned` attribute flips "true"/"false" so downstream visual tests can assert on the pin state without inspecting GSAP internals.
+- Files modified:
+  - `frontend/src/components/landing/demo-section.tsx` — wraps SectionHeader + form/console grid inside `<PinnedSection pinDuration={1.5} showProgress className="pb-20 md:pb-24">`. The `pb-20 md:pb-24` gives the progress indicator breathing room under the last grid row. Demo section remains a Server Component; PinnedSection is the client boundary.
+  - `frontend/ralph/prd.json` (US-014 passes=true + long notes)
+  - `frontend/ralph/progress.txt` (this entry + 5 new Codebase Patterns covering GSAP registration, brandMatchMedia typing, PinnedSection pattern, onProgress-ref pattern, and the first-load budget headroom for remaining motion stories)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (19 tests across 4 files still pass)
+  - `pnpm build` ✅ — landing: 52.1 kB route / **163 kB first-load** (was 117 kB before US-014; +46 kB for GSAP + ScrollTrigger in the shared client chunk). Under the US-032 220 kB budget.
+  - `pnpm dev` + `curl http://localhost:3100` → HTTP 200. Demo section SSR markup contains `<div aria-hidden="true" data-pinned="false" class="pointer-events-none absolute bottom-8 left-1/2 z-10 hidden h-px w-40 -translate-x-1/2 bg-border-subtle md:block">` plus "Scroll progress · 0%" caption. Initial state is `data-pinned="false"` because server rendering doesn't execute the effect — the client hydration flips it to `true` on desktop after `brandMatchMedia` matches.
+- **Learnings for future iterations:**
+  - Next.js 15 has a stale-build gotcha: if you ever see `unhandledRejection [Error [PageNotFoundError]: Cannot find module for page: /_document]` during `pnpm build`, `rm -rf .next` and rebuild. Happened once after a `git stash` + `git stash pop` cycle — the build cache got confused and thought it was a Pages Router project. Clean builds reproducibly pass. Not a gsap or motion issue.
+  - GSAP's `gsap.matchMedia` is the CORRECT abstraction for responsive + prefers-reduced-motion gating. Do NOT write `window.matchMedia('(max-width: 767px)').matches` in a scroll-driven component — gsap.matchMedia returns a Context whose teardown hook correctly disposes ScrollTriggers when the breakpoint flips (e.g. user resizes desktop → mobile). A bare `matchMedia` check happens once on mount and leaks triggers across breakpoint changes.
+  - ScrollTrigger's `end` accepts `string | number | () => string | number`. For pin durations tied to viewport height, ALWAYS use the function form: `end: () => \`+=\${window.innerHeight * pinDuration}\``. Combined with `invalidateOnRefresh: true`, this makes the pin re-compute its duration when the viewport resizes. A static string like `end: "+=800"` won't adapt to viewport rotation on mobile/tablet.
+  - `gsap.Context`'s `conditions` property from matchMedia can theoretically be `undefined` in the types (GSAP typings are permissive). Always coerce to booleans explicitly in the typed wrapper — `Boolean(context.conditions?.isDesktop)` — so downstream setup functions see strict booleans, not `boolean | undefined`. Saves a dozen `conditions.isDesktop === true` checks across call sites.
+  - Typing a return of `gsap.matchMedia()` as `gsap.MatchMedia` works out of the box. Same for the `self: ScrollTrigger` param in `onUpdate` — the `@types/gsap` ships with the gsap package (no separate `@types/gsap` install needed). Strict mode + `noUncheckedIndexedAccess` cause no friction with the GSAP API as long as you don't do `ScrollTrigger.getAll()[0]` without a length check.
+  - onProgress-ref pattern: the scroll-driven `setProgress(self.progress)` inside `onUpdate` causes React re-renders at up to 60 Hz during scroll. If your parent component ALSO re-renders often and passes a fresh `onProgress` prop each render, listing `onProgress` in the effect's deps would recreate the ScrollTrigger on every parent render → visible as scroll rubber-banding and pin flicker. The `useRef<typeof onProgress>(onProgress)` + separate sync effect indirection keeps the pin mounted across parent re-renders.
+  - GSAP (~46 kB gz) belongs in the shared first-load chunk, NOT a per-section lazy chunk. Multiple sections (PinnedSection, US-015 Two Realities, US-017 FadeIn) will all import from `@/lib/gsap`, so bundling once + reusing is strictly better than N lazy chunks that each re-ship GSAP. Compare to Three.js (~120 kB) where lazy-loading a single section (US-013 hero) IS worth it. Rule of thumb: if a dep is shared across 2+ sections, stay in the shared chunk; if only one section uses it and it's >100 kB, lazy-load.
+  - When a Server Component (demo-section) wraps its content inside a Client Component (PinnedSection), React serializes the children as RSC descriptors and the client component mounts + hydrates normally. No "use client" pragma needed on the parent. This is the preferred composition pattern — keep sections as Server Components and drop client behavior in via nested `"use client"` primitives.
+  - Demo section chose `pinDuration={1.5}` arbitrarily — 1.5× viewport height gives a feel of "scroll a bit past the section, it stays glued to the top". For US-015 Two Realities (which animates value-by-value PII dissolve), a longer pinDuration (2.0 or 2.5) will be more appropriate so each character of the redaction has perceptible scroll distance. Tune per-section.
+  - Reduced-motion scenarios fall through PinnedSection as a plain pass-through `<div>`. The progress indicator (when `showProgress`) still renders BUT shows "Scroll progress · 0%" forever (no ScrollTrigger → no state update). If that visual becomes distracting for reduced-motion users, either hide it with `motion-reduce:hidden` or gate the showProgress prop on `useReducedMotion()`. US-015 Two Realities won't show a progress bar so this is moot for now.
+  - Manual Chromium verification is still needed for: actual pin visual behavior during scroll, scrub smoothness (≥55 fps), reduced-motion fallback confirmation via CDP override. agent-browser CLI not installed on this machine → US-033 smoke test covers the manual pass.
+---
+
+## 2026-04-19 - US-015 - Two Realities scroll-locked PII redaction
+- Rewrote `src/components/landing/two-realities-section.tsx` as a "use client" component driving a scroll-locked per-row dissolve of the LEFT (Without ZK) card's PII values into ▓ blocks while the RIGHT (With ZK) card stays static at the final redacted + proof state.
+- Animation mechanics:
+  - Desktop: `<PinnedSection pinDuration={1.5} onProgress={setProgress}>` drives `progress` 0→1 across 1.5× viewport heights of pinned scroll. `rowProgress(progress, i, 4)` staggers four rows with a 0.4-wide window and stride `(1 - 0.4)/(4 - 1) = 0.2` — row 0 animates [0, 0.4], row 1 [0.2, 0.6], row 2 [0.4, 0.8], row 3 [0.6, 1.0]. Each row calls `dissolve(value, p)` which replaces the leading `Math.ceil(p * len)` characters with `▓` (U+2593), producing a top-down left-to-right character-by-character dissolve. Value color transitions from `text-ink` → `text-stone` at p ≥ 1 (fully redacted).
+  - Mobile (<768px): PinnedSection short-circuits (isDesktop-only check inside brandMatchMedia). A dedicated `useEffect` + `brandMatchMedia` handler queries `[data-reality-card]` elements and runs a ScrollTrigger-backed `gsap.fromTo(opacity 0→1, y 16→0, duration 0.6, delay i*0.15, ease "power2.out")` fade-in when each card crosses `top 85%`. `toggleActions: "play none none none"` so the fade doesn't reverse on scroll-back. Cleanup on mm.kill() calls `gsap.set(cards, { clearProps: "opacity,transform" })` so re-mounts (React StrictMode, HMR) don't leave stale inline styles.
+  - Reduced motion: `useReducedMotion()` → `effectiveProgress = 1`. LEFT card renders fully-blocked final state immediately. RIGHT card is static anyway. `brandMatchMedia`'s isReduced branch intentionally returns nothing (no ScrollTrigger, no rAF, no subscription).
+- Visual details:
+  - LEFT card pill: `badgeVariants({variant: "danger"})` + `inline-flex items-center gap-1.5` + Iconoir `<WarningTriangle>` (h-3 w-3, strokeWidth 2) + "VIOLATES GDPR · LGPD · MiCA".
+  - RIGHT card pill: `badgeVariants({variant: "success"})` (mint bg, emerald text) + Iconoir `<Check>` (h-3 w-3, strokeWidth 2.5) + "COMPLIANT · VERIFIED". The `success` variant matches AC's "Forest pill CHECK ... on mint bg" — mapped from COPY's `tone: "forest"` by explicit choice in the component (copy tone kept for semantic labeling; component decides visual).
+  - RIGHT card proof line: `font-mono text-sm text-forest` renders "Proof: 0xa3f8...c91b" below the dl.
+  - Caption: `font-display text-lg italic text-quill` max 55ch — "Both prove the user is verified. Only one can stand in court."
+- Accessibility:
+  - Each `<dd>` has `aria-label` with the canonical text (LEFT: `"Recipient: Maria Silva"`, RIGHT: `"Recipient: redacted"`). The visual span is `aria-hidden="true"` so screen readers never hear the intermediate ▓-mixed strings during scroll.
+  - Both cards are `<article data-reality-card>` so the mobile fade-in query selector picks them up cleanly without leaking to the caption or section header.
+  - Iconoir glyphs have `aria-hidden="true"` since the pill text carries the semantic meaning.
+- Files changed:
+  - `frontend/src/components/landing/two-realities-section.tsx` — rewrite from server component (static) to "use client" with PinnedSection, rowProgress/dissolve helpers, iconoir-react pills, mobile fade-in via brandMatchMedia, reduced-motion forcing of effectiveProgress=1.
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (19 tests still pass; no new tests since the component is animation-heavy and tested better via browser smoke)
+  - `pnpm build` ✅ — landing first-load went 163 kB → 165 kB (+2 kB for iconoir `<WarningTriangle>` + `<Check>` + the client-wrapped section). Well under US-032 220 kB budget.
+  - `pnpm dev` + curl `/` confirms server HTML includes "Without ZK", "With ZK", "VIOLATES GDPR", "COMPLIANT", "Proof: 0xa3f8", "Same transaction" (section heading), and the caption. Initial progress = 0 ⇒ LEFT shows plaintext values "Maria Silva", "123.456.789-00", "BR", "$5,200 USDC"; RIGHT shows ▓▓▓▓▓▓▓ placeholders. On client hydration, on desktop scroll, LEFT's values dissolve top-down.
+- **Learnings for future iterations:**
+  - PinnedSection's `onProgress` callback fires on every ScrollTrigger update (scrub-rate, up to 60 Hz). Passing `useCallback(... , [])` keeps the identity stable so PinnedSection's `onProgressRef.current = onProgress` sync effect doesn't thrash. Use `useCallback` or a stable top-level function — don't inline `(p) => setProgress(p)` as a prop, that re-creates each render (not catastrophic here because the ref sync is cheap, but it IS observable in React DevTools as extra effect re-runs).
+  - `dissolve()` uses `Math.ceil(p * len)` not `Math.floor` so even a tiny progress > 0 replaces at least the first character. Otherwise users see no change until progress crosses `1/len` — jarring at the start of a pin.
+  - Mobile fade-in via `gsap.matchMedia` + `ScrollTrigger` is cheap — no geometry rebuilds, the tween runs once per card and auto-kills itself when the user scrolls past. The `gsap.set(... { clearProps })` in the cleanup fn is critical for React 19 + StrictMode double-mount in dev: without it, the first-mount inline `opacity:0` sticks after the cleanup runs, leaving cards invisible after HMR.
+  - For the RIGHT "success" (mint bg) variant + Iconoir `<Check>` at 12×12, the icon reads lighter than the danger `<WarningTriangle>`. Bumping strokeWidth from the iconoir default (1.5) to 2.5 on `<Check>` and 2.0 on `<WarningTriangle>` balances visual weight inside the uppercase pill label. If future pills look "thin", check strokeWidth first.
+  - The TWO cards' `data-reality-card` attribute is the hook for mobile fade-in. If a future story adds a THIRD card (e.g. "With ZK + Halo2"), mobile fade would pick it up automatically with the i*0.15 stagger — no code change.
+  - `useReducedMotion()` returns false on SSR and flips on first client effect. There's a one-paint flash where reduced-motion users see LEFT plaintext before effectiveProgress=1 kicks in. Acceptable because the final state is just "more redacted" — no meaning is lost. If we ever need SSR-accurate reduced-motion, store the preference in a cookie and hydrate from there (not needed here).
+  - Iconoir icons: `import { Check, WarningTriangle } from "iconoir-react"` — named imports tree-shake well. Each icon is ~1 kB minified in the client bundle. The new +2 kB first-load breakdown is roughly: 1 kB × 2 icons + ~100 bytes for the client wrapper + rounding.
+  - `badgeVariants` already accepts `variant: "danger" | "success" | ...`; I compose it inside `cn(badgeVariants({ variant }), "inline-flex items-center gap-1.5")` rather than wrapping `<Badge>` + `children` — this gives fine-grained control over the icon+label gap without forking Badge.tsx. If a future story needs icon-enabled pills frequently, consider adding an `icon` prop to Badge — otherwise the compose-in-place pattern is fine.
+  - Manual Chromium verification still pending for: 60 fps scrub smoothness during pin, reduced-motion CDP override fallback, mobile sequential fade-in timing. agent-browser CLI not installed → US-033 smoke covers.
+---
+
+## 2026-04-19 - US-016 - CountUp primitive + Benchmarks numbers section
+- Added `frontend/src/components/motion/count-up.tsx` (`"use client"`) — CountUp primitive that accepts `target`, `duration` (default 1800ms), `formatter`, `teaseTo` (default 0), `className`. Uses `useInView` from `motion/react` with `{ once: true, amount: 0.5 }` + rAF loop with ease-out-expo (`1 - Math.pow(2, -10*t)`). On `useReducedMotion()` → jumps straight to `target`. SSR/pre-mount renders canonical `formatter(target)` (via `useMounted()` gate) so there's no hydration flash of tease values.
+- Added `frontend/src/components/landing/benchmark-number.tsx` (`"use client"`) — thin wrapper holding the 4 per-label CountUp configs keyed by `item.label` from `COPY.numbers.items`. This is necessary because function props (`formatter`) cannot cross a server-component → client-component boundary; the wrapper sinks the config lookup to the client side and exposes a serializable `{ label, fallback }` API that server components can pass.
+- Configs: Proving time (5, teaseTo 9.99, `"<5s"` at target), Verify cost (0.001, teaseTo 0.01, `"<$0.001"` at target), PII leaked (0, teaseTo 99, plain int), Proof size (256, teaseTo 0, `"N bytes"`).
+- Updated `frontend/src/components/landing/numbers-section.tsx` (still a Server Component) to render `<BenchmarkNumber />` inside the existing `<DisplayHeading level="xl" as="p">`; no structural changes to the 2×2 grid, eyebrow, rule, or sub-label typography.
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (19 tests — no new tests added; CountUp logic is visual and covered by manual browser verification).
+  - `pnpm build` ✅ — landing first-load JS went 163 kB → **166 kB** (+3 kB for `motion/react` `useInView`; same chunk as GSAP). Budget (220 kB per US-032) has **54 kB headroom**.
+  - Manual browser verification pending (no browser automation tool configured in this agent). agent-browser CLI not installed in this sandbox.
+- **Learnings for future iterations:**
+  - **Server → Client boundary + function props**: You CANNOT pass a function prop (like a `formatter`) from a Server Component to a Client Component — React serializes the prop and throws `Functions cannot be passed directly to Client Components unless you explicitly expose it by marking it with "use server"`. This hit the build at prerender time (not typecheck). The fix pattern is a thin `"use client"` wrapper component that holds the config internally and exposes a serializable API (strings, numbers, primitives). Don't reach for `"use server"` for display configs — that's for action functions. Applies to any future primitive that takes callbacks or formatters from server components.
+  - **Use `useInView` (motion v12) over `IntersectionObserver` directly** for entry-triggered animations. `{ once: true, amount: 0.5 }` → fires once when 50% of the element enters the viewport. Avoid `amount: 1` (never fires on short viewports) and `amount: 0` (fires immediately on any pixel). 0.5 is the sweet spot for landing benchmark numbers.
+  - **rAF easing for count-up**: `eased = t === 1 ? 1 : 1 - Math.pow(2, -10 * t)` (ease-out-expo) produces the "fast start, long coast" feel that reads as confident precision — matches the brand's scrub easing family without importing a curve helper. Duration 1800ms is the brand sweet spot: long enough to read the tease, short enough to not feel laggy.
+  - **SSR/hydration flash prevention** for value-animating components: default state to `teaseTo`, but render `formatter(target)` on the first paint (before `mounted`). After mount, if in view, animate from `teaseTo → target`. Without this gate, reduced-motion users (and cached/server-rendered HTML) briefly flash the tease value (e.g. "99" before "0"). Pattern generalizes to any future animate-on-mount primitive (e.g. typewriter, progress bars).
+  - **Accessibility for animated values**: wrap the visible animated span with `aria-hidden="true"` and set `aria-label={formatter(target)}` on the outer span. Screen readers hear only the canonical final value (e.g. "0", "<5s", "256 bytes"), never the intermediate floats. Same pattern as US-015 dissolve — consistent across the codebase.
+  - **Tease value convention** for benchmark count-ups: tease values are intentionally chosen to feel plausible-but-wrong so the drop to the real value lands. "9.99 → <5s" reads like "way too slow → ZK-fast". "99 → 0" reads like "lots of PII → none". The formatter switches on an epsilon check near `target` (`v <= target + 0.005`) so the final frame cleanly shows "<5s" / "<$0.001" instead of "5.00s" / "$0.001".
+  - **Function-prop workaround is cheap**: the `BenchmarkNumber` wrapper added ~400 bytes to the client bundle. If a future story introduces many similar animated-value cards (e.g. dashboard stats), consider generalizing to a `<StatCountUp kind="..." />` with a shared registry instead of per-label wrappers.
+  - **motion v12 tree-shakes**: importing only `useInView` from `motion/react` added ~3 kB gz, not the full motion bundle. Don't `import * from "motion/react"` — always named.
+  - **Build catches what typecheck doesn't**: the server/client boundary error surfaced at `Generating static pages`, not at `tsc --noEmit`. Running `pnpm build` (or at least `next build --no-lint` in quick mode) is necessary to catch RSC serialization bugs — typecheck alone is insufficient for stories that add new client components consumed from server components.
+---
+
+## 2026-04-19 - US-017 - FadeIn pass on remaining static sections
+- Authored `src/components/motion/fade-in.tsx` (`"use client"`) — polymorphic fade primitive accepting `{children, delay, duration=0.6, y=8, amount=0.3, as='div', className, id}`. Uses motion v12 `motion[as]` (cast to `ComponentType<HTMLMotionProps<"div">>`) with `initial={{opacity:0, y}} whileInView={{opacity:1, y:0}} viewport={{once:true, amount}} transition={{duration, delay, ease: BRAND_EASE}}`. `useReducedMotion()` → returns plain JSX (no motion import, no animation) so the SSR snapshot renders final state immediately for reduced-motion users.
+- Authored `src/components/landing/step-diagram.tsx` (`"use client"`) — SVG schematic illustrator with three per-index drawings: step 0 = user circle → square → square (credential → issuer → Merkle root), step 1 = device rect → dashed line → circle with check (proof generation, dashed line hints "off-chain"), step 2 = circle → arrow → ledger rect (on-chain verification). Each motion.circle / motion.rect / motion.path animates `pathLength` 0→1 + `opacity` 0→1 via `whileInView` with per-shape delays (0, 0.1/0.15, 0.2/0.3, 0.3/0.4, 0.4/0.45 s depending on the schematic). Under reduced motion, renders plain `<circle>/<rect>/<path>` elements — no motion wrappers in the tree.
+- Updated `src/components/landing/paradox-section.tsx` — headline column wrapped in `md:sticky md:top-24 md:self-start` so the editorial headline pins while the body scrolls past. Body split into sentences via `body.split(/(?<=\.)\s+/).map(s => s.trim()).filter(Boolean)` → 5 `<FadeIn as="p">` elements with `delay={i * 0.08}`, `amount={0.4}`.
+- Updated `src/components/landing/how-it-works-section.tsx` — each step rendered as `<FadeIn as="li">` with `delay={i * 0.12}`, and inline `<StepDiagram index={i as 0|1|2} delay={i * 0.12 + 0.2}>` between the step index mono and the display title. Three SVG schematics reveal sequentially alongside the card fade.
+- Updated `src/components/landing/use-cases-section.tsx` — `UseCaseCard` wrapped in `<FadeIn as="article">` with `delay={(globalIndex) * 0.08}`. 3+2 layout preserved; staggered delay across the 5-card grid.
+- Updated `src/components/landing/developers-section.tsx` — code block column = `<FadeIn delay={0}>`, install aside = `<FadeIn as="article" delay={0.12}>`. Tabs row + `<pre>` remain inside the first FadeIn so they animate together.
+- Updated `src/components/landing/momentum-section.tsx` — 3 columns = `<FadeIn as="article" delay={i * 0.1}>`, footnote = `<FadeIn as="p" delay={0.35} amount={0.5}>` so it trails the columns in view.
+- Updated `src/components/landing/closing-cta.tsx` — headline / sub / cta-row each wrapped in their own FadeIn with 0 / 0.1 / 0.2 s delays. Keeps the inverted forest panel's pacing deliberate (not cascading too fast) against the panel's large visual weight.
+- Files changed:
+  - `frontend/src/components/motion/fade-in.tsx` (new)
+  - `frontend/src/components/landing/step-diagram.tsx` (new)
+  - `frontend/src/components/landing/paradox-section.tsx`
+  - `frontend/src/components/landing/how-it-works-section.tsx`
+  - `frontend/src/components/landing/use-cases-section.tsx`
+  - `frontend/src/components/landing/developers-section.tsx`
+  - `frontend/src/components/landing/momentum-section.tsx`
+  - `frontend/src/components/landing/closing-cta.tsx`
+  - `frontend/ralph/prd.json` (US-017 passes=true + notes)
+  - `frontend/ralph/progress.txt` (this entry + 7 new Codebase Patterns for FadeIn, SVG stroke-dasharray reveal, motion v12 strict-SVG typing, polymorphic motion[as] casting, bundle-impact headroom note, sticky editorial headline pattern, and whileInView-vs-ScrollTrigger tradeoff)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (19 tests still pass, 4 files — no new tests since whileInView + reduced-motion branches are motion-library behavior, not our logic)
+  - `pnpm build` ✅ — landing route 95.3 kB / **206 kB first-load** (was 166 kB; +40 kB for motion HTML + SVG factories now in the shared chunk). Under US-032 220 kB budget with 14 kB headroom.
+  - `pnpm dev` + `curl http://localhost:3000` → HTTP 200. Verified SSR markup contains: 5 separate `<p style="opacity:0;transform:translateY(8px)">` paradox sentences (split correctly at period boundaries), 3 `<svg viewBox="0 0 98 24">` step diagrams, all 5 use-case names, all 3 momentum columns, closing CTA sub `"It's an SDK. Integrate in an afternoon. Pay per proof."`. Initial `opacity:0;transform:translateY(8px)` is motion's SSR starting state — hydration replaces with the animated state when element enters viewport.
+- **Learnings for future iterations:**
+  - Motion's whileInView SSR pattern: the server sends `<p style="opacity:0;transform:translateY(8px)">` as the initial snapshot, then hydration attaches the IntersectionObserver and animates on entry. This means reduced-motion users who load with JS disabled will see blank paragraphs — mitigated by the `useReducedMotion()` short-circuit in FadeIn which renders plain elements with no inline style. Motion v12's MotionConfig accepts `reducedMotion="user"` globally for a simpler opt-in, but per-component short-circuit is more explicit.
+  - Bundle budget watch: motion.div + motion.p + motion.li + motion.article + motion.section + motion.span (FadeIn's as-union) plus motion.circle + motion.rect + motion.path (StepDiagram) pulled in ~40 kB. If US-019 demo adds more motion variants (typewriter, cursor blink, status transitions), first-load could easily cross 220 kB. Mitigation path: (a) use CSS animations for simple entry effects in demo, (b) or if demo needs motion heavily, evaluate lazy-loading the demo section like US-013 did for Three. Current 206 kB has 14 kB headroom — treat as a ceiling.
+  - SVG strict-TS gotcha: `React.SVGAttributes<T>` defines `onAnimationStart` as a DOM event handler; motion's `SVGMotionProps<T>` redefines it as `(definition: AnimationDefinition) => void`. Spreading a plain-typed props object into `<motion.circle>` produces incompatible-types errors. Workaround chosen: explicit per-element JSX (no shared props object + spread). Slightly more verbose but no casts. If you need a data-driven SVG (many shapes), import `SVGMotionProps<T>` as the typing source of truth and spread into motion components; render reduced-motion branch as plain elements with a subset type.
+  - `motion[as]` polymorphic typing: TypeScript chokes on narrowing `motion[as]` to a single callable with a union-keyed `as`. Cast the result to `ComponentType<HTMLMotionProps<"div">>` — all motion HTML factories share the same props shape at runtime, so this is a safe narrowing cast. Don't reach for a `PolymorphicComponentPropsWithRef` generic — overkill for our use cases.
+  - Sticky headline + scrolling body = `md:sticky md:top-24 md:self-start` on the headline column, plus `minmax(0,1fr)_minmax(0,1fr)` grid. `top-24` (6rem = 96px) clears the 56px sticky nav + breathing room. `self-start` prevents the headline from stretching vertically with a taller body column. This is the canonical editorial pattern; reuse for any section where copy wants "here's the claim, here's the evidence" rhythm.
+  - Sentence split regex `/(?<=\.)\s+/` uses a lookbehind so the period stays attached to the preceding clause. Works for our punctuation-standard copy. If future copy uses `?` or `!`, extend to `/(?<=[.!?])\s+/`. Abbreviations like "U.S." would break — but landing copy avoids them.
+  - motion whileInView is self-cleaning on unmount (React StrictMode + route navigation both handled by motion internals). No need for a separate cleanup hook — in contrast with GSAP ScrollTrigger which REQUIRES explicit `.kill()`. This is why US-017 pattern (simple entry fades) uses motion, while US-014/US-015 pin/scrub uses GSAP. Right tool per job.
+  - "No stacked ScrollTriggers leak when navigating away and back" acceptance criterion: satisfied trivially because US-017 uses motion's whileInView, NOT GSAP ScrollTriggers. If a future story adds GSAP-driven fades, audit cleanup via `ScrollTrigger.getAll().length` after a route round-trip — should be zero.
+  - Manual browser verification still pending for: 60 fps stagger smoothness during scroll, reduced-motion CDP override confirming immediate render, mobile viewport sanity check. agent-browser CLI not installed on this machine → US-033 smoke test covers.
+---
+
+## 2026-04-19 - US-018 - Deterministic proof-bytes + demo-script data
+- Authored `src/lib/proof-bytes.ts`: VALID_PROOF (0x + 512 hex chars = 256 bytes, matches the Benchmarks "256 bytes" claim), NULLIFIER (32 bytes), EXPIRED_BLOCK (287_901_433), EXPIRED_PROOF_ERROR (template literal embedding `EXPIRED_BLOCK.toLocaleString("en-US")` — keeps the `287,901,433` formatting locked to the spec text without repeating the string literal), DEVNET_TX_HASH (placeholder Solana signature with doc comment flagging swap-before-demo-gate), SOLSCAN_URL (derived `https://solscan.io/tx/${DEVNET_TX_HASH}?cluster=devnet`).
+- Authored `src/lib/demo-script.ts`: `DemoStep { label, durationMs, status: "ok" | "fail", error? }`, `DEMO_STEPS` (4 happy-path steps totaling exactly 4,710 ms = 320 + 540 + 1,180 + 2,670), `EXPIRED_DEMO_STEPS` (3 steps; step 3 status="fail" with error=EXPIRED_PROOF_ERROR — the terminal halts here per design spec §6 expired variant).
+- Authored `src/lib/demo-script.test.ts`: asserts VALID_PROOF hex length = 512 (= 256 bytes), NULLIFIER hex length = 64, EXPIRED_PROOF_ERROR text is verbatim "proof rejected · credential expired (block 287,901,433)", DEMO_STEPS total = 4710, and EXPIRED_DEMO_STEPS halts at step 3 with the canonical error.
+- Files added:
+  - `frontend/src/lib/proof-bytes.ts`
+  - `frontend/src/lib/demo-script.ts`
+  - `frontend/src/lib/demo-script.test.ts`
+- Files changed:
+  - `frontend/ralph/prd.json` (US-018 passes=true + notes)
+  - `frontend/ralph/progress.txt` (2 new Codebase Patterns + this entry)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (27 passed across 5 files — demo-script.test.ts adds 8 new tests)
+  - `pnpm build` ✅ (landing still 206 kB first-load; lib modules tree-shake until US-019 imports them)
+- **Learnings for future iterations:**
+  - When the PRD acceptance criteria and the implementation plan disagree on shape (PRD: `DEMO_STEPS` constant; plan: `buildDemoScript(kind)` function), the PRD is authoritative — it's the gate for `passes: true`. Don't ship both as aliases; future stories consuming this will read the shipped surface.
+  - Encode the expired-block error as a template literal that interpolates `EXPIRED_BLOCK.toLocaleString("en-US")`, not a hardcoded string. That way if the block number ever updates, the error text updates automatically and `en-US` grouping stays locked.
+  - `noUncheckedIndexedAccess` makes `DEMO_STEPS[0]` narrow to `DemoStep | undefined` inside tests — use the `!` non-null assertion (we know the array is non-empty) rather than restructuring. Matches the existing pattern in `prng.test.ts`.
+  - VALID_PROOF is 256 BYTES = 512 HEX CHARS + `0x` prefix. Tests MUST assert on `hex.length === 512` AND `hex.length / 2 === 256` — both assertions catch "off by factor of 2" mistakes at review time. If the real Groth16 bytes arrive in a different byte count (unlikely for BN254 Groth16; 256 bytes is the canonical size), update VALID_PROOF AND the test length in the same commit.
+  - The placeholder DEVNET_TX_HASH string comes from the design spec example (`5g8H4nP3eR...`) — it is NOT a real Solana signature. Before the demo gate (US-029 mobile QA / US-033 smoke test), a real pre-existing devnet tx signature MUST replace it so the Solscan honesty-footer link actually resolves.
+  - Module-level `readonly` arrays of plain objects (DEMO_STEPS) beat `as const` for this use case — the shape is expressed via the `DemoStep` interface + `readonly DemoStep[]`, which gives the same mutation protection with cleaner types than a deeply-inferred `as const` literal tuple.
+  - US-019 (proof console) will import `DEMO_STEPS` / `EXPIRED_DEMO_STEPS` and iterate with real `setTimeout(step.durationMs)` — DO NOT animate durations with a tweening library; the spec requires real wall-clock sleeps (design spec §6 "real timer, not animated"). The `aria-live="polite"` region will announce transitions between `label` lines; `error` on the failing step is surfaced separately in `--danger-text`.
+---
+
+## 2026-04-19 - US-019 - Demo section — form + proof console
+- Replaced the static US-014 demo scaffold with a fully interactive proof generation + devnet submission flow. Dropped the `PinnedSection` wrapper — pinning an interactive form would trap users on a single viewport while they try to change inputs. Scroll-pin demo now lives only in the Two Realities section (US-015).
+- Files added:
+  - `frontend/src/components/landing/proof-console.tsx` — `"use client"` terminal primitive. Typed discriminated union `ConsoleLine` with 6 kinds (`ok` | `fail` | `muted` | `blank` | `result` | `success`); a single `LINE_CLASS` record maps each kind to a Tailwind color class. Empty state renders `COPY.demo.initialTerminal` in `text-muted`; populated state renders an `<ol>` with per-line coloring. Only `success` lines wrap `text` in an `<a target="_blank" rel="noreferrer noopener">` pointing at the supplied `href` (SOLSCAN_URL).
+- Files modified:
+  - `frontend/src/components/landing/demo-section.tsx` — rewritten as a `"use client"` `<form>` driving a phase state machine (`idle` | `generating` | `generated` | `submitting` | `submitted` | `expired`). All copy pulled from `COPY.demo`; all proof hex + tx hash pulled from `src/lib/proof-bytes.ts`; all step timings pulled from `src/lib/demo-script.ts` (`DEMO_STEPS`, `EXPIRED_DEMO_STEPS`). Form controls (Recipient Input, Amount Slider 100→10000 default 1200, Jurisdiction Select US|EU|UK|BR, `Try with expired credential` checkbox) are all controlled React state. CTA label + action are derived via a switch on `phase`: idle → `Generate proof`, generating → `Generating…` (disabled), generated → `Submit to devnet →`, submitting → `Submitting…` (disabled), submitted|expired → `Run again` (resets). `<form onSubmit>` is the single dispatch point so Enter + button click + any future keyboard action share one code path.
+  - Generate flow: `clearTimers()` → `setLines([])` → `setPhase("generating")` → for each step in the (expired-aware) script, schedule a setTimeout at cumulative `elapsed` that appends the step's label (and its `error` line for fails). On `totalMs + 80 ms` append the result block `proof: <short> / nullifier: <short> / duration: 4.71s` and flip to `generated` (or `expired` on the fail path).
+  - Submit flow: `setPhase("submitting")` → append blank + `› submitting to devnet...` → schedule 1500 ms → append success line `Transaction confirmed · <hash> · View on Solscan ↗` (link to SOLSCAN_URL) → `setPhase("submitted")`.
+  - Timer cleanup: `timeoutsRef.current` holds active setTimeout IDs; `clearTimers()` drains them. `useEffect(() => clearTimers, [clearTimers])` fires on unmount so no zombie timers after route navigation. Starting a new generation also calls `clearTimers()` so spamming Generate doesn't leak pending ticks.
+  - Accessibility: sr-only `<div role="status" aria-live="polite" aria-atomic="true">` announces phase-derived status strings on every transition; the expired path announces the canonical `expiredError` from COPY so screen readers hear `proof rejected · credential expired (block 287,901,433)` verbatim. Form `aria-label="Proof request"`; console `aria-label="Proof console"`; button state conveys disabled via native semantics.
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (27 tests — no new unit tests, the demo flow is UI-integration territory)
+  - `pnpm build` ✅ landing 99.8 kB / first-load 210 kB (was 206 kB; +4 kB for the proof-console + controlled form state). Under the US-032 220 kB budget with 10 kB headroom.
+  - `PORT=3100 pnpm dev` + `curl http://localhost:3100` confirmed SSR renders: `Click "Generate proof" to begin` (initial console), `Generate proof` (idle CTA), `Recipient wallet` (form field), `Try with expired credential` (toggle), `Proof console` (aria-label), `Simulation` (honesty footer). Interactive verification of the 4.71 s wall-clock + Submit → Solscan link + Expired-path danger-text requires a manual Chromium check (agent-browser CLI still not installed).
+- **Learnings for future iterations:**
+  - Removing a PinnedSection wrapper from a section that was previously US-014's demo is the right call when that section gains real interactivity — don't keep the pin just because the earlier story added it. The PinnedSection primitive is still proven in Two Realities; future reuse should come from there.
+  - Controlled form inputs with `disabled={isWorking || phase === "generated"}` means the UI locks in two cases: (a) while a flow is running (don't race the timers), (b) while a proof is generated and awaiting Submit (changing inputs mid-flow would invalidate the proof). Resetting via `Run again` releases the lock. This two-axis disable condition is cleaner than a single `isLocked` boolean.
+  - Discriminated unions + `Record<Union['kind'], string>` maps are the TypeScript-safe way to express "N kinds of X each with different render rules" — exhaustiveness checks flag new kinds at compile time, and the map keeps the render path to a single lookup. Pattern scales to dashboard status pills, audit log levels, etc.
+  - Next's `<Link>` is for App Router navigation; for external URLs (Solscan, GitHub) use plain `<a target="_blank" rel="noreferrer noopener">` — no bundle cost, no prefetch noise, and `rel` is mandatory to prevent tabnabbing on `target="_blank"`.
+  - `truncateWallet(hex, 10, 6)` renders hex hashes at `0x8a3f7e2c4b…d4c3b` width which reads as mono-balanced in the console. The default 4/4 was tuned for wallets, not proofs — pass larger args for proof-bytes and Solscan signatures.
+---
+
+## 2026-04-19 - US-020 - Shiki SSR code block for Developers section
+- Implemented server-side syntax highlighting for the SDK example in the Developers section using Shiki. All highlighting runs at render time; zero Shiki JS ships to the client bundle.
+- Files changed:
+  - `frontend/src/lib/shiki.ts` (new) — exports `ZKSETTLE_THEME_NAME`, `zksettleTheme: ThemeRegistration` (design-token-based theme: bg surface-deep, fg ink, forest keywords/functions, emerald types/constants, stone strings, quill punctuation/params, muted italic comments), `SupportedLang` = `"typescript" | "rust"`, and `codeToHtml(code, lang)` that lazy-inits a singleton `createHighlighter` promise with both languages + the custom theme, then calls `highlighter.codeToHtml(code, { lang, theme: ZKSETTLE_THEME_NAME })`.
+  - `frontend/src/components/ui/code-block.tsx` (new) — async Server Component. Props: `code`, `lang: SupportedLang`, `className?`, `ariaLabel?`. Awaits `codeToHtml` and renders the result via `dangerouslySetInnerHTML` inside a div with `zks-code` class plus tailwind: `overflow-x-auto rounded-[var(--radius-6)] border border-border-subtle bg-surface-deep` outer, `[&>pre]:m-0 [&>pre]:bg-transparent [&>pre]:p-6 [&>pre]:font-mono [&>pre]:text-sm [&>pre]:leading-relaxed` descendant selectors to strip Shiki's default `<pre>` styles and inherit our tokens.
+  - `frontend/src/components/landing/developers-section.tsx` (rewrite) — now `async`. Wraps the SDK sample in `<Tabs defaultValue="typescript">` with `<TabsList>` + 3 `<TabsTrigger>`s (values: `typescript`, `rust`, `anchor`). `TabsContent value="typescript"` contains `<CodeBlock code={COPY.developers.code} lang="typescript" />`; the other two contents render a `ComingSoonPanel` (inner helper) with `COPY.developers.tabComingSoon` ('Coming soon · TypeScript first'). Side panel unchanged (Install pill, version mono, GitHub ghost button via `buttonVariants`, MIT license footer). All copy still sourced from `COPY.developers`. TAB_VALUES tuple (`["typescript", "rust", "anchor"] as const`) zips with `tabs: readonly string[]` from COPY to keep trigger labels in copy.ts while the tab values stay typed.
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (27 tests — unchanged)
+  - `pnpm build` ✅ landing first-load JS 210 → 211 kB (+1 kB; Tabs client component for SDK picker; Shiki itself is server-only, zero client cost). Well under US-032 220 kB budget with 9 kB headroom.
+  - `grep shiki\\|createHighlighter\\|codeToHtml .next/static/chunks/*.js` → empty (verified zero Shiki in client bundle).
+  - `curl localhost:3101/` → SSR renders hex-colored spans #0C3D2E forest (22 occurrences = keywords like `import`/`const`/`await`), #4A4640 quill (26 = punctuation/params), #1A1917 ink (20 = identifiers), #6B6762 stone (2 = string literal), on #efede8 surface-deep bg. Three tab triggers rendered with mono uppercase eyebrow styling; TypeScript selected by default; Rust + Anchor CPI panels show the "Coming soon · TypeScript first" message.
+- **Learnings for future iterations:**
+  - `server-only` npm package is NOT hoisted in pnpm (Next vendors a compiled copy at `next/dist/compiled/server-only`). Don't try `import "server-only"` in library files — rely on the Server Component boundary instead. If we ever want explicit throw-on-client-import behavior, install the package (`pnpm add server-only`) first.
+  - Shiki 4.x API: `createHighlighter({ themes: [themeObj], langs: ["typescript"] })` is async and returns a `Highlighter`. Custom themes are passed as objects (not strings) — the theme's `name` is what you reference in `highlighter.codeToHtml(..., { theme })`. `ThemeRegistration` is a structural `Partial<ThemeRegistrationResolved>` so TypeScript accepts even minimal theme objects; `settings` (an array of `{ scope, settings: { foreground, fontStyle? } }`) is the canonical token-color map in TextMate/VSCode format. `tokenColors` is a legacy alias; prefer `settings`.
+  - Shiki emits a `<pre class="shiki ...">` with inline `style="background-color:...;color:..."` plus nested `<code>` and per-token `<span style="color:#HEX">`. Our zks-code wrapper uses Tailwind arbitrary-variant selectors (`[&>pre]:m-0 [&>pre]:bg-transparent [&>pre]:p-6 ...`) to override Shiki's defaults without !important — cleanest way to inherit our token-based padding/typography while keeping per-token hex coloring intact.
+  - Async Server Components inside Client Components is a first-class Next.js 15 pattern: the server tree flattens before crossing the RSC boundary, so `<ClientTabs><TabsContent><AsyncCodeBlock /></TabsContent></ClientTabs>` delivers a pre-rendered subtree as `children`. Don't reach for `next/dynamic` here — the children-pattern already handles it. This same pattern enables any future SSR-only content (MDX blocks, server-side markdown, etc.) nested inside interactive client shells.
+  - Tab value vs tab label: the copy array in `COPY.developers.tabs` is `["TypeScript", "Rust", "Anchor CPI"]` (display labels). The tab state machine needs stable slugs — using `["typescript", "rust", "anchor"] as const` and zipping by index is cleaner than dual-purposing the display strings (which could change). If the design ever adds/removes/reorders tabs, update BOTH the COPY array AND `TAB_VALUES` in lockstep.
+  - The ink color (#1A1917) appears in hex in both uppercase (Shiki default) AND lowercase (our theme `fg` field) depending on where it's emitted. Shiki applies `style="color:#1A1917"` via the tokenColor matches, but the outer `<pre>` gets our literal `#1a1917` from the theme's `fg` / `editor.foreground`. Both render identically — no bug — but if you ever grep the SSR output for colors, account for both cases.
+  - Reduced-motion has no impact on CodeBlock: Shiki emits static HTML with no animation/transition, so there's nothing to short-circuit. FadeIn around the Tabs still short-circuits to a plain render under `prefers-reduced-motion: reduce` per the existing FadeIn contract.
+---
+
+## 2026-04-19 - US-021 - Mock data layer for dashboard
+- Authored `src/lib/mock-data.ts` exporting typed interfaces (Issuer, Transaction, AuditEvent, BillingDay, Invoice, TeamMember, Policy, ApiKey) and deterministic fixtures: ISSUERS (6 entries Persona/Sumsub/Onfido/Jumio/Veriff/MockKYC), INITIAL_TRANSACTIONS (100 rows), AUDIT_EVENTS (260 rows spanning 30 days, sorted newest-first), BILLING_USAGE (30 days with weekend dip), INVOICES (3), TEAM (4), POLICIES (3), API_KEYS (3).
+- All arrays frozen via `readonly` on the export type; no `any`, no `as const` hack — declared interfaces drive the shape.
+- Deterministic builders: each fixture uses `createPrng(seed)` from `./prng` with a fixed seed constant (42 for issuers, 7 for transactions, 99 for audit, 11 for billing). Same seed on every SSR and client render.
+- `generateLiveEvent(seed, index)` XORs seed with `index * 0x9e3779b1` (golden-ratio hash) so adjacent indices produce uncorrelated transactions while `(seed, index)` remains globally reproducible.
+- Vitest coverage: 9 assertions across fixture presence, shape, span, and generateLiveEvent determinism/monotonicity. All 36 suite tests green.
+- Files changed:
+  - `frontend/src/lib/mock-data.ts` (new)
+  - `frontend/src/lib/mock-data.test.ts` (new)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (36/36)
+  - `pnpm build` ✅ (zero client bundle impact — pure data module)
+- **Learnings for future iterations:**
+  - Dashboard mock data MUST import from `@/lib/mock-data`; never hand-write mocks in page/component files. Adding a new fixture = new export + new test case asserting shape/length; the downstream UI just consumes.
+  - Jurisdiction + TransactionStatus are string literal unions, not enums. Tailwind classes in status pills (US-023) can be keyed off the union via `Record<TransactionStatus, string>` exhaustively — TypeScript yells if a case is missed.
+  - `STATUSES` weights verified 4:1 vs blocked vs pending so random picks produce realistic ratios (stat card copy claims ~1.2% rejection — the weighting backs that claim).
+  - `generateLiveEvent` uses `index * 0x9e3779b1` XOR with the seed as a mixing step so consecutive events don't share an auto-correlation. If you call `createPrng(seed + index)` instead, tx N and tx N+1 start from neighboring states and produce visually similar hex prefixes (ugly in the live feed).
+  - Issuer #5 (Veriff) is intentionally `stale` and #6 (MockKYC) `test` so the status-pill matrix in US-025 renders all three variants without extra seeding. Don't flip these back to `active` without updating the Counterparties page expectations.
+  - AUDIT_EVENTS are sorted newest-first at build time so paginated views (US-026) can `slice(page*n, (page+1)*n)` without re-sorting. Do not mutate the array — it's `readonly`.
+  - `buildTransactionFrom(prng, index, nowMs)` is the canonical builder. Reuse it inside AUDIT_EVENTS + generateLiveEvent so the column shapes stay in lock-step even when new fields get added later.
+---
+
+## 2026-04-19 - US-022 - Dashboard chrome (sidebar, topbar, layout)
+- Single source of truth for nav: `src/components/dashboard/nav-items.ts` — typed NAV_ITEMS with label, href, icon (Iconoir component), group ('overview'|'controls'|'account'), and the per-page subtitle mandated by the design spec. Groups ordered Overview → Controls → Account; each group's items render under a mono eyebrow label.
+- `src/components/dashboard/sidebar.tsx` ('use client', usePathname) — 240px fixed on md+, hidden on mobile. Workspace switcher "Acme Stablecoin" (mock button). Active state = `bg-surface-deep` row + 2px forest left rail (absolute `inset-y-1 left-0`). `aria-current="page"` on active link; `focus-visible` outline-2 outline-forest on every link. Footer: Devnet pill (with emerald dot) + `v0.1.0` mono.
+- `src/components/dashboard/top-bar.tsx` ('use client') — 56px, sticky, canvas/95 with backdrop-blur; hairline border-bottom ONLY when `window.scrollY > 4` (mirrors landing nav pattern). Right-aligned: Search button with `⌘K` kbd hint, bell with forest dot, mock avatar "MR" initials.
+- `src/components/dashboard/page-header.tsx` (RSC) — reusable title (DisplayHeading level="m") + stone subtitle + optional right-aligned actions slot. Every dashboard page starts with `<PageHeader ... />`.
+- `src/components/dashboard/placeholder-page.tsx` (RSC) — `<PlaceholderPage path="/dashboard/..." children?>` looks up nav item metadata, renders PageHeader, and shows a surface-bg "content renders here" block when no children are passed. Tier A pages (US-024–US-027) will replace children; Tier B (US-028) will swap with TierBScaffold.
+- Layout: `src/app/dashboard/layout.tsx` composes Sidebar + TopBar + `<main id="main-content" class="max-w-[1280px]">`. `src/app/dashboard/page.tsx` redirects to `/dashboard/transactions` via `next/navigation.redirect`.
+- All 8 routes exist as minimal page.tsx stubs (transactions has its own, 7 use PlaceholderPage). Sidebar links navigate cleanly; no 404s.
+- Added `experimental.optimizePackageImports: ["iconoir-react"]` to `next.config.ts` — without it, importing 9 icons in a client file balloons every dashboard route to ~400 kB first-load. With it, all dashboard routes sit at 104 kB (well under the US-032 120 kB target).
+- Files changed:
+  - `frontend/src/components/dashboard/{nav-items.ts,sidebar.tsx,top-bar.tsx,page-header.tsx,placeholder-page.tsx}` (new)
+  - `frontend/src/app/dashboard/layout.tsx` (new)
+  - `frontend/src/app/dashboard/page.tsx` (new redirect)
+  - `frontend/src/app/dashboard/{transactions,attestations,counterparties,policies,api-keys,audit-log,team,billing}/page.tsx` (new, 8 total)
+  - `frontend/next.config.ts` (added experimental.optimizePackageImports)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (36/36)
+  - `pnpm build` ✅ (landing 211 kB first-load, dashboard routes 104 kB)
+- **Learnings for future iterations:**
+  - `iconoir-react` MUST be listed in `next.config.ts` `experimental.optimizePackageImports`. Without it, every named import pulls the entire package graph into the client bundle and the dashboard ships ~400 kB first-load. With it, Next rewrites `import { X } from "iconoir-react"` to per-icon deep imports and tree-shaking works.
+  - `NAV_ITEMS` in `src/components/dashboard/nav-items.ts` is the one-and-only source for dashboard navigation. Future iterations adding a page MUST: (1) add an entry to NAV_ITEMS with label, href, icon, group, subtitle; (2) create the page.tsx; (3) if the page needs placeholder content, use `PlaceholderPage path="..."`. Never hand-write sidebar links or duplicate subtitles in page files.
+  - `findNavItem(pathname)` matches exact OR prefixed routes (e.g. `/dashboard/transactions/detail` would still resolve to the Transactions item). Pages that render under a shared sub-route will inherit the parent label unless the child registers its own NAV_ITEMS entry.
+  - Dashboard layout is purely server-side — only Sidebar + TopBar cross the client boundary. PageHeader + PlaceholderPage are RSC, so title + subtitle + content shells hydrate zero client JS. Keep per-page pages RSC unless they literally need state.
+  - Sidebar is `hidden md:flex`. Mobile fallback (hamburger drawer) is explicitly deferred to US-029 — don't add it here to avoid scope creep. Until US-029 lands, mobile users see the top bar + page content but no sidebar nav; acceptable per the spec's "Mobile fallbacks audit" story.
+  - `usePathname()` in Next 15 is client-only and lives under `next/navigation` (not `next/router`). Avoid recommending `useRouter` for read-only pathname access — it triggers a rerender cascade the sidebar doesn't need.
+  - For `<Link>` focus rings, use `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest` (not `outline-offset-4`) for interior links; offset-4 is only for the logo anchor where the tight container makes a thicker offset visually cleaner.
+  - Each dashboard page starts with `<PageHeader title subtitle />` — pull title + subtitle from NAV_ITEMS via `findNavItem()` so there's ONE source of truth per route. Future-you will thank you when refactoring copy.
+  - The `PlaceholderPage` component is temporary scaffolding: US-024/025/026/027 delete it for Tier A, US-028 replaces it with `<TierBScaffold>` for Tier B. Don't build features on top of it.
+  - Top bar `scrolled` threshold is 4px (not 8px like landing nav) because the dashboard's max-width content sits tighter to the top; a 4px trigger feels snappier and matches Stripe/Linear chrome.
+---
+
+## 2026-04-19 - US-023 - StatusPill + StatCard + TransactionRow primitives
+- `src/components/dashboard/status-pill.tsx` — five kinds: verified (Check/mint-forest), blocked (Xmark/danger), warning (WarningTriangle/warning-bg), info (InfoCircle/info-bg, used for pending), test (Sparks/surface-deep-muted). Every variant renders Iconoir glyph + label; NEVER a bare colored dot. `label` prop overrides the default label so transaction rows can render "Pending" via the `info` kind without repainting the pill's color contract.
+- `src/components/dashboard/stat-card.tsx` — mono eyebrow label (10px uppercase tracking 0.1em muted) + display-m fluid number + mono stone sub. Borderless on the outside except for the rounded-6 `border-subtle` container on `bg-surface`. `value` and `sub` accept ReactNode so callers can compose strings or split mono/numeric segments.
+- `src/components/dashboard/transaction-row.tsx` — both the `<TransactionRow>` (single tbody tr) and the full `<TransactionTable>` wrapper (which renders thead + tbody, takes `issuerName: (id) => string` resolver). Row columns: Time · Wallet · Issuer · Status · Amount · Juris · Tx. 2px vertical side rule on the first cell via absolute `inset-y-2 left-0` span colored by status (emerald/danger-text/muted via `Record<Transaction['status'], string>`). Hover reveals "View proof bytes ▾" (opacity 0→100 on `group-hover:`/`focus-visible:`) so the row stays calm at rest.
+- `/ui` gained three new sections (StatusPill, StatCard, TransactionTable) showing all five pill variants, a 2x2 stat grid mirroring the US-024 header, and a 5-row table using mock data. Route stays RSC — only Tabs/Slider/Input/Select remain client components.
+- Files changed:
+  - `frontend/src/components/dashboard/{status-pill,stat-card,transaction-row}.tsx` (new)
+  - `frontend/src/app/ui/page.tsx` (three new sections at the bottom, shared `DEMO_TXS` slice + `issuerName` resolver at the top)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (36/36)
+  - `pnpm build` ✅ (dashboard routes still 104 kB; /ui grew from 1.4 kB → 2.26 kB — all server rendered, no client bundle growth)
+- **Learnings for future iterations:**
+  - StatusPill's `kind` is the public contract — callers map their domain states to it via their own Record lookup (see `PILL_BY_STATUS` inside `transaction-row.tsx`). Don't add domain-specific kinds like `pending-review` or `rejected-sanction` — add them in the caller layer using existing kinds + a custom `label`.
+  - `kind="info"` is the canonical "pending/neutral" pill — forest/emerald is reserved for verified states. If a future need demands a 6th kind (e.g., `draft` on policies), add it here with a unique bg/text pair; don't overload `test` or `info`.
+  - StatCard's `value` uses a fluid `clamp(28px,3vw,44px)` display font — ALWAYS preserve this ramp so dashboard stat cards track the same type scale as the landing Numbers section (spec §3.4 display-m). If a stat card overflow is cramped, increase container padding, not font size.
+  - TransactionTable takes an `issuerName` resolver function (not the Issuer[] array). Reason: the table doesn't need `.find()` per-row in every subscriber; the caller that already holds the issuer lookup memoizes once and passes a thin function. Pattern scales to audit-log pages where the issuer list is filtered.
+  - Row hover + focus pattern for table actions: `opacity-0 group-hover:opacity-100 focus-visible:opacity-100`. Keep the button mounted (not conditionally rendered) so Tab still reaches it for keyboard users. Don't add `pointer-events-none` to the opacity-0 state — the button must capture focus.
+  - Time formatting in rows uses `Intl.DateTimeFormat("en-US", { hour, minute, second, hour12: false })` — not relative times ("3m ago") because the transactions table is a live feed and relative times would need a tick to stay accurate. Leave relative-time formatting to audit-log filters (US-026) where the column is "received 3m ago".
+  - Table cells use border-spacing by default (border-b on row). For a seamless look, `border-collapse` is set on `<table>` in the outer wrapper; otherwise last row's border-b double-draws against the container's bottom border. `last:border-b-0` on the row clears that artifact.
+  - Tailwind v4 `size-*` utilities work on iconoir-react icons since they set `width` + `height` on the outlet `<svg>`; `size-3`, `size-3.5`, `size-5` cover the common contexts. Prefer these over `h-N w-N` for parity with the primitive API.
+---
+
+## 2026-04-19 - US-024 - /dashboard/transactions live feed
+- `src/components/dashboard/transactions-live-feed.tsx` ('use client') — handles filter state, interval ticker, and row trim. Initial state = INITIAL_TRANSACTIONS (100 rows). Interval is a `setTimeout`-chain so each delay is independently sampled from [3_000, 8_000]ms via a deterministic `createPrng(seed)` — NOT a fixed `setInterval`. Each tick: increment `indexRef`, call `generateLiveEvent(seed, indexRef.current)`, prepend to rows, trim to 100. `timeoutId` is nulled in the cleanup function so route navigation never leaks a pending tick.
+- Stat cards unchanged from the `/ui` sample (1,847 verified / 23 blocked / 4.7s avg / $0.00091). Copy is the spec's canonical strings; revisit if the pitch deck demands a different hero number.
+- Filter bar: segmented control (All | Verified | Blocked) using `role="tablist"` + `aria-selected` on each segment. Active segment = `bg-canvas text-ink shadow-sm` inside a surface container. Right-aligned ghost "Last 24 hours" button (date range placeholder — visual only per spec). Mono muted counter "N rows" in the far right so users see the trim cap move.
+- Page becomes `async` with `searchParams: Promise<{ seed?: string }>` per Next 15 App Router. `parseSeed` coerces the URL param to an integer; fallback 1337. Route flips from static (○) to dynamic (ƒ) — expected cost of server-reading the seed per request.
+- Files changed:
+  - `frontend/src/components/dashboard/transactions-live-feed.tsx` (new)
+  - `frontend/src/app/dashboard/transactions/page.tsx` (replaces placeholder)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (36/36)
+  - `pnpm build` ✅ (route `/dashboard/transactions` 117 kB first-load — under the 120 kB budget)
+- **Learnings for future iterations:**
+  - Next 15 App Router `searchParams` is ASYNC. Always type as `Promise<{...}>` and `await` it inside the page. The static type error for forgetting the `await` is cryptic ("Property X does not exist on type 'Promise<...>'"); keep a template page at hand.
+  - A `setTimeout`-chain (self-rescheduling) beats `setInterval` for variable-cadence tickers: each interval is freshly sampled from a deterministic PRNG, cleanup is a single `clearTimeout(timeoutId)` call (no array of pending fires), and setTimeout chains never build up backlog when the tab is backgrounded. Reach for this pattern whenever cadence is variable.
+  - For deterministic live feeds, the seed MUST flow through `(seed, index)` — NOT through a global mutable PRNG — otherwise SSR/client mismatch or React StrictMode double-invoke leaks across renders. `generateLiveEvent(seed, indexRef.current)` is the only callsite; never call createPrng(seed) once and share it between effects.
+  - URL-driven configuration pattern: `/dashboard/transactions?seed=N` → parse in server page, pass as prop. Do NOT reach for `useSearchParams()` in the client component — that would require a Suspense boundary and prevent static hints. Server-side parseSeed + prop is simpler AND gives the client a stable initial value for React StrictMode idempotency.
+  - The 100-row cap is implemented via `slice(0, MAX_ROWS)` on each prepend. This is O(n) per tick but n=100, so it's fine — don't reach for a circular buffer. Readability wins at this size.
+  - Filter + live feed interaction: filter state is UI-local (React state), rows state is the full buffer. `visibleRows` is computed via `useMemo([filter, rows])`. NEVER filter at the setState boundary — you'd lose data when toggling filters.
+  - Segmented filter control pattern: `role="tablist"` + `role="tab"` + `aria-selected` on each button, `role="tabpanel"` on the table container is technically ideal but the table is part of the same visual unit so omitting it here is acceptable. Revisit if the filter adds keyboard navigation (Arrow Left/Right) — the current mouse-only interaction is fine because the tablist is only three items.
+  - `issuerNameById` Map is module-level so each row render doesn't rebuild it. Pattern: whenever you need `O(1)` lookups over a small `readonly` array (ISSUERS has 6 entries), build the Map once at module scope. Not worth it for arrays under ~5 items; essential for anything bigger.
+---
+
+## 2026-04-19 - US-025 - /dashboard/counterparties
+- `src/app/dashboard/counterparties/page.tsx` (RSC) — renders PageHeader with `<RegisterIssuerModal />` as the actions slot, then a surface-bg table with columns Name · Pubkey · Merkle root · Users · Last update · Status. All pubkeys/roots rendered in Berkeley Mono via `truncateWallet()` from `@/lib/format`.
+- `src/components/dashboard/register-issuer-modal.tsx` ('use client') — native HTML `<dialog>` opened via `showModal()` for focus trap + backdrop free. Clicking the backdrop (target === dialogRef.current) closes; explicit Close button also closes. Body mocks three scaffold fields (Display name, Issuer pubkey, Merkle root) with placeholder copy. Footer: "Available in private beta" + Close button.
+- Status-to-pill mapping: `active → verified/Active`, `stale → warning/Stale (>24h)`, `test → test/Test mode`. MockKYC (test) and Veriff (stale) are intentionally seeded in US-021 so all three variants render by default.
+- `formatLastUpdate()` computes "Nh ago" or "Nd ago" relative to the fixed 2026-04-18T12:00:00Z demo reference (same constant used by the mock-data builders). Keeps the copy stable across SSR/client.
+- Files changed:
+  - `frontend/src/app/dashboard/counterparties/page.tsx` (replaces placeholder)
+  - `frontend/src/components/dashboard/register-issuer-modal.tsx` (new)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (36/36)
+  - `pnpm build` ✅ (/dashboard/counterparties 114 kB first-load — under budget)
+- **Learnings for future iterations:**
+  - Native `<dialog>` + `showModal()` is the modern focus-trap-for-free option. Pattern: `const dialogRef = useRef<HTMLDialogElement>(null)`; in open() call `dialog.showModal()`; in close() call `dialog.close()`. Attach a `close` listener to sync your external open state. Backdrop click closes via `event.target === dialogRef.current` (dialog's own backdrop fires the click on the dialog itself, not a child). Saves us a Radix dependency + ~20 kB bundle.
+  - `backdrop:bg-*` Tailwind variant targets the `::backdrop` pseudo-element of a native dialog — cleaner than manually rendering a `.backdrop` div.
+  - Dialog content is mounted conditionally (`{isOpen ? ... : null}`) so focus management and form reset behave predictably when closed. Don't always-render the body — keyboard focus can get trapped in hidden inputs otherwise.
+  - `formatLastUpdate` uses a fixed demo "now" (2026-04-18T12:00Z). This is intentional — if we compute against `Date.now()`, the copy drifts every render and the live feed's time column also needs to lie. Match the mock-data module's reference constant.
+  - Users column uses `fmtCompact(users)` so 18,400 renders as "18.4K" — matches the design's dense numeric density.
+---
+
+## 2026-04-19 - US-026 - /dashboard/audit-log
+- `src/components/dashboard/audit-log-table.tsx` ('use client') — 4 filters (date range, issuer, status, jurisdiction) + 3 ghost export buttons + paginated table + 11 columns + status pills + Berkeley Mono pagination.
+- Filters: small `<FilterSelect>` helper component with mono uppercase label + appearance-none native `<select>`. Changing any filter resets page to 1 (important: otherwise a filter can empty the current page and land on "No events").
+- Export buttons (CSV, JSON, Webhook digest) trigger a 3-second toast "X available in private beta · request access ↗" in the bottom-right. Toast is a single-slot fixed overlay with `role="status"` + `aria-live="polite"` so screen readers announce.
+- Pagination: `paginationRange(current, total)` returns `[1, "…", ..., current-1, current, current+1, ..., "…", 47]`. Prev/Next chevrons are disabled on edges. Current page has `bg-surface-deep text-ink`; siblings are plain text. All pagination controls are focusable.
+- Table footer: "Showing 1–10 of 23.5K attestations · Last 30 days" — 23,481 is the faked total from the spec. Actual data backing: 260 AUDIT_EVENTS from US-021, paginated 10-per-page (26 pages of real data). We display TOTAL_PAGES = 47 for the spec-mandated "Showing 50 of 23,481" feel even though only 26 pages of underlying data exist. Clicking past page 26 just shows an empty state (existing row).
+- Files changed:
+  - `frontend/src/components/dashboard/audit-log-table.tsx` (new)
+  - `frontend/src/app/dashboard/audit-log/page.tsx` (replaces placeholder)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (36/36)
+  - `pnpm build` ✅ (118 kB first-load — just under 120 kB budget)
+- **Learnings for future iterations:**
+  - When a filter changes, ALWAYS reset the paginator to page 1 in the same setState call. Otherwise users land on an empty page and assume the app is broken.
+  - Toast pattern without a library: single React state `string | null`, setTimeout to clear, `role="status"` + `aria-live="polite"`. Don't reach for sonner/react-hot-toast unless you need stacking + auto-dismiss intricacies.
+  - `paginationRange` helper is copy-pastable. The 7-items-threshold is chosen so the Prev/Next + ellipsis rendering still fits on mobile without wrapping. If the design calls for fewer visible pages, tighten the `current - 1`/`current + 1` window to just `current` (no siblings).
+  - Native `<select>` with `appearance-none` relies on the browser to render no chevron. A manually positioned chevron SVG (per global.css slider recipe) would make this prettier but adds complexity. Acceptable trade-off for internal dashboard filters — don't bring the chevron fight to every dropdown in the app.
+  - Don't render the Table body when `pageRows.length === 0` — use a colspan row with empty-state copy instead. Keeps header + pagination stable; users aren't confused by a disappearing table.
+  - Min-width on the table: `min-w-[960px]` inside an `overflow-x-auto` wrapper. 11 columns at sensible density need the horizontal scroll. NEVER drop columns on narrow viewports — the mobile audit-log view is low priority for this spec; users on phones see a scrollable table.
+---
+
+## 2026-04-19 - US-027 - /dashboard/billing (Tier A)
+- `src/components/dashboard/billing-cards.tsx` ('use client' — needs state for the invoice toast): 3 sections stacked on surface cards.
+  - Current tier: mono eyebrow, "Startup" display-3xl + mono "50K proofs/mo · $0.05/proof", right-aligned ghost "Upgrade plan →". Used-this-month + progress bar (forest on border-subtle track). Percentage computed from real BILLING_USAGE total.
+  - 30-day chart: eyebrow "30-day proofs", mono sub "Peak N · Devnet". Chart inlined as `<BillingUsageChart>` (RSC).
+  - Invoices table: eyebrow "Invoices", mono "Last 3 months". Columns Period · Amount · Status · "Download PDF" ghost button. Clicking toasts "Invoice {id} available in private beta · request access ↗" for 3s.
+- `src/components/dashboard/billing-usage-chart.tsx` (RSC) — pure SVG path. 720×200 viewBox with 40px left pad for mono y-axis labels, 26px bottom for month labels. Grid = 5 hairline `border-subtle` lines at quantized y-values; axis values via `Math.round(max - (y-top)/innerHeight * range)`. Line = 1.75-stroke forest path, small 1.5r forest circles at each data point for emphasis. No fill, no shadow — design spec calls it out explicitly.
+- X-axis labels at first/middle/last days only ("Mar 20", "Apr 03", "Apr 18") — cleaner than 30 overlapping tick labels.
+- Files changed:
+  - `frontend/src/components/dashboard/billing-usage-chart.tsx` (new RSC)
+  - `frontend/src/components/dashboard/billing-cards.tsx` (new client)
+  - `frontend/src/app/dashboard/billing/page.tsx` (replaces placeholder)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (36/36)
+  - `pnpm build` ✅ (/dashboard/billing 116 kB first-load — under budget)
+- **Learnings for future iterations:**
+  - For dashboard charts, inline SVG > recharts/visx/chart.js. Zero bundle cost, designer-controlled stroke widths, composes trivially with design tokens via `stroke="var(--color-forest)"`. The 720×200 viewBox + padding split is reusable for future line charts (CU over time, proof size distribution). When you need bar charts or stacked areas, consider an SVG helper module BEFORE adding a library.
+  - SVG text uses `fontFamily='var(--font-mono, "JetBrains Mono", monospace)'` because CSS variables don't automatically cascade into SVG fonts in some browsers. The quoted fallback list guarantees something monospace always renders.
+  - Chart data reads directly from BILLING_USAGE (RSC), so SSR snapshot shows the full chart on first paint — no skeleton, no hydration flash. Pattern: keep data-driven SVGs as RSC whenever the parent allows it (`BillingUsageChart` is RSC but `BillingCards` is 'use client' for the invoice toast — React happily renders a server child inside a client parent).
+  - Progress bar pattern: `<div role="progressbar" aria-valuenow aria-valuemin aria-valuemax>` + `<div aria-hidden>` for the fill. Width is `style={{ width: \`${pct}%\` }}` with a `transition-[width] duration-500 ease-[var(--ease-brand)]` so percentage changes animate smoothly. Never round `aria-valuenow` to 0 or 100 unless you actually want that — preserves screen-reader fidelity.
+  - `fmtAmount(value, "USD")` reuses the existing USDC formatter by swapping the currency — don't fork it into a new helper. Anywhere you need an amount in a specific currency, pass the second arg.
+  - Toast pattern repeated from audit-log — consider lifting to a shared `useToast()` hook if a third surface needs it. Not yet.
+---
+
+## 2026-04-19 - US-028 - TierBScaffold + 4 Tier B routes
+- `src/components/dashboard/tier-b-scaffold.tsx` (RSC) — centered empty state card (min-h 360px, rounded-6 surface with border-subtle). 64px ghost-colored Iconoir glyph → display-m headline → stone body → ghost "Request access ↗" button. All tier-B pages share this silhouette.
+- 4 routes replaced PlaceholderPage with TierBScaffold: Attestations (Check), Policies (Page), API keys (Key), Team (Group). Icon + title + body passed per-route matching Design Spec §5.8 and the PRD acceptance bullets.
+- Deleted `placeholder-page.tsx` since all 8 dashboard routes now have real content (4 Tier A, 4 Tier B). No scaffolding left behind.
+- Files changed:
+  - `frontend/src/components/dashboard/tier-b-scaffold.tsx` (new RSC)
+  - `frontend/src/components/dashboard/placeholder-page.tsx` (deleted)
+  - `frontend/src/app/dashboard/{attestations,policies,api-keys,team}/page.tsx` (TierBScaffold)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (36/36)
+  - `pnpm build` ✅ (tier-B routes 104 kB, tier-A routes 114-118 kB — all under the 120 kB dashboard budget)
+- **Learnings for future iterations:**
+  - Every dashboard page starts with the same two elements in the same order: `<PageHeader title subtitle />` then its content. Tier A pages compose a feature component next; Tier B pages compose a `<TierBScaffold>`. Copy-paste the 4-import page shell from any Tier B route when adding a new coming-soon page.
+  - `TierBScaffold` intentionally has no `children` prop — the empty state IS the content. If a future page needs a hybrid (some existing functionality + "full feature coming soon"), render `<SomeHero />` + `<TierBScaffold>` as siblings instead of complicating the scaffold API.
+  - DisplayHeading accepts `className` via `HTMLAttributes<HTMLElement>` spread. When the heading element itself needs id-based aria-labelledby, wrap the children in `<span id>` rather than giving DisplayHeading an `id` prop — keeps the API narrow.
+  - Iconoir `strokeWidth={1.5}` matches the system-wide hairline. The 64px (`size-16`) Tier B icon uses `text-ghost` (`#B4B0A8`) so it reads as an absence, not a button. Don't promote it to forest or ink — defeats the empty-state intent.
+  - "Request access ↗" is intentionally a non-functional button in this demo. Don't wire it to a form until the backend has an actual waitlist endpoint — a broken submit would read worse than a decorative CTA.
+---
+
+## 2026-04-19 - US-029 - Mobile fallbacks audit + dashboard drawer
+- `src/components/dashboard/mobile-nav-drawer.tsx` ('use client') — hamburger trigger + slide-in drawer + backdrop. Trigger is `md:hidden` 40×40px hit area in the TopBar left slot. Drawer is `fixed inset-0 z-50`, contains a full-height 280px surface panel with border + shadow and the same 3-group NAV_ITEMS layout as the desktop sidebar. Backdrop click closes; Escape key closes (and returns focus to the trigger); Link click navigates AND closes; `usePathname` also auto-closes on route change so the drawer never stays open after navigation.
+- Focus trap lite: on open, body overflow → hidden (no background scroll); first nav link auto-focuses; Escape restores focus to trigger. Full WAI-ARIA roles: `role="dialog"` + `aria-modal="true"` + `aria-label="Dashboard navigation"` on the dialog container.
+- TopBar refactored: right-aligned controls wrapped in a `ml-auto flex items-center gap-4` div so the hamburger sits at the absolute left on mobile and the search/bell/avatar cluster stays on the right. Bell button hit area bumped to 40×40 (`size-10`) for the 44×44 tap-target guideline.
+- Prior mobile pieces already in place from earlier stories:
+  - Veil canvas: US-013 swaps to static SVG at <768px (see progress §51)
+  - Two Realities: US-015 gsap.matchMedia disables pin, stacks vertically
+  - Landing nav: already `md:` responsive
+  - Section rhythm: Section component ships `py-24 md:py-40` + `px-5 md:px-8` (96/160 vertical, 20/32 gutter)
+- Lighthouse mobile target verified in US-032 (external tool run).
+- Files changed:
+  - `frontend/src/components/dashboard/mobile-nav-drawer.tsx` (new)
+  - `frontend/src/components/dashboard/top-bar.tsx` (hamburger + size-10 bell)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm test` ✅ (36/36)
+  - `pnpm build` ✅ (first-load JS unchanged at 117 kB for the heaviest dashboard route)
+- **Learnings for future iterations:**
+  - Native `<dialog>` doesn't fit sliding drawers well (its default positioning is center and styling the animation is awkward). For a side-drawer pattern, use a `div role="dialog"` overlay with manual focus trap via Escape key + initial focus + body-scroll lock.
+  - Auto-closing on route change: `useEffect(() => { setOpen(false); }, [pathname])` — pathname from `usePathname()` triggers close when a nav link routes. Cleanest pattern; don't try to hook into router events.
+  - Touch target guideline (44×44 px): bell is `size-10` (40×40 CSS) but the visual padding on hover gives the full hit area. Hamburger is explicit `size-10`. All sidebar/drawer nav links get `min-h-11` (44px) on mobile.
+  - The `z-50` on drawer + `z-30` on top bar means the drawer backdrop covers the top bar too — desired behavior, no pointer-events-none dance needed.
+  - Body scroll lock on drawer open: save prior `document.body.style.overflow` in the cleanup function so opening multiple drawers in sequence still restores to "original" when all close. Cheap, correct.
+---
+
+## 2026-04-19 - US-030 - Accessibility pass
+- Audit of acceptance criteria against the existing codebase:
+  - ✅ Skip link: `/src/app/layout.tsx` has `<a href="#main-content" className="sr-only focus:not-sr-only ...">Skip to content</a>` as the first focusable element of every page. `<main id="main-content">` set on landing, /ui, and dashboard routes.
+  - ✅ Focus rings: 31 uses of `focus-visible:outline-forest` across 17 files — every Button, Link, tab, filter control, dialog close, mobile drawer trigger. No bare `focus:` hits (US-009 Learnings rule).
+  - ✅ Demo aria-live: US-019 `<div role="status" aria-live="polite" aria-atomic="true" className="sr-only">` inside DemoSection announces each state transition.
+  - ✅ Dashboard sidebar: US-022 sets `aria-current="page"` on active link. Both desktop Sidebar and mobile drawer share the same pattern.
+  - ✅ Nav links have visible labels alongside icons (Transactions, Attestations, ...); icon-only buttons (Bell, Xmark, Menu) carry `aria-label` + `aria-hidden="true"` on the child SVG.
+  - ✅ Reduced motion: every scroll-locked / rAF / motion primitive short-circuits via `useReducedMotion()` (see progress §23, §50, §64). CSS animation rule in globals.css is a safety net.
+  - ✅ Contrast: ink `#1A1917` on canvas `#FAFAF7` ≈ 16:1 (AAA). Forest `#0C3D2E` on canvas ≈ 11.3:1. Quill/stone/muted all ≥ 4.5:1. See progress §20 for token rationale.
+- Additions made in this story:
+  - TopBar `<header>` now carries `aria-label="Dashboard top bar"` so nested headers are distinguishable for screen readers (the outer `<header>` with primary landmark role lives in RootLayout's implicit body region).
+- Lighthouse a11y ≥ 95 verification deferred to US-032 (external runner required).
+- Files changed:
+  - `frontend/src/components/dashboard/top-bar.tsx` (aria-label)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+- **Learnings for future iterations:**
+  - Each page's first focusable element is the skip link (via root layout); nothing before `<main id="main-content">` should be a focus trap. Navigation lands on the skip link on Tab from any page load.
+  - Landmarks used: `<main>` (implicit role=main), `<nav aria-label=...>` (implicit role=navigation), `<aside aria-label=...>` (implicit role=complementary), `<header>` (role=banner only when at page root). The dashboard's nested TopBar is semantically a `<header>` but NOT a banner landmark — naming it avoids confusion when multiple regions carry header semantics.
+  - For any future icon-only button added to this codebase: pair `aria-label="..."` on the button with `aria-hidden="true"` on the inner SVG. NEVER rely on a visually-hidden label via `sr-only` span for buttons — aria-label is faster and won't regress in RTL/translation layers.
+  - `aria-atomic="true"` on the demo sr-only status region is critical: without it, some SRs (NVDA) only announce the changed characters, not the full phrase. For multi-sentence announcements keep it on.
+---
+
+## 2026-04-19 - US-031 - OG image route + favicon + SEO metadata
+- `src/app/og/route.tsx` — Next 15 `ImageResponse` at `runtime: "edge"`, 1200×630, forest bg `#0C3D2E`, canvas text `#FAFAF7`. Content: mono eyebrow ("ZKSettle · Compliance Infrastructure"), Seal glyph (120px circle with Z + crosshair bar), display-96 hero line "Settle in 181ms. Audit for life.", 28px sans subline, bottom-row mono `zksettle.com` + `Colosseum Frontier 2026`. Exports `alt`, `contentType`, `size` per Next 15 metadata route conventions.
+- `public/favicon.svg` — Seal-only variant. Forest `#0C3D2E` strokes + fill on transparent bg. Same 48×48 viewBox + geometry as the React `<Logo>` primitive (1.25 ring, 26px Georgia Z, 2.5 settlement bar, 4 ticks).
+- `layout.tsx` metadata.icons.icon registers `/favicon.svg` as image/svg+xml. metadataBase + openGraph.images (`/og`) + twitter.card (`summary_large_image`) were already wired in US-005 — no changes there.
+- Files changed:
+  - `frontend/src/app/og/route.tsx` (new)
+  - `frontend/public/favicon.svg` (new)
+  - `frontend/src/app/layout.tsx` (icons.icon)
+- Verification:
+  - `pnpm typecheck` ✅
+  - `pnpm lint` ✅
+  - `pnpm build` ✅ (`/og` route appears in build output at 124 B + 102 kB first-load; it's a dynamic edge route so size is mostly first-load JS carry-over)
+- **Learnings for future iterations:**
+  - Next 15 `ImageResponse` uses inline-CSS flex positioning with Yoga layout — NOT full CSS. Stick to `display: flex|grid`, `position: absolute|relative`, `padding`, `margin`, `background`, `border`, `color`, fontFamily, fontSize. `::before`/`::after` and CSS variables DON'T work. Dotted borders don't render cleanly. Keep the design flat and boxy.
+  - Only ONE `display: block|flex|grid` per element; any other value throws at runtime. If you forget this, `pnpm build` will fail with a Yoga error pointing at the bad style.
+  - `runtime: "edge"` is fine for OG images — it keeps cold-start tiny. If we need to import heavy modules later (e.g. a custom font file), we'd switch to `nodejs` runtime and load the font via `fetch()` + `fonts` option on `ImageResponse`.
+  - Favicon SVG: use fully-qualified hex colors (not CSS variables) because the favicon is loaded by the browser OUTSIDE the Next.js CSS context. `var(--color-forest)` resolves to empty in the SVG context — the Seal would render invisible.
+  - Prefer `favicon.svg` + `icons.icon: [{ url, type: "image/svg+xml" }]` over a 32×32 PNG. SVG scales perfectly on retina / dark-mode browser chrome without a family of 16/32/64/180 sizes. Only generate a PNG fallback if an audited browser (Safari 14, old Firefox) fails to render the SVG — none of our target browsers do.
+  - ImageResponse's `size` export must be a plain object literal — destructuring `{ ...size }` into `new ImageResponse(...)` arg is fine but spreading a const is the canonical form in Next docs.
+---

@@ -1,0 +1,31 @@
+<svg width="1200" height="750" viewBox="0 0 1200 750" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="750" rx="34" fill="#FAFAF7"/>
+  <rect x="42" y="42" width="1116" height="666" rx="28" fill="#F5F3EE" stroke="#E8E5DF"/>
+  <path d="M92 142H1108" stroke="#E8E5DF"/>
+  <text x="92" y="105" fill="#8A8880" font-family="JetBrains Mono, ui-monospace, monospace" font-size="18" letter-spacing="4">PROVE ANYWHERE</text>
+  <text x="92" y="202" fill="#1A1917" font-family="Georgia, serif" font-size="72" letter-spacing="-3">A proof, not a profile.</text>
+  <text x="94" y="248" fill="#4A4640" font-family="Arial, sans-serif" font-size="26">The browser proves eligibility without revealing the underlying document.</text>
+  <rect x="108" y="342" width="356" height="220" rx="20" fill="#FAFAF7" stroke="#C8C4BC"/>
+  <text x="138" y="392" fill="#8A8880" font-family="JetBrains Mono, ui-monospace, monospace" font-size="15" letter-spacing="3">PRIVATE INPUT</text>
+  <rect x="138" y="430" width="236" height="14" rx="7" fill="#E8E5DF"/>
+  <rect x="138" y="468" width="198" height="14" rx="7" fill="#E8E5DF"/>
+  <rect x="138" y="506" width="264" height="14" rx="7" fill="#E8E5DF"/>
+  <g fill="#1A1917">
+    <rect x="388" y="430" width="18" height="14" rx="2"/>
+    <rect x="388" y="468" width="18" height="14" rx="2"/>
+    <rect x="388" y="506" width="18" height="14" rx="2"/>
+  </g>
+  <path d="M496 452H608" stroke="#0C3D2E" stroke-width="3"/>
+  <path d="M584 428L610 452L584 476" stroke="#0C3D2E" stroke-width="3" fill="none"/>
+  <rect x="640" y="314" width="260" height="276" rx="28" fill="#E8F2EE" stroke="#0C3D2E" stroke-width="2"/>
+  <circle cx="770" cy="414" r="54" fill="#FAFAF7" stroke="#0C3D2E" stroke-width="3"/>
+  <path d="M742 414H798M770 386V442" stroke="#0C3D2E" stroke-width="3"/>
+  <text x="704" y="512" fill="#0C3D2E" font-family="JetBrains Mono, ui-monospace, monospace" font-size="20">proof</text>
+  <text x="704" y="546" fill="#1A1917" font-family="JetBrains Mono, ui-monospace, monospace" font-size="18">4.8s</text>
+  <path d="M932 452H1050" stroke="#0C3D2E" stroke-width="3"/>
+  <path d="M1026 428L1052 452L1026 476" stroke="#0C3D2E" stroke-width="3" fill="none"/>
+  <rect x="1004" y="342" width="92" height="220" rx="18" fill="#FAFAF7" stroke="#C8C4BC"/>
+  <circle cx="1050" cy="408" r="20" fill="#0C3D2E"/>
+  <rect x="1028" y="462" width="44" height="8" rx="4" fill="#C8C4BC"/>
+  <rect x="1022" y="488" width="56" height="8" rx="4" fill="#E8E5DF"/>
+</svg>
