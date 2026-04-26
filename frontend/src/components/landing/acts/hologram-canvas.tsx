@@ -28,17 +28,27 @@ function probeWebGL(): boolean {
   }
 }
 
-export function HologramCanvas({ paused = false }: { paused?: boolean }) {
+export function HologramCanvas({
+  paused = false,
+  progress = 0,
+}: {
+  paused?: boolean;
+  progress?: number;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
     if (!probeWebGL()) return;
 
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
     const isMobile = window.innerWidth < 768;
 
     let renderer: WebGLRenderer;
@@ -74,11 +84,18 @@ export function HologramCanvas({ paused = false }: { paused?: boolean }) {
         uResolution: { value: new Vector2(w * dpr, h * dpr) },
         uGlitchSeed: { value: 0 },
         uReducedMotion: { value: reducedMotion ? 1.0 : 0.0 },
+        uProgress: { value: 0 },
       },
     });
 
     const geo = new BufferGeometry();
-    geo.setAttribute("position", new BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
+    geo.setAttribute(
+      "position",
+      new BufferAttribute(
+        new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]),
+        3,
+      ),
+    );
     const mesh = new Mesh(geo, material);
     mesh.frustumCulled = false;
     scene.add(mesh);
@@ -87,13 +104,16 @@ export function HologramCanvas({ paused = false }: { paused?: boolean }) {
       const rw = container.clientWidth || window.innerWidth;
       const rh = container.clientHeight || window.innerHeight;
       renderer.setSize(rw, rh);
-      (material.uniforms.uResolution!.value as Vector2).set(rw * dpr, rh * dpr);
+      (material.uniforms.uResolution!.value as Vector2).set(
+        rw * dpr,
+        rh * dpr,
+      );
     };
     window.addEventListener("resize", onResize);
 
     let glitchTimer = 0;
     let glitchSeed = Math.random() * 1000;
-    const GLITCH_INTERVAL = isMobile ? 6.0 : 3.5;
+    const GLITCH_INTERVAL = isMobile ? 6.0 : 2.5;
 
     let rafId = 0;
     let lastTime = performance.now();
@@ -117,6 +137,7 @@ export function HologramCanvas({ paused = false }: { paused?: boolean }) {
 
       material.uniforms.uTime!.value = t;
       material.uniforms.uGlitchSeed!.value = glitchSeed;
+      material.uniforms.uProgress!.value = progressRef.current;
 
       renderer.render(scene, camera);
       rafId = requestAnimationFrame(tick);
@@ -143,18 +164,19 @@ export function HologramCanvas({ paused = false }: { paused?: boolean }) {
       className="absolute inset-0 z-0"
       style={{ contain: "strict" }}
     >
-      {/* CSS fallback — hidden once WebGL canvas is appended */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
-          background: "radial-gradient(ellipse at center, rgba(10,40,35,0.4) 0%, rgba(5,5,5,1) 70%)",
+          background:
+            "radial-gradient(ellipse at center, rgba(10,40,35,0.4) 0%, rgba(5,5,5,1) 70%)",
           backgroundSize: "100% 100%",
         }}
       >
         <div
           className="absolute inset-0"
           style={{
-            backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,200,0.015) 2px, rgba(0,255,200,0.015) 4px)",
+            backgroundImage:
+              "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,200,0.015) 2px, rgba(0,255,200,0.015) 4px)",
           }}
         />
       </div>
