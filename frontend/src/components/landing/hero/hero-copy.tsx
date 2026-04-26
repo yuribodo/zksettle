@@ -14,7 +14,7 @@ import { useCipherDecode } from "./use-cipher-decode";
 
 const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*+=?/\\|<>~^";
 function randomGlyph() {
-  return GLYPHS[Math.floor(Math.random() * GLYPHS.length)]!;
+  return GLYPHS[Math.floor(Math.random() * GLYPHS.length)]!; // NOSONAR — visual animation, not security
 }
 
 function splitWords(text: string): { start: number; end: number }[] {

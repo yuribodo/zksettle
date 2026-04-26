@@ -254,7 +254,7 @@ export const revokeCredential = (wallet: string) =>
 export const publishRoots = () =>
   apiFetch("/v1/roots/publish", { method: "POST" });
 
-export const createApiKey = (owner: string) =>
+export const createApiKey = async (owner: string) =>
   ApiKeyResponseSchema.parse(
     await apiFetch("/api-keys", { method: "POST", body: JSON.stringify({ owner }) }),
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { BillingUsageChart } from "@/components/dashboard/billing-usage-chart";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,15 @@ export function BillingCards() {
   const { data: history, isLoading: historyLoading, isError: historyError } =
     useUsageHistory(30);
   const [toast, setToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current !== null) {
+        clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
 
   const tier: Tier = usage?.tier ?? "developer";
   const monthlyLimit = usage?.monthly_limit ?? 0;
@@ -37,10 +46,16 @@ export function BillingCards() {
   const historyData = history?.history ?? [];
   const historyPeak = historyData.reduce((max, d) => Math.max(max, d.count), 0);
 
-  const handleInvoiceDownload = (id: string) => {
+  const handleInvoiceDownload = useCallback((id: string) => {
+    if (toastTimerRef.current !== null) {
+      clearTimeout(toastTimerRef.current);
+    }
     setToast(`Invoice ${id} available in private beta · request access ↗`);
-    setTimeout(() => setToast(null), 3_000);
-  };
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 3_000);
+  }, []);
 
   return (
     <div className="flex flex-col gap-6">
@@ -70,7 +85,7 @@ export function BillingCards() {
               </p>
             ) : null}
           </div>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" disabled title="Upgrade not available yet">
             Upgrade plan →
           </Button>
         </div>

@@ -11,9 +11,10 @@ import { cn } from "@/lib/cn";
 
 export function MobileNavDrawer() {
   const [open, setOpen] = useState(false);
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const drawerRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const mainRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setOpen(false);
@@ -30,10 +31,50 @@ export function MobileNavDrawer() {
 
   useEffect(() => {
     if (!open) return;
+
+    const main = document.querySelector("main");
+    if (main) {
+      main.setAttribute("inert", "");
+      mainRef.current = main;
+    }
+
+    return () => {
+      if (mainRef.current) {
+        mainRef.current.removeAttribute("inert");
+        mainRef.current = null;
+      }
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpen(false);
         triggerRef.current?.focus();
+        return;
+      }
+
+      if (event.key === "Tab") {
+        const drawer = drawerRef.current;
+        if (!drawer) return;
+        const focusable = drawer.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0]!;
+        const last = focusable[focusable.length - 1]!;
+        if (event.shiftKey) {
+          if (document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+          }
+        }
       }
     };
     window.addEventListener("keydown", onKey);
@@ -42,11 +83,16 @@ export function MobileNavDrawer() {
 
   useEffect(() => {
     if (!open) return;
-    const first = drawerRef.current?.querySelector<HTMLAnchorElement>("a");
+    const first = drawerRef.current?.querySelector<HTMLElement>(
+      'a[href], button:not([disabled])',
+    );
     first?.focus();
   }, [open]);
 
-  const close = useCallback(() => setOpen(false), []);
+  const close = useCallback(() => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  }, []);
 
   return (
     <>

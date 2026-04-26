@@ -112,7 +112,7 @@ export function HologramCanvas({
     window.addEventListener("resize", onResize);
 
     let glitchTimer = 0;
-    let glitchSeed = Math.random() * 1000;
+    let glitchSeed = Math.random() * 1000; // NOSONAR — visual animation seed, not security
     const GLITCH_INTERVAL = isMobile ? 6.0 : 2.5;
 
     let rafId = 0;
@@ -132,7 +132,7 @@ export function HologramCanvas({
       glitchTimer += dt;
       if (glitchTimer >= GLITCH_INTERVAL) {
         glitchTimer = 0;
-        glitchSeed = Math.random() * 1000;
+        glitchSeed = Math.random() * 1000; // NOSONAR
       }
 
       material.uniforms.uTime!.value = t;

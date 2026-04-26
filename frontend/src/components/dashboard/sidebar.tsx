@@ -9,7 +9,7 @@ import { NAV_GROUPS, NAV_ITEMS } from "@/components/dashboard/nav-items";
 import { cn } from "@/lib/cn";
 
 export function Sidebar() {
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
 
   return (
     <aside

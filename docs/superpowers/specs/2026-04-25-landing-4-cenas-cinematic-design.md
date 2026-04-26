@@ -142,7 +142,7 @@ Foco em landings que (a) vendem **infra técnica** (não consumer apps), (b) usa
 - Conteúdo do hero (texto + CTAs) faz fade + scale-down enquanto particles convergem (uProgress já vai pra 1)
 - Background canvas fica "respirando" no ponto de chegada (glyph) durante a transição
 
-**Hand-off pro Ato 2 é narrativo, não visual contínuo** — o canvas WebGL é interno ao hero (não atravessa atos). O ATÉ 2 começa com o glyph já formado na hero, e o headline "Same transaction. Two realities." entra como nova cena. O único cross-section morph "físico" planejado é Ato 2 → Ato 3 (card direito do paradox vira "câmera" do engine).
+**Hand-off pro Ato 2 é narrativo, não visual contínuo** — o canvas WebGL é interno ao hero (não atravessa atos). O ATO 2 começa com o glyph já formado na hero, e o headline "Same transaction. Two realities." entra como nova cena. O único cross-section morph "físico" planejado é Ato 2 → Ato 3 (card direito do paradox vira "câmera" do engine).
 
 ### Ato 2 — PARADOX ★ (pin ~3× viewport)
 

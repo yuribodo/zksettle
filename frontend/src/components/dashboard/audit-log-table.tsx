@@ -1,7 +1,7 @@
 "use client";
 
 import { Refresh, WarningTriangle } from "iconoir-react";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { StatusPill } from "@/components/dashboard/status-pill";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,13 @@ function describeError(err: unknown): string {
 
 export function AuditLogTable() {
   const [toast, setToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   const [range, setRange] = useState<RangeValue>("30d");
   const [issuerInput, setIssuerInput] = useState("");
@@ -105,10 +112,14 @@ export function AuditLogTable() {
     setRange("30d");
   };
 
-  const exportToast = (label: string) => {
+  const exportToast = useCallback((label: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast(`${label} not yet wired · backend exposes JSON via GET /v1/events`);
-    setTimeout(() => setToast(null), 3_000);
-  };
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 3_000);
+  }, []);
 
   return (
     <div className="flex flex-col gap-6">

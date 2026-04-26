@@ -89,6 +89,10 @@ export function ApiKeysPanel() {
   };
 
   const onRevoke = async (key: ListedKey) => {
+    const confirmed = window.confirm(
+      `Revoke key "${displayPrefix(key.key_hash)}" owned by "${key.owner}"? This cannot be undone.`,
+    );
+    if (!confirmed) return;
     deleteKey.reset();
     try {
       await deleteKey.mutateAsync(key.key_hash);

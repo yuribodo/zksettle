@@ -52,7 +52,7 @@ export function BillingUsageChart({ data }: BillingUsageChartProps) {
   const lastDay = data[data.length - 1]!;
 
   const monthLabel = (iso: string) =>
-    new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit" }).format(
+    new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit", timeZone: "UTC" }).format(
       new Date(iso),
     );
 

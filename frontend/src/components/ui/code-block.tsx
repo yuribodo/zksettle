@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { codeToHtml, type SupportedLang } from "@/lib/shiki";
 import { cn } from "@/lib/cn";
 
@@ -8,8 +11,16 @@ export interface CodeBlockProps {
   ariaLabel?: string;
 }
 
-export async function CodeBlock({ code, lang, className, ariaLabel }: CodeBlockProps) {
-  const html = await codeToHtml(code, lang);
+export function CodeBlock({ code, lang, className, ariaLabel }: CodeBlockProps) {
+  const [html, setHtml] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    codeToHtml(code, lang).then((result) => {
+      if (!cancelled) setHtml(result);
+    });
+    return () => { cancelled = true; };
+  }, [code, lang]);
 
   return (
     <div
@@ -19,7 +30,7 @@ export async function CodeBlock({ code, lang, className, ariaLabel }: CodeBlockP
         "[&>pre]:m-0 [&>pre]:bg-transparent [&>pre]:p-6 [&>pre]:font-mono [&>pre]:text-sm [&>pre]:leading-relaxed",
         className,
       )}
-      dangerouslySetInnerHTML={{ __html: html }}
+      dangerouslySetInnerHTML={html ? { __html: html } : undefined}
     />
   );
 }

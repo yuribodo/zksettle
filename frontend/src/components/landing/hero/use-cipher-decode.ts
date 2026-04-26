@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*+=?/\\|<>~^";
 
 function randomGlyph(): string {
-  return GLYPHS[Math.floor(Math.random() * GLYPHS.length)]!;
+  return GLYPHS[Math.floor(Math.random() * GLYPHS.length)]!; // NOSONAR — visual animation, not security
 }
 
 export type CipherState = {
