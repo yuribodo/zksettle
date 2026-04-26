@@ -39,7 +39,7 @@
 
 html,
 body {
-  background-color: var(--color-canvas);
+  background-color: transparent;
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -140,6 +140,27 @@ em {
 
 .animate-veil-cursor {
   animation: terminal-cursor 1s steps(1) infinite;
+}
+
+@keyframes proof-ring-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes proof-ring-reverse {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes proof-trace {
+  0% { stroke-dashoffset: 251; }
+  60% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: 0; }
+}
+
+@keyframes proof-seal-breathe {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {

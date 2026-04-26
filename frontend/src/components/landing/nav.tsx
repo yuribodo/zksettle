@@ -32,7 +32,7 @@ export function Nav() {
         "border-b transition-all duration-300 ease-[var(--ease-brand)]",
         scrolled
           ? "border-border-subtle bg-canvas/80 backdrop-blur-md"
-          : "border-transparent bg-canvas/40 backdrop-blur-md",
+          : "border-transparent bg-transparent",
       )}
     >
       <div className="mx-auto flex h-full w-full max-w-6xl items-center justify-between px-5 md:px-8">
@@ -41,7 +41,7 @@ export function Nav() {
           aria-label="ZKSettle home"
           className="inline-flex items-center rounded-[2px] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-forest"
         >
-          <Logo size={28} />
+          <Logo size={28} variant={scrolled ? "canvas-ink" : "forest-surface"} />
         </Link>
         <div className="flex items-center gap-1 md:gap-4">
           <ul className="hidden items-center gap-1 md:flex">
@@ -49,7 +49,12 @@ export function Nav() {
               <li key={link.href}>
                 <Link
                   href={link.href}
-                  className="inline-flex h-9 items-center rounded-[2px] px-3 text-sm text-quill transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
+                  className={cn(
+                    "inline-flex h-9 items-center rounded-[2px] px-3 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest",
+                    scrolled
+                      ? "text-quill hover:text-ink"
+                      : "text-white/70 hover:text-white",
+                  )}
                 >
                   {link.label}
                 </Link>

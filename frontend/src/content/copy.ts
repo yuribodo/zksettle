@@ -21,21 +21,22 @@ export interface ParadoxActCopy {
 }
 
 // ── Act 3 ────────────────────────────────────────────────────────────────────
-export interface EngineChapter {
-  readonly title: string;
-  readonly body: string;
-}
-
 export interface EngineBenchmark {
   readonly value: string;
   readonly label: string;
+}
+
+export interface EngineChapter {
+  readonly title: string;
+  readonly kicker: string;
+  readonly body: string;
+  readonly benchmarks: readonly EngineBenchmark[];
 }
 
 export interface EngineCopy {
   readonly eyebrow: string;
   readonly headline: string;
   readonly chapters: readonly EngineChapter[];
-  readonly benchmarks: readonly EngineBenchmark[];
   readonly demoCta: string;
 }
 
@@ -90,22 +91,31 @@ export const COPY: LandingCopy = {
     chapters: [
       {
         title: "Verify once.",
+        kicker: "identity intake",
         body: "KYC issuer signs once. The Merkle tree root goes on-chain. You never expose a document again.",
+        benchmarks: [
+          { value: "1", label: "Credential" },
+          { value: "0", label: "PII exposed" },
+        ],
       },
       {
         title: "Prove anywhere.",
+        kicker: "local proving",
         body: "The browser generates a Groth16 proof in <5s. No server. No trust assumption.",
+        benchmarks: [
+          { value: "<5s", label: "Proof generation" },
+          { value: "192B", label: "Proof size" },
+        ],
       },
       {
         title: "Settle forever.",
+        kicker: "on-chain verification",
         body: "The Transfer Hook verifies in $0.001 of compute. Audit trail lives forever.",
+        benchmarks: [
+          { value: "$0.001", label: "Verify cost" },
+          { value: "181ms", label: "Settlement" },
+        ],
       },
-    ] as const,
-    benchmarks: [
-      { value: "181ms", label: "Settlement" },
-      { value: "<5s", label: "Proof generation" },
-      { value: "$0.001", label: "Verify cost" },
-      { value: "0", label: "PII leaked" },
     ] as const,
     demoCta: "Try it →",
   },

@@ -43,7 +43,7 @@ void main() {
   float vel = u_scrollVelocity;
 
   // FBM UV displacement — organic wobble during fast scroll
-  float displaceAmount = vel * 0.003;
+  float displaceAmount = vel * 0.008;
   vec2 displace = vec2(
     fbm(uv * 4.0 + u_time * 0.1) - 0.5,
     fbm(uv * 4.0 + u_time * 0.1 + 100.0) - 0.5
@@ -51,12 +51,12 @@ void main() {
   vec2 distortedUv = uv + displace;
 
   // Chromatic aberration — offset R and B channels
-  float chromAmount = vel * 0.012;
+  float chromAmount = vel * 0.035;
   vec2 uvR = distortedUv + vec2(-chromAmount, chromAmount * 0.5);
   vec2 uvB = distortedUv + vec2(chromAmount, -chromAmount * 0.5);
 
   // Grain per channel (time-varying so it shimmers)
-  float grainIntensity = mix(0.02, 0.08, vel);
+  float grainIntensity = mix(0.04, 0.18, vel);
   float grainR = (hash2(floor(uvR * u_res) + fract(u_time * 43.0) * 1000.0) - 0.5) * grainIntensity;
   float grainG = (hash2(floor(distortedUv * u_res) + fract(u_time * 43.0) * 1000.0) - 0.5) * grainIntensity;
   float grainB = (hash2(floor(uvB * u_res) + fract(u_time * 43.0) * 1000.0) - 0.5) * grainIntensity;
@@ -64,8 +64,8 @@ void main() {
   vec3 color = vec3(grainR, grainG, grainB);
 
   // Alpha: ramp with velocity, with a subtle floor so idle state has minimal grain
-  float grainFloor = 0.015;
-  float alpha = u_opacity * max(vel * 1.5, grainFloor);
+  float grainFloor = 0.04;
+  float alpha = u_opacity * max(vel * 2.5, grainFloor);
 
   gl_FragColor = vec4(color, alpha);
 }
