@@ -44,15 +44,17 @@ impl Config {
                 .map(|v| v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false),
             cors_allowed_origins: read_var("GATEWAY_CORS_ALLOWED_ORIGINS")
-                .map(|v| {
-                    v.split(',')
-                        .map(|s| s.trim().to_string())
-                        .filter(|s| !s.is_empty())
-                        .collect()
-                })
+                .map(|v| parse_origins(&v))
                 .unwrap_or_default(),
         })
     }
+}
+
+fn parse_origins(raw: &str) -> Vec<String> {
+    raw.split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect()
 }
 
 fn read_var(name: &str) -> Result<String, GatewayError> {
@@ -71,6 +73,21 @@ mod tests {
             err.to_string().contains("GATEWAY_DOES_NOT_EXIST_TEST"),
             "error should name the var"
         );
+    }
+
+    #[test]
+    fn parse_origins_splits_and_trims() {
+        assert_eq!(
+            parse_origins("http://a.com, http://b.com"),
+            vec!["http://a.com", "http://b.com"],
+        );
+    }
+
+    #[test]
+    fn parse_origins_drops_empty_segments() {
+        assert_eq!(parse_origins("http://a.com,,http://b.com"), vec!["http://a.com", "http://b.com"]);
+        assert!(parse_origins(",,,").is_empty());
+        assert!(parse_origins("").is_empty());
     }
 
     #[test]

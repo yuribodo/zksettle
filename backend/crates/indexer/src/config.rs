@@ -11,7 +11,6 @@ pub struct Config {
     pub dedup_path: String,
     pub dedup_capacity: u64,
     pub dedup_ttl_secs: u64,
-    pub events_path: String,
 }
 
 impl std::fmt::Debug for Config {
@@ -26,7 +25,6 @@ impl std::fmt::Debug for Config {
             .field("dedup_path", &self.dedup_path)
             .field("dedup_capacity", &self.dedup_capacity)
             .field("dedup_ttl_secs", &self.dedup_ttl_secs)
-            .field("events_path", &self.events_path)
             .finish()
     }
 }
@@ -54,8 +52,6 @@ impl Config {
                 .unwrap_or_else(|_| "86400".into())
                 .parse()
                 .map_err(|_| IndexerError::Config("INDEXER_DEDUP_TTL_SECS must be a valid u64".into()))?,
-            events_path: read_var("INDEXER_EVENTS_PATH")
-                .unwrap_or_else(|_| "./data/events".into()),
         })
     }
 
@@ -94,7 +90,6 @@ mod tests {
             dedup_path: "./data/dedup".into(),
             dedup_capacity: 1_000_000,
             dedup_ttl_secs: 86400,
-            events_path: "./data/events".into(),
         };
         assert!(cfg.is_dry_run());
     }
@@ -111,7 +106,6 @@ mod tests {
             dedup_path: "./data/dedup".into(),
             dedup_capacity: 1_000_000,
             dedup_ttl_secs: 86400,
-            events_path: "./data/events".into(),
         };
         assert!(!cfg.is_dry_run());
     }
@@ -128,7 +122,6 @@ mod tests {
             dedup_path: "./data/dedup".into(),
             dedup_capacity: 1_000_000,
             dedup_ttl_secs: 86400,
-            events_path: "./data/events".into(),
         };
         let dbg = format!("{cfg:?}");
         assert!(!dbg.contains("super_secret_token"));

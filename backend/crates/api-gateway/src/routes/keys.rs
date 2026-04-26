@@ -45,9 +45,10 @@ pub struct DeleteKeyResponse {
 }
 
 fn constant_time_eq(a: &str, b: &str) -> bool {
+    use subtle::ConstantTimeEq;
     let a_hash = Sha256::digest(a.as_bytes());
     let b_hash = Sha256::digest(b.as_bytes());
-    a_hash == b_hash
+    a_hash.ct_eq(&b_hash).into()
 }
 
 /// Admin-auth gate shared by `POST /api-keys`, `GET /api-keys`, and `DELETE /api-keys/{hash}`.
@@ -133,6 +134,7 @@ pub async fn delete_key(
     if !removed {
         return Err(GatewayError::NotFound);
     }
+    state.metering.remove(&key_hash);
     Ok(Json(DeleteKeyResponse {
         key_hash,
         deleted: true,

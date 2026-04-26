@@ -5,7 +5,6 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
 use tracing::{error, info, warn};
 
-use crate::events_store::StoredEvent;
 use crate::helius::parse::extract_proof_settled;
 use crate::helius::payload::HeliusTransaction;
 use crate::AppState;
@@ -51,28 +50,6 @@ pub async fn handle_webhook(
                             nullifier = hex::encode(event.nullifier_hash),
                             error = %e,
                             "failed to persist nullifier after successful upload"
-                        );
-                    }
-                    let stored = StoredEvent {
-                        signature: tx.signature.clone(),
-                        slot: event.slot,
-                        timestamp: event.timestamp,
-                        issuer: event.issuer,
-                        nullifier_hash: event.nullifier_hash,
-                        merkle_root: event.merkle_root,
-                        sanctions_root: event.sanctions_root,
-                        jurisdiction_root: event.jurisdiction_root,
-                        mint: event.mint,
-                        recipient: event.recipient,
-                        payer: event.payer,
-                        amount: event.amount,
-                        epoch: event.epoch,
-                    };
-                    if let Err(e) = state.events.insert(&stored) {
-                        error!(
-                            signature = %tx.signature,
-                            error = %e,
-                            "failed to persist event in audit-log store"
                         );
                     }
                 }
