@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { COPY } from "@/content/copy";
@@ -17,6 +17,8 @@ export function ActFiveMarkets() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useActPin(containerRef, { duration: ACT_DURATION });
+
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   const { markets, closer } = COPY.move;
 
@@ -46,9 +48,20 @@ export function ActFiveMarkets() {
         <div
           className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3"
           data-markets-grid
+          onMouseLeave={() => setHoveredIndex(null)}
         >
           {markets.map((m, i) => (
-            <MarketCell key={m.name} market={m} index={i} total={markets.length} />
+            <MarketCell
+              key={m.name}
+              market={m}
+              index={i}
+              total={markets.length}
+              isDimmed={hoveredIndex !== null && hoveredIndex !== i}
+              onHoverChange={(hovering) => {
+                if (hovering) setHoveredIndex(i);
+                else setHoveredIndex((prev) => (prev === i ? null : prev));
+              }}
+            />
           ))}
         </div>
 
