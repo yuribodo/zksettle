@@ -11,6 +11,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { COPY } from "@/content/copy";
 import { DisplayHeading } from "@/components/ui/display-heading";
 import { cn } from "@/lib/cn";
+import { useCanvasStage } from "@/components/landing/canvas/use-canvas-stage";
 
 import { useActPin } from "./use-act-pin";
 import { MarketCell } from "./market-cell";
@@ -23,8 +24,14 @@ const ACT_DURATION = "+=120%";
 
 export function ActFiveMarkets() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const { scrollStateRef } = useCanvasStage();
 
-  useActPin(containerRef, { duration: ACT_DURATION });
+  useActPin(containerRef, {
+    duration: ACT_DURATION,
+    onUpdate: (progress) => {
+      scrollStateRef.current.actFiveProgress = progress;
+    },
+  });
 
   useGSAP(
     () => {
@@ -58,7 +65,10 @@ export function ActFiveMarkets() {
           .to(closer, { opacity: 1, y: 0, duration: 0.4 }, "-=0.15");
       });
 
-      return () => mm.revert();
+      return () => {
+        scrollStateRef.current.actFiveProgress = 0;
+        mm.revert();
+      };
     },
     { scope: containerRef },
   );
