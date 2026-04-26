@@ -270,4 +270,145 @@ mod tests {
         .unwrap();
         assert_eq!(mock.sent_count(), 1);
     }
+
+    /// Tests for the production `ReqwestUpstream` size guard. We can't use
+    /// the mock here — the guard lives inside `ReqwestUpstream::send`. So we
+    /// spin up a raw TCP server that emits hand-crafted HTTP/1.1 responses
+    /// (no axum/hyper involved) and point reqwest at it. This lets us
+    /// independently exercise:
+    ///   - the `1024 * 1024` constant (line 60)
+    ///   - the Content-Length guard (line 69)
+    ///   - the body-length guard reached only when CL is absent (line 84)
+    mod size_guard {
+        use super::*;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpListener;
+
+        const MAX_BYTES: usize = 1024 * 1024;
+
+        /// Spin up a tokio TCP server that sends `response_bytes` verbatim
+        /// for every accepted connection, then closes. Returns its port.
+        async fn spawn_raw_server(response_bytes: Vec<u8>) -> u16 {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let port = listener.local_addr().unwrap().port();
+            tokio::spawn(async move {
+                loop {
+                    let (mut sock, _) = match listener.accept().await {
+                        Ok(s) => s,
+                        Err(_) => return,
+                    };
+                    let bytes = response_bytes.clone();
+                    tokio::spawn(async move {
+                        // drain the request line + headers (best effort)
+                        let mut buf = vec![0u8; 4096];
+                        let _ = sock.read(&mut buf).await;
+                        let _ = sock.write_all(&bytes).await;
+                        let _ = sock.shutdown().await;
+                    });
+                }
+            });
+            port
+        }
+
+        fn req(port: u16) -> UpstreamRequest {
+            UpstreamRequest {
+                method: Method::GET,
+                url: format!("http://127.0.0.1:{port}/"),
+                headers: HeaderMap::new(),
+                body: Bytes::new(),
+            }
+        }
+
+        /// Body well above the `*→+` mutation's MAX (=2048) but well under
+        /// the real MAX (=1MB) succeeds. Kills:
+        ///   - line 60 `*` → `+` (mutated MAX=2048; 4KB rejected)
+        ///   - line 60 `*` → `/` (mutated MAX=1; 4KB rejected)
+        ///   - line 69 `>` → `<` (mutated: 4KB < 1MB true → reject)
+        ///   - line 84 `>` → `<` (same logic on body.len())
+        #[tokio::test]
+        async fn under_limit_response_succeeds() {
+            let body = vec![b'a'; 4096];
+            let mut resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            )
+            .into_bytes();
+            resp.extend_from_slice(&body);
+            let port = spawn_raw_server(resp).await;
+
+            let upstream = ReqwestUpstream::new(Client::new());
+            let result = upstream.send(req(port)).await.expect("must accept 4KB");
+            assert_eq!(result.status, StatusCode::OK);
+            assert_eq!(result.body.len(), 4096);
+        }
+
+        /// Content-Length header above MAX is rejected before reading the
+        /// body. Kills:
+        ///   - line 69 `>` → `==` (mutated: 2MB == 1MB false → no error)
+        ///   - line 69 `>` → `<`  (mutated: 2MB < 1MB false → no error)
+        #[tokio::test]
+        async fn oversized_content_length_header_is_rejected() {
+            // Lie about CL: claim 2MB, send empty body, close. Reqwest will
+            // hand the headers to our code BEFORE attempting body read — our
+            // line-69 guard fires immediately.
+            let resp = b"HTTP/1.1 200 OK\r\nContent-Length: 2097152\r\nConnection: close\r\n\r\n"
+                .to_vec();
+            let port = spawn_raw_server(resp).await;
+
+            let upstream = ReqwestUpstream::new(Client::new());
+            let err = upstream
+                .send(req(port))
+                .await
+                .expect_err("oversized CL must be rejected");
+            assert!(
+                matches!(&err, GatewayError::Upstream(msg) if msg.contains("too large")),
+                "unexpected error: {err:?}"
+            );
+        }
+
+        /// Boundary case: body exactly at MAX must succeed. Kills:
+        ///   - line 69 `>` → `>=` (mutated: 1MB >= 1MB true → reject)
+        ///   - line 69 `>` → `==` (mutated: 1MB == 1MB true → reject)
+        ///   - line 84 `>` → `>=` (same boundary on body.len())
+        #[tokio::test]
+        async fn exactly_max_size_response_succeeds() {
+            let body = vec![0u8; MAX_BYTES];
+            let mut resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                MAX_BYTES
+            )
+            .into_bytes();
+            resp.extend_from_slice(&body);
+            let port = spawn_raw_server(resp).await;
+
+            let upstream = ReqwestUpstream::new(Client::new());
+            let result = upstream
+                .send(req(port))
+                .await
+                .expect("body exactly at MAX must pass");
+            assert_eq!(result.body.len(), MAX_BYTES);
+        }
+
+        /// Without a Content-Length header, the line-69 guard cannot trip,
+        /// so the line-84 body-length guard becomes the only defense. Kills:
+        ///   - line 84 `>` → `==` (mutated: oversized != MAX → no error)
+        ///   - line 84 `>` → `<`  (mutated: oversized < MAX false → no error)
+        #[tokio::test]
+        async fn oversized_body_without_content_length_is_rejected() {
+            let body = vec![0u8; MAX_BYTES + 1];
+            let mut resp = b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n".to_vec();
+            resp.extend_from_slice(&body);
+            let port = spawn_raw_server(resp).await;
+
+            let upstream = ReqwestUpstream::new(Client::new());
+            let err = upstream
+                .send(req(port))
+                .await
+                .expect_err("oversized chunked-style body must be rejected");
+            assert!(
+                matches!(&err, GatewayError::Upstream(msg) if msg.contains("too large")),
+                "unexpected error: {err:?}"
+            );
+        }
+    }
 }

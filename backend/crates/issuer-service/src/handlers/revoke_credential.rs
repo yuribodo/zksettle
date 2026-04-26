@@ -38,9 +38,7 @@ pub async fn handler(
         .map_err(ServiceError::from)?;
 
     let removed_from_sanctions = st.sanctions_tree.remove(wallet_fr);
-    if !removed_from_sanctions {
-        tracing::debug!(%wallet, "wallet was not in sanctions tree");
-    }
+    tracing::debug!(%wallet, in_sanctions = removed_from_sanctions, "credential revoke applied");
 
     st.credentials
         .get_mut(&wallet_bytes)
@@ -148,5 +146,44 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, ServiceError::InvalidHex(_)));
+    }
+
+    /// When the wallet IS in the sanctions tree at revoke time, the handler
+    /// must remove it from the sanctions tree (so an exclusion proof later
+    /// succeeds and the sanctions root reverts to the empty root). The other
+    /// 4 tests above never insert into the sanctions tree, leaving this
+    /// branch unexercised — mutation testing flagged that gap.
+    #[tokio::test]
+    async fn revoking_wallet_in_sanctions_tree_removes_it_from_sanctions() {
+        let wallet = [4u8; 32];
+        let hex = format!("0x{}", hex::encode(wallet));
+        let wallet_fr = wallet_to_fr(&hex).unwrap();
+
+        let state = state_with_wallet(wallet, false);
+        let empty_root = {
+            let mut st = state.write().await;
+            let empty_root = st.sanctions_tree.root();
+            st.sanctions_tree.insert(wallet_fr);
+            assert_ne!(
+                st.sanctions_tree.root(),
+                empty_root,
+                "precondition: insert must change the sanctions root"
+            );
+            empty_root
+        };
+
+        let resp = handler(State(state.clone()), empty_state_path(), Path(hex))
+            .await
+            .unwrap()
+            .0;
+        assert!(resp.revoked);
+
+        let st = state.read().await;
+        assert!(st.credentials[&wallet].revoked);
+        assert_eq!(
+            st.sanctions_tree.root(),
+            empty_root,
+            "sanctions root must revert to empty after the only entry is removed"
+        );
     }
 }

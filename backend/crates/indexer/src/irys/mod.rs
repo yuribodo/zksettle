@@ -134,4 +134,24 @@ mod tests {
         mock.upload(&fixture_event()).await.unwrap();
         assert_eq!(mock.upload_count(), 1);
     }
+
+    /// Exercises the `IrysUploader` trait impl on `IrysClient` through a
+    /// `dyn IrysUploader` indirection. The inherent `IrysClient::upload`
+    /// already has its own dry-run test, but the trait-impl wrapper at
+    /// `mod.rs:19` is a separate function that mutation testing flagged as
+    /// uncovered: replacing the body with `Ok(String::new())` or
+    /// `Ok("xyzzy".into())` would otherwise pass undetected. Asserting the
+    /// exact `"dry-run"` marker (not just `is_ok()`) kills both.
+    #[tokio::test]
+    async fn trait_dispatch_on_irys_client_returns_dry_run_marker() {
+        use std::sync::Arc;
+
+        let uploader: Arc<dyn IrysUploader> = Arc::new(client::IrysClient::new(
+            "http://unused".into(),
+            None,
+            reqwest::Client::new(),
+        ));
+        let tx = uploader.upload(&fixture_event()).await.unwrap();
+        assert_eq!(tx, "dry-run");
+    }
 }
