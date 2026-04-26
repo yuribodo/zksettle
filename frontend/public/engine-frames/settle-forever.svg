@@ -1,0 +1,31 @@
+<svg width="1200" height="750" viewBox="0 0 1200 750" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="750" rx="34" fill="#FAFAF7"/>
+  <rect x="42" y="42" width="1116" height="666" rx="28" fill="#F5F3EE" stroke="#E8E5DF"/>
+  <path d="M92 142H1108" stroke="#E8E5DF"/>
+  <text x="92" y="105" fill="#8A8880" font-family="JetBrains Mono, ui-monospace, monospace" font-size="18" letter-spacing="4">SETTLE FOREVER</text>
+  <text x="92" y="202" fill="#1A1917" font-family="Georgia, serif" font-size="72" letter-spacing="-3">Public settlement. Private data.</text>
+  <text x="94" y="248" fill="#4A4640" font-family="Arial, sans-serif" font-size="26">The transfer hook verifies the proof and leaves an audit trail on-chain.</text>
+  <rect x="112" y="336" width="250" height="210" rx="22" fill="#FAFAF7" stroke="#C8C4BC"/>
+  <text x="142" y="390" fill="#8A8880" font-family="JetBrains Mono, ui-monospace, monospace" font-size="15" letter-spacing="3">PROOF</text>
+  <text x="142" y="442" fill="#0C3D2E" font-family="JetBrains Mono, ui-monospace, monospace" font-size="28">0xa3f1...</text>
+  <rect x="142" y="484" width="160" height="12" rx="6" fill="#E8E5DF"/>
+  <path d="M398 440H520" stroke="#0C3D2E" stroke-width="3"/>
+  <path d="M496 416L522 440L496 464" stroke="#0C3D2E" stroke-width="3" fill="none"/>
+  <rect x="552" y="310" width="230" height="262" rx="26" fill="#E8F2EE" stroke="#0C3D2E" stroke-width="2"/>
+  <text x="600" y="378" fill="#0C3D2E" font-family="JetBrains Mono, ui-monospace, monospace" font-size="18" letter-spacing="2">TRANSFER HOOK</text>
+  <circle cx="667" cy="450" r="42" fill="#FAFAF7" stroke="#0C3D2E" stroke-width="3"/>
+  <path d="M646 451L660 465L690 433" stroke="#0C3D2E" stroke-width="5" fill="none"/>
+  <path d="M820 440H942" stroke="#0C3D2E" stroke-width="3"/>
+  <path d="M918 416L944 440L918 464" stroke="#0C3D2E" stroke-width="3" fill="none"/>
+  <rect x="964" y="326" width="132" height="232" rx="20" fill="#FAFAF7" stroke="#C8C4BC"/>
+  <path d="M994 382H1066M994 426H1066M994 470H1066" stroke="#C8C4BC" stroke-width="8" stroke-linecap="round"/>
+  <text x="984" y="526" fill="#0C3D2E" font-family="JetBrains Mono, ui-monospace, monospace" font-size="18">audit</text>
+  <g>
+    <rect x="154" y="608" width="200" height="64" rx="14" fill="#FAFAF7" stroke="#E8E5DF"/>
+    <text x="180" y="647" fill="#0C3D2E" font-family="JetBrains Mono, ui-monospace, monospace" font-size="20">181ms</text>
+    <rect x="404" y="608" width="200" height="64" rx="14" fill="#FAFAF7" stroke="#E8E5DF"/>
+    <text x="430" y="647" fill="#0C3D2E" font-family="JetBrains Mono, ui-monospace, monospace" font-size="20">$0.001</text>
+    <rect x="654" y="608" width="200" height="64" rx="14" fill="#FAFAF7" stroke="#E8E5DF"/>
+    <text x="680" y="647" fill="#0C3D2E" font-family="JetBrains Mono, ui-monospace, monospace" font-size="20">0 PII</text>
+  </g>
+</svg>
