@@ -69,6 +69,14 @@ impl UsageRecord {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct DailyUsage {
+    /// `YYYY-MM-DD` (UTC).
+    pub date: String,
+    pub count: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
