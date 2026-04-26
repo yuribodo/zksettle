@@ -5,7 +5,7 @@ use axum::http::request::Parts;
 use zksettle_types::gateway::ApiKeyRecord;
 
 use crate::error::GatewayError;
-use crate::key_store::hash_key;
+use crate::key_store;
 use crate::AppState;
 
 #[derive(Debug)]
@@ -32,10 +32,9 @@ impl FromRequestParts<Arc<AppState>> for AuthenticatedKey {
             return Err(GatewayError::Unauthorized);
         }
 
-        let hash = hash_key(token);
-        let record = state
-            .keys
-            .lookup_by_hash(&hash)
+        let hash = key_store::hash_key(token);
+        let record = key_store::lookup_by_hash(&state.db, &hash)
+            .await?
             .ok_or(GatewayError::KeyNotFound)?;
 
         Ok(AuthenticatedKey(record))
@@ -51,14 +50,17 @@ mod tests {
 
     use super::*;
     use crate::config::Config;
-    use crate::key_store::KeyStore;
-    use crate::metering::Metering;
     use crate::rate_limit::RateLimitStore;
     use crate::upstream::MockHttpUpstream;
+    use crate::{test_cleanup, test_db};
+    use serial_test::serial;
 
-    fn state_with_key(raw_key: &str) -> Arc<AppState> {
-        let keys = KeyStore::new();
-        keys.insert(raw_key, "alice".into(), Tier::Developer, 0);
+    async fn state_with_key(raw_key: &str) -> Arc<AppState> {
+        let db = test_db().await;
+        test_cleanup(&db).await;
+        key_store::insert(&db, raw_key, "alice".into(), Tier::Developer, 0)
+            .await
+            .unwrap();
         Arc::new(AppState {
             config: Config {
                 port: 4000,
@@ -68,9 +70,9 @@ mod tests {
                 allow_open_keys: true,
                 cors_allowed_origins: vec![],
                 indexer_url: None,
+                database_url: String::new(),
             },
-            keys,
-            metering: Metering::new(),
+            db,
             rate_limiter: RateLimitStore::new(),
             upstream: Arc::new(MockHttpUpstream::new()),
         })
@@ -85,16 +87,18 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn missing_authorization_header_returns_unauthorized() {
-        let state = state_with_key("zks_one");
+        let state = state_with_key("zks_one").await;
         let req = Request::builder().uri("/").body(()).unwrap();
         let err = extract(&state, req).await.unwrap_err();
         assert!(matches!(err, GatewayError::Unauthorized));
     }
 
     #[tokio::test]
+    #[serial]
     async fn header_without_bearer_prefix_returns_unauthorized() {
-        let state = state_with_key("zks_one");
+        let state = state_with_key("zks_one").await;
         let req = Request::builder()
             .uri("/")
             .header("authorization", "Token zks_one")
@@ -105,8 +109,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn empty_bearer_token_returns_unauthorized() {
-        let state = state_with_key("zks_one");
+        let state = state_with_key("zks_one").await;
         let req = Request::builder()
             .uri("/")
             .header("authorization", "Bearer ")
@@ -117,8 +122,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn unknown_key_returns_key_not_found() {
-        let state = state_with_key("zks_known");
+        let state = state_with_key("zks_known").await;
         let req = Request::builder()
             .uri("/")
             .header("authorization", "Bearer zks_unknown")
@@ -129,8 +135,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn valid_key_returns_record_with_owner() {
-        let state = state_with_key("zks_alice");
+        let state = state_with_key("zks_alice").await;
         let req = Request::builder()
             .uri("/")
             .header("authorization", "Bearer zks_alice")

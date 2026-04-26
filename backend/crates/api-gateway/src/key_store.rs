@@ -1,51 +1,60 @@
-use dashmap::DashMap;
+use sea_orm::*;
 use sha2::{Digest, Sha256};
 use zksettle_types::gateway::{ApiKeyRecord, Tier};
 
-#[derive(Default)]
-pub struct KeyStore {
-    keys: DashMap<String, ApiKeyRecord>,
+use crate::entity::api_key;
+use crate::error::GatewayError;
+
+fn model_to_record(m: api_key::Model) -> Result<ApiKeyRecord, GatewayError> {
+    let tier: Tier = m
+        .tier
+        .parse()
+        .map_err(|e: String| GatewayError::Database(e))?;
+    Ok(ApiKeyRecord {
+        key_hash: m.key_hash,
+        tier,
+        owner: m.owner,
+        created_at: m.created_at as u64,
+    })
 }
 
-impl KeyStore {
-    pub fn new() -> Self {
-        Self::default()
-    }
+pub async fn insert(
+    db: &DatabaseConnection,
+    raw_key: &str,
+    owner: String,
+    tier: Tier,
+    created_at: u64,
+) -> Result<(), GatewayError> {
+    let hash = hash_key(raw_key);
+    let model = api_key::ActiveModel {
+        key_hash: Set(hash),
+        owner: Set(owner),
+        tier: Set(tier.to_string()),
+        created_at: Set(created_at as i64),
+    };
+    api_key::Entity::insert(model).exec(db).await?;
+    Ok(())
+}
 
-    pub fn insert(&self, raw_key: &str, owner: String, tier: Tier, created_at: u64) {
-        let hash = hash_key(raw_key);
-        self.keys.insert(
-            hash.clone(),
-            ApiKeyRecord {
-                key_hash: hash,
-                tier,
-                owner,
-                created_at,
-            },
-        );
-    }
+pub async fn lookup_by_hash(
+    db: &DatabaseConnection,
+    key_hash: &str,
+) -> Result<Option<ApiKeyRecord>, GatewayError> {
+    let result = api_key::Entity::find_by_id(key_hash).one(db).await?;
+    result.map(model_to_record).transpose()
+}
 
-    pub fn lookup(&self, raw_key: &str) -> Option<ApiKeyRecord> {
-        let hash = hash_key(raw_key);
-        self.keys.get(&hash).map(|r| r.clone())
-    }
+pub async fn remove_by_hash(
+    db: &DatabaseConnection,
+    key_hash: &str,
+) -> Result<bool, GatewayError> {
+    let result = api_key::Entity::delete_by_id(key_hash).exec(db).await?;
+    Ok(result.rows_affected > 0)
+}
 
-    pub fn lookup_by_hash(&self, key_hash: &str) -> Option<ApiKeyRecord> {
-        self.keys.get(key_hash).map(|r| r.clone())
-    }
-
-    pub fn remove(&self, raw_key: &str) -> bool {
-        let hash = hash_key(raw_key);
-        self.keys.remove(&hash).is_some()
-    }
-
-    pub fn remove_by_hash(&self, key_hash: &str) -> bool {
-        self.keys.remove(key_hash).is_some()
-    }
-
-    pub fn list(&self) -> Vec<ApiKeyRecord> {
-        self.keys.iter().map(|r| r.value().clone()).collect()
-    }
+pub async fn list(db: &DatabaseConnection) -> Result<Vec<ApiKeyRecord>, GatewayError> {
+    let results = api_key::Entity::find().all(db).await?;
+    results.into_iter().map(model_to_record).collect()
 }
 
 pub fn hash_key(raw: &str) -> String {
@@ -63,60 +72,95 @@ pub fn generate_key() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{test_cleanup, test_db};
+    use serial_test::serial;
 
-    #[test]
-    fn insert_and_lookup() {
-        let store = KeyStore::new();
-        store.insert("test-key", "alice".into(), Tier::Developer, 1000);
-        let record = store.lookup("test-key").unwrap();
+    #[tokio::test]
+    #[serial]
+    async fn insert_and_lookup() {
+        let db = test_db().await;
+        test_cleanup(&db).await;
+        insert(&db, "test-key", "alice".into(), Tier::Developer, 1000)
+            .await
+            .unwrap();
+        let record = lookup_by_hash(&db, &hash_key("test-key"))
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(record.owner, "alice");
         assert_eq!(record.tier, Tier::Developer);
     }
 
-    #[test]
-    fn lookup_missing_returns_none() {
-        let store = KeyStore::new();
-        assert!(store.lookup("nonexistent").is_none());
+    #[tokio::test]
+    #[serial]
+    async fn lookup_missing_returns_none() {
+        let db = test_db().await;
+        test_cleanup(&db).await;
+        assert!(lookup_by_hash(&db, &hash_key("nonexistent"))
+            .await
+            .unwrap()
+            .is_none());
     }
 
-    #[test]
-    fn remove_key() {
-        let store = KeyStore::new();
-        store.insert("key", "bob".into(), Tier::Startup, 2000);
-        assert!(store.remove("key"));
-        assert!(store.lookup("key").is_none());
+    #[tokio::test]
+    #[serial]
+    async fn remove_key() {
+        let db = test_db().await;
+        test_cleanup(&db).await;
+        insert(&db, "key", "bob".into(), Tier::Startup, 2000)
+            .await
+            .unwrap();
+        let hash = hash_key("key");
+        assert!(remove_by_hash(&db, &hash).await.unwrap());
+        assert!(lookup_by_hash(&db, &hash).await.unwrap().is_none());
     }
 
-    #[test]
-    fn remove_by_hash_returns_false_when_unknown() {
-        let store = KeyStore::new();
-        assert!(!store.remove_by_hash("0".repeat(64).as_str()));
+    #[tokio::test]
+    #[serial]
+    async fn remove_by_hash_returns_false_when_unknown() {
+        let db = test_db().await;
+        test_cleanup(&db).await;
+        assert!(!remove_by_hash(&db, &"0".repeat(64)).await.unwrap());
     }
 
-    #[test]
-    fn remove_by_hash_evicts_existing() {
-        let store = KeyStore::new();
-        store.insert("k", "owner".into(), Tier::Developer, 1);
-        let hash = hash_key("k");
-        assert!(store.remove_by_hash(&hash));
-        assert!(store.lookup("k").is_none());
-    }
-
-    #[test]
-    fn list_returns_all_records() {
-        let store = KeyStore::new();
-        store.insert("a", "alice".into(), Tier::Developer, 100);
-        store.insert("b", "bob".into(), Tier::Startup, 200);
-        let mut owners: Vec<String> = store.list().into_iter().map(|r| r.owner).collect();
+    #[tokio::test]
+    #[serial]
+    async fn list_returns_all_records() {
+        let db = test_db().await;
+        test_cleanup(&db).await;
+        insert(&db, "a", "alice".into(), Tier::Developer, 100)
+            .await
+            .unwrap();
+        insert(&db, "b", "bob".into(), Tier::Startup, 200)
+            .await
+            .unwrap();
+        let mut owners: Vec<String> = list(&db)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|r| r.owner)
+            .collect();
         owners.sort();
         assert_eq!(owners, vec!["alice".to_string(), "bob".to_string()]);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn insert_duplicate_key_hash_errors() {
+        let db = test_db().await;
+        test_cleanup(&db).await;
+        insert(&db, "dup", "alice".into(), Tier::Developer, 100)
+            .await
+            .unwrap();
+        let result = insert(&db, "dup", "bob".into(), Tier::Developer, 200).await;
+        assert!(result.is_err());
     }
 
     #[test]
     fn generated_key_has_prefix() {
         let key = generate_key();
         assert!(key.starts_with("zks_"));
-        assert_eq!(key.len(), 4 + 64); // "zks_" + 32 bytes hex
+        assert_eq!(key.len(), 4 + 64);
     }
 
     #[test]

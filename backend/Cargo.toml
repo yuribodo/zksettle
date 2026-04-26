@@ -2,6 +2,7 @@
 members = [
     "programs/*",
     "crates/*",
+    "crates/api-gateway/migration",
 ]
 resolver = "2"
 
