@@ -28,10 +28,13 @@ fn is_hop_by_hop(name: &str) -> bool {
     HOP_BY_HOP.iter().any(|h| h.eq_ignore_ascii_case(name))
 }
 
-/// Route `/events*` (the indexer-served audit log) to `GATEWAY_INDEXER_URL`
-/// when configured. Everything else goes to `GATEWAY_UPSTREAM_URL` (issuer-service).
+/// Route `/events` and `/events/{id}` to `GATEWAY_INDEXER_URL` when configured.
+/// Everything else goes to `GATEWAY_UPSTREAM_URL` (issuer-service).
 fn pick_upstream<'a>(path_after_v1: &str, config: &'a crate::config::Config) -> &'a str {
-    if path_after_v1.starts_with("/events") {
+    if path_after_v1 == "/events"
+        || path_after_v1.starts_with("/events/")
+        || path_after_v1.starts_with("/events?")
+    {
         if let Some(ref url) = config.indexer_url {
             return url.as_str();
         }
@@ -158,6 +161,8 @@ mod tests {
                 log_level: "error".into(),
                 admin_key: None,
                 allow_open_keys: true,
+                cors_allowed_origins: vec![],
+                indexer_url: None,
             },
             keys: KeyStore::new(),
             metering: Metering::new(),
@@ -342,7 +347,20 @@ mod tests {
     #[test]
     fn pick_upstream_only_matches_events_prefix() {
         let c = cfg("http://issuer:3000", Some("http://indexer:3001"));
-        // A path that *contains* "events" but doesn't start with it should not route.
         assert_eq!(pick_upstream("/credentials_events", &c), "http://issuer:3000");
+    }
+
+    #[test]
+    fn pick_upstream_rejects_events_like_paths() {
+        let c = cfg("http://issuer:3000", Some("http://indexer:3001"));
+        assert_eq!(pick_upstream("/eventstream", &c), "http://issuer:3000");
+        assert_eq!(pick_upstream("/events-foo", &c), "http://issuer:3000");
+    }
+
+    #[test]
+    fn pick_upstream_routes_events_subpaths() {
+        let c = cfg("http://issuer:3000", Some("http://indexer:3001"));
+        assert_eq!(pick_upstream("/events/123", &c), "http://indexer:3001");
+        assert_eq!(pick_upstream("/events/abc/detail", &c), "http://indexer:3001");
     }
 }

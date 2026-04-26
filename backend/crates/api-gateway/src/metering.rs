@@ -63,6 +63,11 @@ impl Metering {
         self.get(key_hash, now).request_count
     }
 
+    pub fn remove(&self, key_hash: &str) {
+        self.usage.remove(key_hash);
+        self.daily.remove(key_hash);
+    }
+
     /// Returns up to `days` daily-usage rows for `key_hash`, ending at today
     /// (UTC). Always exactly `days` entries, oldest first, zero-filled where
     /// no requests occurred. `days = 0` returns an empty vec.
@@ -307,5 +312,27 @@ mod tests {
         assert_eq!(civil_from_days(365), (1971, 1, 1));
         assert_eq!(civil_from_days(20_454), (2026, 1, 1));
         assert_eq!(civil_from_days(20_568), (2026, 4, 25));
+
+        // Century boundaries — exercise doe/36524 and doe/146096 corrections (line 126).
+        assert_eq!(civil_from_days(47_541), (2100, 3, 1)); // doe/36524=1
+        assert_eq!(civil_from_days(-25_508), (1900, 3, 1)); // doe/36524=2
+        assert_eq!(civil_from_days(11_016), (2000, 2, 29)); // doe/146096=1 (400-yr leap)
+
+        // Negative era — exercise else branch on line 124.
+        assert_eq!(civil_from_days(-719_468), (0, 3, 1));
+        assert_eq!(civil_from_days(-719_469), (0, 2, 29));
+    }
+
+    #[test]
+    fn remove_clears_usage_and_daily() {
+        let m = Metering::new();
+        m.increment("k", 1000);
+        m.increment("k", 1001);
+        assert_eq!(m.current_count("k", 1001), 2);
+        assert!(m.daily.get("k").is_some());
+
+        m.remove("k");
+        assert_eq!(m.current_count("k", 1001), 0);
+        assert!(m.daily.get("k").is_none());
     }
 }
