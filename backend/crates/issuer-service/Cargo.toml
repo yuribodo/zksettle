@@ -32,3 +32,4 @@ mutants = "0.0.3"
 [dev-dependencies]
 http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }
+zksettle-rpc = { path = "../zksettle-rpc", features = ["test-util"] }
