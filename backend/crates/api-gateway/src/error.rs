@@ -3,6 +3,7 @@ use axum::response::{IntoResponse, Response};
 use sea_orm::DbErr;
 use serde::Serialize;
 use thiserror::Error;
+use tracing::error;
 
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -50,9 +51,18 @@ impl IntoResponse for GatewayError {
             Self::Upstream(_) => StatusCode::BAD_GATEWAY,
             Self::Config(_) | Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
-        let body = ErrorBody {
-            error: self.to_string(),
+        let message = match &self {
+            Self::Database(detail) => {
+                error!(error = %detail, "database error");
+                "internal server error".to_owned()
+            }
+            Self::Config(detail) => {
+                error!(error = %detail, "configuration error");
+                "internal server error".to_owned()
+            }
+            other => other.to_string(),
         };
+        let body = ErrorBody { error: message };
         (status, axum::Json(body)).into_response()
     }
 }
