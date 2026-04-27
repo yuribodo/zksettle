@@ -3,7 +3,7 @@
 import { useGSAP } from "@gsap/react";
 import { gsap } from "gsap";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { COPY } from "@/content/copy";
@@ -104,12 +104,17 @@ export function HeroCopy() {
 
   const { overrides, scrambleWord } = useWordScramble(headline);
 
+  const canHover = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia("(hover: hover)").matches;
+  }, []);
+
   const onWordHover = useCallback(
     (word: { start: number; end: number }) => {
-      if (!cipher.done || reduceMotion) return;
+      if (!canHover || !cipher.done || reduceMotion) return;
       scrambleWord(word.start, word.end);
     },
-    [cipher.done, reduceMotion, scrambleWord],
+    [canHover, cipher.done, reduceMotion, scrambleWord],
   );
 
   useGSAP(
@@ -193,7 +198,7 @@ export function HeroCopy() {
                   <span
                     key={i}
                     className={cn(
-                      "inline-block transition-all duration-300",
+                      "inline-block transition-[color,filter,opacity] duration-300",
                       !isDecoded && !isHoverScrambled && "font-mono text-white/40",
                       !isDecoded && isHoverScrambled && "text-white/40",
                       isDecoded && isLastWord && !cipher.done && "text-cyan-300",
