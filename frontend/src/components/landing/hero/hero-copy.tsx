@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
+import { useCanvasStage } from "@/components/landing/canvas/use-canvas-stage";
 import { COPY } from "@/content/copy";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/cn";
@@ -88,6 +89,7 @@ function useWordScramble(text: string) {
 export function HeroCopy() {
   const { eyebrow, headline, sub, ctas } = COPY.hero;
   const heroRef = useRef<HTMLDivElement>(null);
+  const { enabled: canvasEnabled } = useCanvasStage();
   const reduceMotion = useReducedMotion();
   const [cipherActive, setCipherActive] = useState(false);
 
@@ -161,7 +163,7 @@ export function HeroCopy() {
       id="hero"
       aria-labelledby="hero-heading"
       ref={heroRef}
-      className="relative isolate bg-ink md:bg-transparent"
+      className={cn("relative isolate", canvasEnabled ? "bg-transparent" : "bg-ink")}
     >
       <div className="relative mx-auto flex min-h-[calc(100dvh-56px)] w-full max-w-7xl flex-col items-center justify-center px-5 py-24 md:px-8">
         <p
