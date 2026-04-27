@@ -39,6 +39,13 @@ services:
       target: issuer-service
     ports:
       - "3000:3000"
+    environment:
+      LISTEN_ADDR: "0.0.0.0:3000"
+      PROGRAM_ID: "${PROGRAM_ID:?set PROGRAM_ID}"
+      KEYPAIR_PATH: "/keys/id.json"
+      RPC_URL: "${RPC_URL:-http://127.0.0.1:8899}"
+    volumes:
+      - ${KEYPAIR_FILE:-~/.config/solana/id.json}:/keys/id.json:ro
 
   indexer:
     build:
@@ -47,6 +54,10 @@ services:
       target: indexer
     ports:
       - "3001:3001"
+    environment:
+      INDEXER_PORT: "3001"
+      INDEXER_HELIUS_AUTH_TOKEN: "${INDEXER_HELIUS_AUTH_TOKEN:?set INDEXER_HELIUS_AUTH_TOKEN}"
+      INDEXER_PROGRAM_ID: "${INDEXER_PROGRAM_ID:?set INDEXER_PROGRAM_ID}"
     volumes:
       - indexer_data:/data
 
