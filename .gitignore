@@ -9,4 +9,5 @@ node_modules/
 backend/programs/zksettle/src/generated_vk.rs
 .env
 .env.*
+!.env.example
 .superpowers/

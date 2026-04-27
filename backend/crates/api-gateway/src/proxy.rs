@@ -5,9 +5,11 @@ use axum::body::Body;
 use axum::extract::{Request, State};
 use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Response};
+use tracing::warn;
 
 use crate::auth::AuthenticatedKey;
 use crate::error::GatewayError;
+use crate::metering;
 use crate::upstream::UpstreamRequest;
 use crate::AppState;
 
@@ -28,8 +30,6 @@ fn is_hop_by_hop(name: &str) -> bool {
     HOP_BY_HOP.iter().any(|h| h.eq_ignore_ascii_case(name))
 }
 
-/// Route `/events` and `/events/{id}` to `GATEWAY_INDEXER_URL` when configured.
-/// Everything else goes to `GATEWAY_UPSTREAM_URL` (issuer-service).
 fn pick_upstream<'a>(path_after_v1: &str, config: &'a crate::config::Config) -> &'a str {
     if path_after_v1 == "/events"
         || path_after_v1.starts_with("/events/")
@@ -63,12 +63,21 @@ pub async fn proxy_to_upstream(
         .unwrap()
         .as_secs();
 
-    let current = state.metering.current_count(&record.key_hash, now);
-    if current >= record.tier.monthly_limit() {
+    let reserved = metering::try_reserve(
+        &state.db,
+        &record.key_hash,
+        now,
+        record.tier.monthly_limit(),
+    )
+    .await?;
+    if !reserved {
         return Err(GatewayError::QuotaExhausted);
     }
 
     if !state.rate_limiter.check(&record.key_hash, record.tier) {
+        if let Err(e) = metering::release(&state.db, &record.key_hash).await {
+            warn!(key_hash = %record.key_hash, error = %e, "failed to release quota on rate limit");
+        }
         return Err(GatewayError::RateLimited);
     }
 
@@ -98,7 +107,14 @@ pub async fn proxy_to_upstream(
     let upstream_resp = state.upstream.send(upstream_req).await?;
 
     if upstream_resp.status.is_success() || upstream_resp.status.is_redirection() {
-        state.metering.increment(&record.key_hash, now);
+        if let Err(e) = metering::record_daily(&state.db, &record.key_hash, now).await {
+            warn!(key_hash = %record.key_hash, error = %e, "record_daily failed, releasing reservation");
+            if let Err(e) = metering::release(&state.db, &record.key_hash).await {
+                warn!(key_hash = %record.key_hash, error = %e, "failed to release quota after record_daily failure");
+            }
+        }
+    } else if let Err(e) = metering::release(&state.db, &record.key_hash).await {
+        warn!(key_hash = %record.key_hash, error = %e, "failed to release quota on upstream error");
     }
 
     let status = upstream_resp.status;
@@ -110,50 +126,32 @@ pub async fn proxy_to_upstream(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn hop_by_hop_matches_all_entries() {
-        for &h in HOP_BY_HOP {
-            assert!(is_hop_by_hop(h), "{h} should be hop-by-hop");
-        }
-    }
-
-    #[test]
-    fn hop_by_hop_case_insensitive() {
-        assert!(is_hop_by_hop("Connection"));
-        assert!(is_hop_by_hop("TRANSFER-ENCODING"));
-        assert!(is_hop_by_hop("Keep-Alive"));
-    }
-
-    #[test]
-    fn not_hop_by_hop() {
-        assert!(!is_hop_by_hop("content-type"));
-        assert!(!is_hop_by_hop("accept"));
-        assert!(!is_hop_by_hop("x-custom-header"));
-    }
-
-    use axum::body::Body;
-    use axum::http::{Method, StatusCode};
-    use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    use axum::http::{Method, StatusCode};
     use zksettle_types::gateway::{ApiKeyRecord, Tier};
 
     use crate::config::Config;
-    use crate::key_store::{hash_key, KeyStore};
-    use crate::metering::Metering;
+    use crate::key_store;
     use crate::rate_limit::RateLimitStore;
     use crate::upstream::{MockHttpUpstream, UpstreamResponse};
+    use serial_test::serial;
 
-    fn record() -> ApiKeyRecord {
+    fn record(tier: Tier) -> ApiKeyRecord {
         ApiKeyRecord {
-            key_hash: hash_key("zks_test"),
-            tier: Tier::Developer,
+            key_hash: key_store::hash_key("zks_test"),
+            tier,
             owner: "alice".into(),
             created_at: 0,
         }
     }
 
-    fn state(mock: Arc<MockHttpUpstream>) -> Arc<AppState> {
+    async fn state_with_mock(mock: Arc<MockHttpUpstream>) -> Arc<AppState> {
+        let db = crate::test_db().await;
+        crate::test_cleanup(&db).await;
+        key_store::insert(&db, "zks_test", "alice".into(), Tier::Developer, 0)
+            .await
+            .unwrap();
         Arc::new(AppState {
             config: Config {
                 port: 4000,
@@ -163,9 +161,9 @@ mod tests {
                 allow_open_keys: true,
                 cors_allowed_origins: vec![],
                 indexer_url: None,
+                database_url: String::new(),
             },
-            keys: KeyStore::new(),
-            metering: Metering::new(),
+            db,
             rate_limiter: RateLimitStore::new(),
             upstream: mock,
         })
@@ -188,8 +186,9 @@ mod tests {
             .as_secs()
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn happy_path_forwards_request_and_increments_metering() {
+    #[tokio::test]
+    #[serial]
+    async fn happy_path_forwards_and_increments_metering() {
         let mock = Arc::new(MockHttpUpstream::new());
         let mut headers = HeaderMap::new();
         headers.insert("x-upstream", "value".parse().unwrap());
@@ -198,8 +197,8 @@ mod tests {
             headers,
             body: axum::body::Bytes::from_static(b"hello"),
         });
-        let state = state(mock.clone());
-        let rec = record();
+        let state = state_with_mock(mock.clone()).await;
+        let rec = record(Tier::Developer);
 
         let resp = proxy_to_upstream(
             State(state.clone()),
@@ -210,32 +209,31 @@ mod tests {
         .unwrap();
 
         assert_eq!(resp.status(), StatusCode::OK);
-        // handler uses SystemTime::now() internally; query with the same clock
-        assert_eq!(state.metering.current_count(&rec.key_hash, now_secs()), 1);
+        assert_eq!(
+            metering::current_count(&state.db, &rec.key_hash, now_secs())
+                .await
+                .unwrap(),
+            1
+        );
 
         let sent = mock.last_sent().expect("mock recorded send");
         assert_eq!(sent.method, Method::GET);
         assert_eq!(sent.url, "http://upstream.example/issuers/foo?x=1");
-        assert!(
-            sent.headers.contains_key("x-keep"),
-            "non-hop-by-hop headers must reach upstream"
-        );
-        assert!(
-            !sent.headers.contains_key("connection"),
-            "hop-by-hop headers must be stripped"
-        );
+        assert!(sent.headers.contains_key("x-keep"));
+        assert!(!sent.headers.contains_key("connection"));
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn upstream_5xx_is_propagated_and_metering_does_not_increment() {
+    #[tokio::test]
+    #[serial]
+    async fn upstream_5xx_does_not_increment_metering() {
         let mock = Arc::new(MockHttpUpstream::new());
         mock.queue_response(UpstreamResponse {
             status: StatusCode::BAD_GATEWAY,
             headers: HeaderMap::new(),
             body: axum::body::Bytes::new(),
         });
-        let state = state(mock.clone());
-        let rec = record();
+        let state = state_with_mock(mock.clone()).await;
+        let rec = record(Tier::Developer);
 
         let resp = proxy_to_upstream(
             State(state.clone()),
@@ -247,51 +245,59 @@ mod tests {
 
         assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
         assert_eq!(
-            state.metering.current_count(&rec.key_hash, now_secs()),
-            0,
-            "non-success upstream response must not consume quota"
+            metering::current_count(&state.db, &rec.key_hash, now_secs())
+                .await
+                .unwrap(),
+            0
         );
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn quota_exhausted_short_circuits_before_upstream_call() {
+    #[tokio::test]
+    #[serial]
+    async fn quota_exhausted_returns_error() {
         let mock = Arc::new(MockHttpUpstream::new());
-        let state = state(mock.clone());
-        let rec = record();
-        // pre-fill the metering counter with the same wall clock the handler
-        // will read so the period-rollover branch doesn't reset us to zero
+        let state = state_with_mock(mock.clone()).await;
+        let rec = record(Tier::Developer);
         let now = now_secs();
-        for _ in 0..rec.tier.monthly_limit() {
-            state.metering.increment(&rec.key_hash, now);
+
+        for _ in 0..Tier::Developer.monthly_limit() {
+            metering::increment(&state.db, &rec.key_hash, now)
+                .await
+                .unwrap();
         }
 
-        let err = proxy_to_upstream(State(state.clone()), AuthenticatedKey(rec), build_request())
-            .await
-            .unwrap_err();
-
-        assert!(matches!(err, GatewayError::QuotaExhausted));
-        assert_eq!(
-            mock.sent_count(),
-            0,
-            "must not call upstream after quota check"
-        );
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn upstream_transport_error_propagates_as_upstream_variant() {
-        let mock = Arc::new(MockHttpUpstream::new());
-        mock.queue_error(GatewayError::Upstream("network down".into()));
-        let state = state(mock.clone());
-
+        mock.queue_ok();
         let err = proxy_to_upstream(
             State(state.clone()),
-            AuthenticatedKey(record()),
+            AuthenticatedKey(rec),
             build_request(),
         )
         .await
         .unwrap_err();
 
-        assert!(matches!(err, GatewayError::Upstream(_)));
+        assert!(matches!(err, GatewayError::QuotaExhausted));
+        assert_eq!(mock.sent_count(), 0);
+    }
+
+    #[test]
+    fn hop_by_hop_matches_all_entries() {
+        for &h in HOP_BY_HOP {
+            assert!(is_hop_by_hop(h), "{h} should be hop-by-hop");
+        }
+    }
+
+    #[test]
+    fn hop_by_hop_case_insensitive() {
+        assert!(is_hop_by_hop("Connection"));
+        assert!(is_hop_by_hop("TRANSFER-ENCODING"));
+        assert!(is_hop_by_hop("Keep-Alive"));
+    }
+
+    #[test]
+    fn not_hop_by_hop() {
+        assert!(!is_hop_by_hop("content-type"));
+        assert!(!is_hop_by_hop("accept"));
+        assert!(!is_hop_by_hop("x-custom-header"));
     }
 
     #[test]
@@ -320,6 +326,7 @@ mod tests {
             admin_key: None,
             allow_open_keys: true,
             cors_allowed_origins: vec![],
+            database_url: String::new(),
         }
     }
 

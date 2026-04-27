@@ -13,6 +13,7 @@ pub struct Config {
     /// Origins allowed via CORS. Empty = CORS disabled (browser callers blocked).
     /// Set `GATEWAY_CORS_ALLOWED_ORIGINS=https://app.example.com,http://localhost:3000`.
     pub cors_allowed_origins: Vec<String>,
+    pub database_url: String,
 }
 
 impl std::fmt::Debug for Config {
@@ -25,6 +26,7 @@ impl std::fmt::Debug for Config {
             .field("admin_key", &self.admin_key.as_ref().map(|_| "[REDACTED]"))
             .field("allow_open_keys", &self.allow_open_keys)
             .field("cors_allowed_origins", &self.cors_allowed_origins)
+            .field("database_url", &"[REDACTED]")
             .finish()
     }
 }
@@ -46,6 +48,7 @@ impl Config {
             cors_allowed_origins: read_var("GATEWAY_CORS_ALLOWED_ORIGINS")
                 .map(|v| parse_origins(&v))
                 .unwrap_or_default(),
+            database_url: read_var("GATEWAY_DATABASE_URL")?,
         })
     }
 }
@@ -100,9 +103,11 @@ mod tests {
             allow_open_keys: false,
             cors_allowed_origins: vec![],
             indexer_url: None,
+            database_url: "postgres://secret@localhost/db".into(),
         };
         let dbg = format!("{cfg:?}");
         assert!(!dbg.contains("my_admin_secret"));
+        assert!(!dbg.contains("postgres://secret"));
         assert!(dbg.contains("[REDACTED]"));
     }
 }

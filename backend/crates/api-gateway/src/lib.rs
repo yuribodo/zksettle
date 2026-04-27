@@ -4,12 +4,14 @@ use std::time::Duration;
 use axum::http::{HeaderValue, Method};
 use axum::routing::{any, delete, get};
 use axum::Router;
+use sea_orm::DatabaseConnection;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing::warn;
 
 pub mod auth;
 pub mod config;
+pub mod entity;
 pub mod error;
 pub mod key_store;
 pub mod metering;
@@ -19,15 +21,12 @@ pub mod routes;
 pub mod upstream;
 
 use config::Config;
-use key_store::KeyStore;
-use metering::Metering;
 use rate_limit::RateLimitStore;
 use upstream::HttpUpstream;
 
 pub struct AppState {
     pub config: Config,
-    pub keys: KeyStore,
-    pub metering: Metering,
+    pub db: DatabaseConnection,
     pub rate_limiter: RateLimitStore,
     pub upstream: Arc<dyn HttpUpstream>,
 }
@@ -89,7 +88,21 @@ fn build_cors_layer(allowed_origins: &[String]) -> CorsLayer {
 }
 
 #[cfg(test)]
-pub fn test_state() -> Arc<AppState> {
+pub async fn test_db() -> DatabaseConnection {
+    let url = std::env::var("TEST_DATABASE_URL")
+        .unwrap_or_else(|_| "postgres://zksettle:zksettle_dev@localhost:5432/zksettle_gateway_test".into());
+    config::db::connect_and_migrate(&url).await.expect("test DB connect")
+}
+
+#[cfg(test)]
+pub async fn test_cleanup(db: &DatabaseConnection) {
+    use sea_orm::EntityTrait;
+    entity::api_key::Entity::delete_many().exec(db).await.unwrap();
+}
+
+#[cfg(test)]
+pub async fn test_state() -> Arc<AppState> {
+    let db = test_db().await;
     let config = Config {
         port: 4000,
         upstream_url: "http://localhost:0".into(),
@@ -98,19 +111,19 @@ pub fn test_state() -> Arc<AppState> {
         allow_open_keys: true,
         cors_allowed_origins: vec![],
         indexer_url: None,
+        database_url: String::new(),
     };
     Arc::new(AppState {
         config,
-        keys: KeyStore::new(),
-        metering: Metering::new(),
+        db,
         rate_limiter: RateLimitStore::new(),
         upstream: Arc::new(upstream::ReqwestUpstream::new(reqwest::Client::new())),
     })
 }
 
 #[cfg(test)]
-pub fn test_app() -> Router {
-    build_router(test_state())
+pub async fn test_app() -> Router {
+    build_router(test_state().await)
 }
 
 #[cfg(test)]
@@ -118,9 +131,11 @@ mod tests {
     use super::*;
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
+    use serial_test::serial;
     use tower::ServiceExt;
 
-    fn app_with_origins(origins: Vec<&str>) -> Router {
+    async fn app_with_origins(origins: Vec<&str>) -> Router {
+        let db = test_db().await;
         let config = Config {
             port: 4000,
             upstream_url: "http://localhost:0".into(),
@@ -129,11 +144,11 @@ mod tests {
             allow_open_keys: true,
             cors_allowed_origins: origins.into_iter().map(String::from).collect(),
             indexer_url: None,
+            database_url: String::new(),
         };
         let state = Arc::new(AppState {
             config,
-            keys: KeyStore::new(),
-            metering: Metering::new(),
+            db,
             rate_limiter: RateLimitStore::new(),
             upstream: Arc::new(upstream::ReqwestUpstream::new(reqwest::Client::new())),
         });
@@ -141,8 +156,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn cors_preflight_allowed_origin_returns_200() {
-        let app = app_with_origins(vec!["http://localhost:3000"]);
+        let app = app_with_origins(vec!["http://localhost:3000"]).await;
         let resp = app
             .oneshot(
                 Request::builder()
@@ -164,8 +180,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn cors_preflight_disallowed_origin_blocked() {
-        let app = app_with_origins(vec!["http://localhost:3000"]);
+        let app = app_with_origins(vec!["http://localhost:3000"]).await;
         let resp = app
             .oneshot(
                 Request::builder()
@@ -186,8 +203,9 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn cors_empty_origins_no_allow_header() {
-        let app = app_with_origins(vec![]);
+        let app = app_with_origins(vec![]).await;
         let resp = app
             .oneshot(
                 Request::builder()
