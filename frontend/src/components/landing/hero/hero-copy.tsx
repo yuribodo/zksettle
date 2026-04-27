@@ -156,9 +156,9 @@ export function HeroCopy() {
       id="hero"
       aria-labelledby="hero-heading"
       ref={heroRef}
-      className="relative isolate"
+      className="relative isolate bg-ink md:bg-transparent"
     >
-      <div className="relative mx-auto flex min-h-[calc(100vh-56px)] w-full max-w-7xl flex-col items-center justify-center px-5 py-24 md:px-8">
+      <div className="relative mx-auto flex min-h-[calc(100dvh-56px)] w-full max-w-7xl flex-col items-center justify-center px-5 py-24 md:px-8">
         <p
           data-hero-eyebrow
           className="mb-8 font-mono text-xs leading-none uppercase tracking-[0.18em] text-white/60 md:mb-10"
