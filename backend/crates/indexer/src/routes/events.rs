@@ -4,7 +4,7 @@ use axum::extract::{Query, State};
 use axum::Json;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
+use sea_orm::{ColumnTrait, Condition, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use serde::{Deserialize, Serialize};
 
 use crate::entity::event::{Column, Entity as EventEntity, Model as EventModel};
@@ -27,18 +27,23 @@ pub struct ListEventsResponse {
     pub next_cursor: Option<String>,
 }
 
-fn encode_cursor(id: i32) -> String {
-    URL_SAFE_NO_PAD.encode(id.to_le_bytes())
+fn encode_cursor(slot: i64, id: i32) -> String {
+    let mut buf = [0u8; 12];
+    buf[..8].copy_from_slice(&slot.to_le_bytes());
+    buf[8..].copy_from_slice(&id.to_le_bytes());
+    URL_SAFE_NO_PAD.encode(buf)
 }
 
-fn decode_cursor(cursor: &str) -> Result<i32, IndexerError> {
+fn decode_cursor(cursor: &str) -> Result<(i64, i32), IndexerError> {
     let bytes = URL_SAFE_NO_PAD
         .decode(cursor)
         .map_err(|_| IndexerError::InvalidCursor)?;
-    let arr: [u8; 4] = bytes
-        .try_into()
-        .map_err(|_| IndexerError::InvalidCursor)?;
-    Ok(i32::from_le_bytes(arr))
+    if bytes.len() != 12 {
+        return Err(IndexerError::InvalidCursor);
+    }
+    let slot = i64::from_le_bytes(bytes[..8].try_into().unwrap());
+    let id = i32::from_le_bytes(bytes[8..].try_into().unwrap());
+    Ok((slot, id))
 }
 
 pub async fn list_events(
@@ -47,11 +52,21 @@ pub async fn list_events(
 ) -> Result<Json<ListEventsResponse>, IndexerError> {
     let limit = params.limit.unwrap_or(50).clamp(1, 200);
 
-    let mut query = EventEntity::find().order_by_desc(Column::Id);
+    let mut query = EventEntity::find()
+        .order_by_desc(Column::Slot)
+        .order_by_desc(Column::Id);
 
     if let Some(ref cursor) = params.cursor {
-        let cursor_id = decode_cursor(cursor)?;
-        query = query.filter(Column::Id.lt(cursor_id));
+        let (cursor_slot, cursor_id) = decode_cursor(cursor)?;
+        query = query.filter(
+            Condition::any()
+                .add(Column::Slot.lt(cursor_slot))
+                .add(
+                    Condition::all()
+                        .add(Column::Slot.eq(cursor_slot))
+                        .add(Column::Id.lt(cursor_id)),
+                ),
+        );
     }
     if let Some(from_ts) = params.from_ts {
         query = query.filter(Column::Timestamp.gte(from_ts));
@@ -77,7 +92,7 @@ pub async fn list_events(
 
     let next_cursor = if rows.len() > limit as usize {
         let last = rows.pop().unwrap();
-        Some(encode_cursor(last.id))
+        Some(encode_cursor(last.slot, last.id))
     } else {
         None
     };
@@ -94,10 +109,10 @@ mod tests {
 
     #[test]
     fn cursor_roundtrip() {
-        let id = 42;
-        let encoded = encode_cursor(id);
-        let decoded = decode_cursor(&encoded).unwrap();
-        assert_eq!(decoded, id);
+        let encoded = encode_cursor(500, 42);
+        let (slot, id) = decode_cursor(&encoded).unwrap();
+        assert_eq!(slot, 500);
+        assert_eq!(id, 42);
     }
 
     #[test]
@@ -106,10 +121,18 @@ mod tests {
     }
 
     #[test]
+    fn cursor_wrong_length_returns_error() {
+        let short = URL_SAFE_NO_PAD.encode([0u8; 4]);
+        assert!(decode_cursor(&short).is_err());
+    }
+
+    #[test]
     fn cursor_roundtrip_edge_values() {
-        for id in [0, 1, i32::MAX, -1] {
-            let encoded = encode_cursor(id);
-            assert_eq!(decode_cursor(&encoded).unwrap(), id);
+        for (slot, id) in [(0, 0), (1, 1), (i64::MAX, i32::MAX), (-1, -1)] {
+            let encoded = encode_cursor(slot, id);
+            let (s, i) = decode_cursor(&encoded).unwrap();
+            assert_eq!(s, slot);
+            assert_eq!(i, id);
         }
     }
 }
@@ -201,8 +224,8 @@ mod integration_tests {
             .unwrap();
         let body: ListEventsResponse = parse_body(resp).await;
         assert_eq!(body.events.len(), 3);
-        assert!(body.events[0].id > body.events[1].id);
-        assert!(body.events[1].id > body.events[2].id);
+        assert!(body.events[0].slot >= body.events[1].slot);
+        assert!(body.events[1].slot >= body.events[2].slot);
     }
 
     #[tokio::test]
