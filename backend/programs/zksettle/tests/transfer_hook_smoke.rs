@@ -27,13 +27,13 @@ use zksettle::instructions::transfer_hook::{ExtraAccountMetaInput, MAX_HOOK_PROO
 use helpers::{
     boot_harness, close_hook_payload_ix, close_hook_payload_ix_with_pda,
     create_token2022_mint_with_hook_ixs, default_light_args, execute_hook_ix, extra_meta_pda,
-    hook_payload_pda, init_extra_meta_ix, nonzero_nullifier, registered_issuer,
+    hook_payload_pda, init_extra_meta_ix, initialized_tree, nonzero_nullifier, registered_issuer,
     set_hook_payload_ix, ANCHOR_ERROR_CODE_OFFSET, CONSTRAINT_SEEDS,
 };
 
 async fn stage_default_payload(
-    rpc: &mut light_program_test::ProgramTestRpc,
-    authority: &impl Signer,
+    rpc: &mut light_program_test::LightProgramTest,
+    authority: &solana_keypair::Keypair,
     issuer_key: &Pubkey,
     proof_byte: u8,
     proof_len: usize,
@@ -376,22 +376,98 @@ async fn close_hook_payload_nonexistent_fails() {
 }
 
 #[tokio::test]
-#[ignore = "requires gnark fixture + bubblegum tree + Token-2022 mint infrastructure"]
-async fn transfer_hook_settles_and_blocks_replay() {
+async fn transfer_hook_wiring_up_to_gnark_boundary() {
+    use solana_keypair::Keypair;
+    use solana_signer::Signer;
+
+    let mut rpc = boot_harness().await;
+    let (authority, issuer_key, merkle_tree_kp) = initialized_tree(&mut rpc).await;
+
+    // Create Token-2022 mint with TransferHook extension
+    let mint_kp = Keypair::new();
+    let mint_ixs = create_token2022_mint_with_hook_ixs(&authority.pubkey(), &mint_kp.pubkey(), 6);
+    rpc.create_and_send_transaction(&mint_ixs, &authority.pubkey(), &[&authority, &mint_kp])
+        .await
+        .expect("create Token-2022 mint");
+
+    // init_extra_account_meta_list with a dummy entry
+    let meta = zksettle::instructions::transfer_hook::ExtraAccountMetaInput {
+        discriminator: 0,
+        address_config: authority.pubkey().to_bytes(),
+        is_signer: false,
+        is_writable: true,
+    };
+    rpc.create_and_send_transaction(
+        &[init_extra_meta_ix(&authority.pubkey(), &mint_kp.pubkey(), vec![meta])],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("init_extra_account_meta_list");
+
+    // Stage payload with dummy proof
+    let recipient = Pubkey::new_unique();
+    rpc.create_and_send_transaction(
+        &[set_hook_payload_ix(
+            &authority.pubkey(),
+            &issuer_key,
+            vec![0xaa; 256],
+            nonzero_nullifier(),
+            mint_kp.pubkey(),
+            10,
+            recipient,
+            500,
+            default_light_args(),
+        )],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("set_hook_payload");
+
+    // settle_hook with dummy proof → MalformedProof from verify_bundle
+    let (registry_key, _) = helpers::registry_pda();
+    let (tree_creator_key, _) = helpers::tree_creator_pda();
+    let tree_config_key =
+        zksettle::instructions::bubblegum_mint::tree_config_pda(&merkle_tree_kp.pubkey()).0;
+
+    let result = rpc
+        .create_and_send_transaction(
+            &[helpers::settle_hook_ix(
+                &authority.pubkey(),
+                &mint_kp.pubkey(),
+                &recipient,
+                &issuer_key,
+                &registry_key,
+                &merkle_tree_kp.pubkey(),
+                &tree_config_key,
+                &tree_creator_key,
+                500,
+            )],
+            &authority.pubkey(),
+            &[&authority],
+        )
+        .await;
+
+    // Expect MalformedProof — proves full wiring up to gnark boundary
+    assert_rpc_error(
+        result,
+        0,
+        ANCHOR_ERROR_CODE_OFFSET + zksettle::error::ZkSettleError::MalformedProof as u32,
+    )
+    .expect("expected MalformedProof at gnark verification boundary");
+}
+
+#[tokio::test]
+#[ignore = "un-ignore once gnark fixture passes on-chain verification"]
+async fn transfer_hook_full_e2e_with_gnark_proof() {
     let _rpc = boot_harness().await;
-    // Blocked on:
-    //   1. Bubblegum tree registry + merkle tree init (init_attestation_tree)
-    //   2. Token-2022 mint with TransferHook extension (create_token2022_mint_with_hook_ixs helper exists)
-    //   3. gnark proof fixture for (mint, epoch, recipient, amount)
-    //
-    // Partial test plan (once bubblegum infra lands):
-    //   - register_issuer, init_attestation_tree, create Token-2022 mint
-    //   - set_hook_payload with dummy proof
-    //   - call settle_hook → expect MalformedProof from verify_bundle
-    //   - proves full account wiring up to the gnark boundary
-    //
-    // Full test:
-    //   - load valid gnark proof fixture
-    //   - Token-2022 transferChecked triggers hook → asserts Light attestation + ProofSettled event
+    // Full e2e test plan:
+    //   - register_issuer with roots from circuits/Prover.toml
+    //   - init_attestation_tree
+    //   - create Token-2022 mint
+    //   - set_hook_payload with real gnark proof from fixture
+    //   - settle_hook → expect Ok(())
+    //   - verify ProofSettled event emitted
     //   - replay same payload → assert address-collision from Light CPI
 }

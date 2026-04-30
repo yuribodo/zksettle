@@ -30,6 +30,10 @@ test-all:
 test-one name:
     cd backend && cargo test --lib {{name}} -- --nocapture
 
+# Transfer hook smoke tests
+test-hook:
+    cd backend && cargo test --features light-tests --test transfer_hook_smoke -- --nocapture
+
 # ── Mutation Testing ────────────────────────────────────────────────
 
 # Mutation tests on well-covered modules only
@@ -74,6 +78,24 @@ fmt-check:
 fmt:
     cd backend && cargo fmt
 
+# ── Anchor ─────────────────────────────────────────────────────────
+
+# Anchor build (binary only, no IDL regen)
+anchor-build:
+    cd backend && anchor build --no-idl
+
+# Anchor build with IDL regeneration
+anchor-build-idl:
+    cd backend && anchor build
+
+# Anchor deploy to devnet
+anchor-deploy:
+    cd backend && anchor deploy --provider.cluster devnet --program-name zksettle
+
+# Anchor deploy to localnet
+anchor-deploy-local:
+    cd backend && anchor deploy --provider.cluster localnet --program-name zksettle
+
 # ── Circuit ─────────────────────────────────────────────────────────
 
 # Compile Noir circuit
@@ -83,6 +105,61 @@ circuit-build:
 # Run circuit tests
 circuit-test:
     cd circuits && nargo test
+
+# Generate gnark proof fixture from compiled circuit
+circuit-fixture:
+    ./scripts/generate-fixture.sh
+
+# Full circuit pipeline: compile → fixture
+circuit-all: circuit-build circuit-fixture
+
+# ── Docker ─────────────────────────────────────────────────────────
+
+# Start all services
+up:
+    docker compose up -d
+
+# Start all services with rebuild
+up-build:
+    docker compose up -d --build
+
+# Stop all services
+down:
+    docker compose down
+
+# Stop and remove volumes
+down-clean:
+    docker compose down -v
+
+# Show service logs (all or specific service)
+logs *service:
+    docker compose logs -f {{service}}
+
+# Show running services
+ps:
+    docker compose ps
+
+# Start only postgres
+db:
+    docker compose up -d postgres
+
+# Postgres shell
+db-shell:
+    docker compose exec postgres psql -U zksettle zksettle_gateway
+
+# Restart a specific service
+restart service:
+    docker compose restart {{service}}
+
+# ── Devnet ─────────────────────────────────────────────────────────
+
+# Run devnet hook setup script
+devnet-setup:
+    cd scripts/devnet-hook && npx ts-node setup.ts
+
+# Install devnet script deps
+devnet-install:
+    cd scripts/devnet-hook && npm install
 
 # ── Setup ───────────────────────────────────────────────────────────
 

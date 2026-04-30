@@ -33,6 +33,24 @@ pub async fn registered_issuer(rpc: &mut LightProgramTest) -> (Keypair, Pubkey) 
     (authority, issuer_key)
 }
 
+pub async fn initialized_tree(rpc: &mut LightProgramTest) -> (Keypair, Pubkey, Keypair) {
+    let (authority, issuer_key) = registered_issuer(rpc).await;
+    let merkle_tree_kp = Keypair::new();
+
+    rpc.create_and_send_transaction(
+        &[super::instructions::init_attestation_tree_ix(
+            &authority.pubkey(),
+            &merkle_tree_kp.pubkey(),
+        )],
+        &authority.pubkey(),
+        &[&authority, &merkle_tree_kp],
+    )
+    .await
+    .expect("init_attestation_tree should succeed");
+
+    (authority, issuer_key, merkle_tree_kp)
+}
+
 pub fn nonzero_nullifier() -> [u8; 32] {
     let mut n = [0u8; 32];
     n[0] = 1;
