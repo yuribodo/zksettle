@@ -1,6 +1,7 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use thiserror::Error;
+use tracing::error;
 
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -32,6 +33,12 @@ pub enum IndexerError {
     #[error("configuration error: {0}")]
     Config(String),
 
+    #[error("database error: {0}")]
+    Database(String),
+
+    #[error("invalid cursor")]
+    InvalidCursor,
+
     #[error("unauthorized")]
     Unauthorized,
 }
@@ -40,7 +47,10 @@ impl IntoResponse for IndexerError {
     fn into_response(self) -> Response {
         let status = match &self {
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
-            Self::Config(_) | Self::DedupWrite(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Config(_) | Self::DedupWrite(_) | Self::Database(_) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+            Self::InvalidCursor => StatusCode::BAD_REQUEST,
             Self::IrysUpload(_) => StatusCode::BAD_GATEWAY,
             Self::Base64Decode(_)
             | Self::BorshDeserialize(_)
@@ -48,7 +58,22 @@ impl IntoResponse for IndexerError {
             | Self::MissingEvents => StatusCode::BAD_REQUEST,
             Self::NoProofSettledEvent | Self::DuplicateNullifier => StatusCode::OK,
         };
-        (status, self.to_string()).into_response()
+        let message = match &self {
+            Self::Database(detail) => {
+                error!(error = %detail, "database error");
+                "internal server error".to_owned()
+            }
+            Self::Config(detail) => {
+                error!(error = %detail, "configuration error");
+                "internal server error".to_owned()
+            }
+            Self::DedupWrite(detail) => {
+                error!(error = %detail, "dedup write error");
+                "internal server error".to_owned()
+            }
+            other => other.to_string(),
+        };
+        (status, message).into_response()
     }
 }
 
@@ -72,5 +97,7 @@ mod tests {
         assert_eq!(status_of(IndexerError::DiscriminatorMismatch), StatusCode::BAD_REQUEST);
         assert_eq!(status_of(IndexerError::NoProofSettledEvent), StatusCode::OK);
         assert_eq!(status_of(IndexerError::DuplicateNullifier), StatusCode::OK);
+        assert_eq!(status_of(IndexerError::Database("x".into())), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(status_of(IndexerError::InvalidCursor), StatusCode::BAD_REQUEST);
     }
 }
