@@ -1,0 +1,8 @@
+[package]
+name = "indexer-migration"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+sea-orm-migration = { version = "1", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
