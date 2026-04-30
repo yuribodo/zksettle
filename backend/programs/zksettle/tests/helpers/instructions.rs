@@ -4,10 +4,12 @@ use solana_instruction::{AccountMeta, Instruction};
 use spl_discriminator::SplDiscriminate;
 
 use zksettle::instruction::{
-    CloseHookPayload as ClosePayloadIx, InitExtraAccountMetaList as InitMetaIx,
-    RegisterIssuer as RegisterIssuerIx, SetHookPayload as SetPayloadIx,
+    CloseHookPayload as ClosePayloadIx, InitAttestationTree as InitTreeIx,
+    InitExtraAccountMetaList as InitMetaIx, RegisterIssuer as RegisterIssuerIx,
+    SetHookPayload as SetPayloadIx, SettleHook as SettleHookIx,
     UpdateIssuerRoot as UpdateIssuerRootIx,
 };
+use zksettle::instructions::bubblegum_mint::{MPL_BUBBLEGUM_ID, NOOP_PROGRAM_ID};
 use zksettle::instructions::transfer_hook::{
     ExtraAccountMetaInput, StagedLightArgs, EXTRA_ACCOUNT_META_LIST_SEED, HOOK_PAYLOAD_SEED,
 };
@@ -233,5 +235,76 @@ pub fn default_light_args() -> StagedLightArgs {
         address_queue_index: 0,
         address_root_index: 0,
         output_state_tree_index: 0,
+    }
+}
+
+pub fn registry_pda() -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[b"bubblegum-registry"], &zksettle::ID)
+}
+
+pub fn tree_creator_pda() -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[b"bubblegum-tree-creator"], &zksettle::ID)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn settle_hook_ix(
+    authority: &Pubkey,
+    mint: &Pubkey,
+    destination: &Pubkey,
+    issuer: &Pubkey,
+    registry: &Pubkey,
+    merkle_tree: &Pubkey,
+    tree_config: &Pubkey,
+    tree_creator: &Pubkey,
+    amount: u64,
+) -> Instruction {
+    let (payload_pda, _) = hook_payload_pda(authority);
+
+    Instruction {
+        program_id: zksettle::ID,
+        accounts: vec![
+            AccountMeta::new(*authority, true),
+            AccountMeta::new_readonly(*mint, false),
+            AccountMeta::new_readonly(*destination, false),
+            AccountMeta::new(payload_pda, false),
+            AccountMeta::new_readonly(*destination, false), // leaf_owner == recipient
+            AccountMeta::new_readonly(*issuer, false),
+            AccountMeta::new_readonly(*registry, false),
+            AccountMeta::new(*merkle_tree, false),
+            AccountMeta::new(*tree_config, false),
+            AccountMeta::new_readonly(*tree_creator, false),
+            AccountMeta::new_readonly(MPL_BUBBLEGUM_ID, false),
+            AccountMeta::new_readonly(spl_account_compression::ID, false),
+            AccountMeta::new_readonly(NOOP_PROGRAM_ID, false),
+            AccountMeta::new_readonly(system_program::ID, false),
+        ],
+        data: SettleHookIx { amount }.data(),
+    }
+}
+
+pub fn init_attestation_tree_ix(
+    authority: &Pubkey,
+    merkle_tree: &Pubkey,
+) -> Instruction {
+    let issuer = issuer_pda(authority);
+    let (registry, _) = registry_pda();
+    let (tree_config, _) = zksettle::instructions::bubblegum_mint::tree_config_pda(merkle_tree);
+    let (tree_creator, _) = tree_creator_pda();
+
+    Instruction {
+        program_id: zksettle::ID,
+        accounts: vec![
+            AccountMeta::new(*authority, true),
+            AccountMeta::new_readonly(issuer, false),
+            AccountMeta::new(registry, false),
+            AccountMeta::new(*merkle_tree, true),
+            AccountMeta::new(tree_config, false),
+            AccountMeta::new_readonly(tree_creator, false),
+            AccountMeta::new_readonly(MPL_BUBBLEGUM_ID, false),
+            AccountMeta::new_readonly(spl_account_compression::ID, false),
+            AccountMeta::new_readonly(NOOP_PROGRAM_ID, false),
+            AccountMeta::new_readonly(system_program::ID, false),
+        ],
+        data: InitTreeIx {}.data(),
     }
 }
