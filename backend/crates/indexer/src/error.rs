@@ -1,6 +1,7 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use thiserror::Error;
+use tracing::error;
 
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -57,7 +58,22 @@ impl IntoResponse for IndexerError {
             | Self::MissingEvents => StatusCode::BAD_REQUEST,
             Self::NoProofSettledEvent | Self::DuplicateNullifier => StatusCode::OK,
         };
-        (status, self.to_string()).into_response()
+        let message = match &self {
+            Self::Database(detail) => {
+                error!(error = %detail, "database error");
+                "internal server error".to_owned()
+            }
+            Self::Config(detail) => {
+                error!(error = %detail, "configuration error");
+                "internal server error".to_owned()
+            }
+            Self::DedupWrite(detail) => {
+                error!(error = %detail, "dedup write error");
+                "internal server error".to_owned()
+            }
+            other => other.to_string(),
+        };
+        (status, message).into_response()
     }
 }
 
