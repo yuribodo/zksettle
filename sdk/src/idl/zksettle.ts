@@ -2,7 +2,7 @@
  * Program IDL in camelCase format in order to be used in JS/TS.
  *
  * Note that this is only a type helper and is not the actual IDL. The original
- * IDL can be found at `target/idl/zksettle.json`.
+ * IDL can be found at `sdk/src/idl/zksettle.json`.
  */
 export type Zksettle = {
   "address": "AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo",
