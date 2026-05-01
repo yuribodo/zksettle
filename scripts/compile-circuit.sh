@@ -32,15 +32,11 @@ fi
 echo "Compiling Noir circuit..."
 cd "$CIRCUIT_DIR" && nargo compile
 
-echo "Copying artifact to frontend/public/circuits/..."
-mkdir -p "$FRONTEND_DST_DIR"
-cp "$ARTIFACT_SRC" "$FRONTEND_DST"
-
 PUBLIC_INPUT_COUNT=$(python3 -c "
 import json, sys
 abi = json.load(sys.stdin)['abi']
 print(sum(1 for p in abi['parameters'] if p['visibility'] == 'public'))
-" < "$FRONTEND_DST")
+" < "$ARTIFACT_SRC")
 
 echo "Artifact has $PUBLIC_INPUT_COUNT public inputs"
 
@@ -48,7 +44,12 @@ if [ "$PUBLIC_INPUT_COUNT" -ne "$EXPECTED_PUBLIC_INPUTS" ]; then
   echo "ERROR: expected $EXPECTED_PUBLIC_INPUTS public inputs, got $PUBLIC_INPUT_COUNT"
   echo "       Public-input layout is load-bearing — see circuits/src/main.nr"
   echo "       and backend/programs/zksettle/src/state/pubinputs.rs"
+  echo "       Refusing to publish a stale artifact to $FRONTEND_DST"
   exit 1
 fi
+
+echo "Copying artifact to frontend/public/circuits/..."
+mkdir -p "$FRONTEND_DST_DIR"
+cp "$ARTIFACT_SRC" "$FRONTEND_DST"
 
 echo "Done. Artifact at: ${FRONTEND_DST#$REPO_ROOT/}"
