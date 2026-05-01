@@ -57,7 +57,6 @@ pub async fn handle_webhook(
                             jurisdiction_root: Set(hex::encode(event.jurisdiction_root)),
                             mint: Set(bs58::encode(event.mint).into_string()),
                             recipient: Set(bs58::encode(event.recipient).into_string()),
-                            payer: Set(bs58::encode(event.payer).into_string()),
                             amount: Set(event.amount as i64),
                             epoch: Set(event.epoch as i64),
                         };
