@@ -66,5 +66,10 @@
     "typescript": "^5.7.3",
     "typescript-eslint": "^8",
     "vitest": "^2"
+  },
+  "pnpm": {
+    "overrides": {
+      "html-encoding-sniffer": "4.0.0"
+    }
   }
 }
