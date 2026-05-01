@@ -406,7 +406,7 @@ async fn transfer_hook_wiring_up_to_gnark_boundary() {
 }
 
 #[tokio::test]
-#[ignore = "un-ignore once gnark fixture exists at backend/tests/fixtures/proof_and_witness.bin"]
+#[ignore = "un-ignore once gnark fixture exists at tests/fixtures/proof_and_witness.bin"]
 async fn transfer_hook_full_e2e_with_gnark_proof() {
     use solana_keypair::Keypair;
     use solana_signer::Signer;
