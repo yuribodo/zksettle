@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Logo } from "@/components/icons/logo";
+import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 
@@ -61,6 +62,14 @@ export function Nav() {
               </li>
             ))}
           </ul>
+          <ConnectWalletButton
+            size="sm"
+            className={cn(
+              scrolled
+                ? "border-border-subtle bg-surface text-quill hover:border-border hover:bg-surface-deep hover:text-ink"
+                : "border-white/25 bg-white/10 text-white backdrop-blur-sm hover:bg-white/16 hover:text-white",
+            )}
+          />
           <Link
             href="#demo"
             className={cn(buttonVariants({ variant: "primary", size: "sm" }))}
