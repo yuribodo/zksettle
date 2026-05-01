@@ -26,7 +26,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
-import idlJson from "../../backend/target/idl/zksettle.json";
+import idlJson from "../../sdk/src/idl/zksettle.json";
 
 const ZKSETTLE_PROGRAM_ID = new PublicKey(
   "AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo"
