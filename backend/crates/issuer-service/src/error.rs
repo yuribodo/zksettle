@@ -31,6 +31,9 @@ pub enum ServiceError {
 
     #[error("persist error: {0}")]
     Persist(String),
+
+    #[error("unauthorized: {0}")]
+    Unauthorized(String),
 }
 
 impl From<zksettle_rpc::RpcError> for ServiceError {
@@ -62,6 +65,7 @@ impl IntoResponse for ServiceError {
             ServiceError::Tree(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
             ServiceError::Chain(_) => (StatusCode::BAD_GATEWAY, self.to_string()),
             ServiceError::Persist(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
+            ServiceError::Unauthorized(_) => (StatusCode::UNAUTHORIZED, self.to_string()),
         };
         let body = axum::Json(json!({ "error": msg }));
         (status, body).into_response()
@@ -87,6 +91,7 @@ mod tests {
         assert_eq!(status_of(ServiceError::WalletIsSanctioned), StatusCode::FORBIDDEN);
         assert_eq!(status_of(ServiceError::Chain("rpc fail".into())), StatusCode::BAD_GATEWAY);
         assert_eq!(status_of(ServiceError::Persist("io".into())), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(status_of(ServiceError::Unauthorized("bad sig".into())), StatusCode::UNAUTHORIZED);
     }
 
     #[test]
