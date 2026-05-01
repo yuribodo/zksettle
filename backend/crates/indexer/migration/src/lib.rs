@@ -2,6 +2,7 @@ pub use sea_orm_migration::prelude::*;
 
 mod m20260430_001_create_events_table;
 mod m20260430_002_add_slot_id_index;
+mod m20260501_001_drop_payer_column;
 
 pub struct Migrator;
 
@@ -11,6 +12,7 @@ impl MigratorTrait for Migrator {
         vec![
             Box::new(m20260430_001_create_events_table::Migration),
             Box::new(m20260430_002_add_slot_id_index::Migration),
+            Box::new(m20260501_001_drop_payer_column::Migration),
         ]
     }
 }

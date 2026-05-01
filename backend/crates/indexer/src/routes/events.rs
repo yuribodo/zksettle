@@ -177,7 +177,6 @@ mod integration_tests {
             jurisdiction_root: Set(format!("jr_{index}")),
             mint: Set("mint_a".to_string()),
             recipient: Set(recipient.to_string()),
-            payer: Set("payer_a".to_string()),
             amount: Set(1_000_000),
             epoch: Set(1),
         };

@@ -15,7 +15,6 @@ pub struct Model {
     pub jurisdiction_root: String,
     pub mint: String,
     pub recipient: String,
-    pub payer: String,
     pub amount: i64,
     pub epoch: i64,
 }
