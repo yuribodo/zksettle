@@ -96,6 +96,17 @@ anchor-deploy:
 anchor-deploy-local:
     cd backend && anchor deploy --provider.cluster localnet --program-name zksettle
 
+# Generate IDL and copy to SDK (requires anchor CLI)
+generate-idl:
+    ./scripts/generate-idl.sh
+
+# Copy IDL to SDK (skip anchor build, use existing target)
+copy-idl:
+    mkdir -p sdk/src/idl
+    cp backend/target/idl/zksettle.json sdk/src/idl/zksettle.json
+    cp backend/target/types/zksettle.ts sdk/src/idl/zksettle.ts
+    @python3 -c "import json,sys; n=len(json.load(sys.stdin)['instructions']); print(f'IDL has {n} instructions')" < sdk/src/idl/zksettle.json
+
 # ── Circuit ─────────────────────────────────────────────────────────
 
 # Compile Noir circuit
