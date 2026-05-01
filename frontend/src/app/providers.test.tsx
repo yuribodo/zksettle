@@ -8,6 +8,7 @@ const providerProps = {
   endpoint: undefined as string | undefined,
   wallets: undefined as unknown[] | undefined,
   autoConnect: undefined as boolean | undefined,
+  onError: undefined as ((error: unknown) => void) | undefined,
 };
 
 const adapterSpies = {
@@ -58,13 +59,16 @@ vi.mock("@solana/wallet-adapter-react", () => ({
     children,
     wallets,
     autoConnect,
+    onError,
   }: {
     children: React.ReactNode;
     wallets: unknown[];
     autoConnect: boolean;
+    onError?: (error: unknown) => void;
   }) => {
     providerProps.wallets = wallets;
     providerProps.autoConnect = autoConnect;
+    providerProps.onError = onError;
     return <div data-testid="wallet-provider">{children}</div>;
   },
 }));
@@ -88,6 +92,7 @@ describe("Providers", () => {
     providerProps.endpoint = undefined;
     providerProps.wallets = undefined;
     providerProps.autoConnect = undefined;
+    providerProps.onError = undefined;
     Object.values(adapterSpies).forEach((spy) => spy.mockClear());
   });
 
@@ -114,9 +119,27 @@ describe("Providers", () => {
 
     expect(providerProps.endpoint).toBe("https://rpc.zksettle.devnet");
     expect(providerProps.autoConnect).toBe(true);
+    expect(providerProps.onError).toBeTypeOf("function");
     expect(providerProps.wallets).toHaveLength(3);
     expect(adapterSpies.phantom).toHaveBeenCalledTimes(1);
     expect(adapterSpies.backpack).toHaveBeenCalledTimes(1);
     expect(adapterSpies.solflare).toHaveBeenCalledWith({ network: "devnet" });
+  });
+
+  it("logs wallet auto-connect errors through the WalletProvider onError handler", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const error = new Error("auto-connect failed");
+
+    render(
+      <Providers>
+        <div />
+      </Providers>,
+    );
+
+    providerProps.onError?.(error);
+
+    expect(consoleError).toHaveBeenCalledWith("Wallet auto-connect error", error);
+
+    consoleError.mockRestore();
   });
 });
