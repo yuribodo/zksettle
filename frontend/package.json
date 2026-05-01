@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",
+    "test:coverage": "vitest run --passWithNoTests --coverage",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -53,6 +54,7 @@
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
     "@types/three": "^0.184.0",
+    "@vitest/coverage-v8": "^2.1.9",
     "@vitest/ui": "^2.1.9",
     "eslint": "^9",
     "eslint-config-next": "^15",
