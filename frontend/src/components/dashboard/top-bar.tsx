@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Bell, Search } from "iconoir-react";
 
 import { MobileNavDrawer } from "@/components/dashboard/mobile-nav-drawer";
+import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { cn } from "@/lib/cn";
 
 export function TopBar() {
@@ -51,13 +52,13 @@ export function TopBar() {
             className="absolute top-2.5 right-2.5 size-1.5 rounded-full bg-forest"
           />
         </button>
-
-        <div
-          aria-hidden="true"
-          className="flex size-9 items-center justify-center rounded-full bg-surface-deep font-mono text-xs text-quill"
-        >
-          MR
-        </div>
+        <ConnectWalletButton
+          showAddress
+          size="sm"
+          variant="ghost"
+          className="min-w-[148px] border-border-subtle bg-surface/60 px-3 text-quill hover:border-border hover:bg-surface hover:text-ink"
+          addressClassName="hidden sm:inline-flex"
+        />
       </div>
     </header>
   );
