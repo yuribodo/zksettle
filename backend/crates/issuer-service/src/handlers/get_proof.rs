@@ -1,8 +1,9 @@
-use axum::extract::{Path, State};
+use axum::extract::State;
 use axum::Json;
 use serde::Serialize;
 
-use crate::convert::{fr_to_bytes_be, wallet_hex_to_bytes};
+use crate::auth::WalletAuth;
+use crate::convert::fr_to_bytes_be;
 use crate::error::ServiceError;
 use crate::state::SharedState;
 
@@ -17,14 +18,13 @@ pub struct MembershipProofResponse {
 
 pub async fn handler(
     State(state): State<SharedState>,
-    Path(wallet): Path<String>,
+    wallet_auth: WalletAuth,
 ) -> Result<Json<MembershipProofResponse>, ServiceError> {
-    let wallet_bytes = wallet_hex_to_bytes(&wallet)?;
     let st = state.read().await;
 
     let cred = st
         .credentials
-        .get(&wallet_bytes)
+        .get(&wallet_auth.wallet_bytes)
         .ok_or(ServiceError::WalletNotFound)?;
 
     if cred.revoked {
@@ -35,7 +35,7 @@ pub async fn handler(
     let root = st.membership_tree.root();
 
     Ok(Json(MembershipProofResponse {
-        wallet,
+        wallet: wallet_auth.wallet_hex,
         leaf_index: cred.leaf_index,
         path: proof
             .path
@@ -56,6 +56,7 @@ mod tests {
     use zksettle_crypto::{verify_merkle_proof, MerkleProof, MERKLE_DEPTH};
 
     use super::*;
+    use crate::auth::WalletAuth;
     use crate::convert::{bytes_be_to_fr, wallet_to_fr};
     use crate::state::{CredentialRecord, IssuerState};
 
@@ -76,6 +77,13 @@ mod tests {
         Arc::new(RwLock::new(st))
     }
 
+    fn auth(wallet: [u8; 32]) -> WalletAuth {
+        WalletAuth {
+            wallet_hex: format!("0x{}", hex::encode(wallet)),
+            wallet_bytes: wallet,
+        }
+    }
+
     fn parse_path(hex_path: &[String]) -> [Fr; MERKLE_DEPTH] {
         let mut out = [Fr::default(); MERKLE_DEPTH];
         for (i, h) in hex_path.iter().enumerate() {
@@ -93,7 +101,7 @@ mod tests {
         let state = state_with_wallet(wallet, false);
         let hex = format!("0x{}", hex::encode(wallet));
 
-        let resp = handler(State(state), Path(hex.clone())).await.unwrap().0;
+        let resp = handler(State(state), auth(wallet)).await.unwrap().0;
 
         let leaf = wallet_to_fr(&hex).unwrap();
         let path: [Fr; MERKLE_DEPTH] = parse_path(&resp.path);
@@ -114,7 +122,7 @@ mod tests {
     #[tokio::test]
     async fn missing_wallet_returns_wallet_not_found() {
         let state = Arc::new(RwLock::new(IssuerState::new()));
-        let err = handler(State(state), Path(format!("0x{}", hex::encode([1u8; 32]))))
+        let err = handler(State(state), auth([1u8; 32]))
             .await
             .unwrap_err();
         assert!(matches!(err, ServiceError::WalletNotFound));
@@ -124,8 +132,7 @@ mod tests {
     async fn revoked_wallet_returns_wallet_revoked() {
         let wallet = [4u8; 32];
         let state = state_with_wallet(wallet, true);
-        let hex = format!("0x{}", hex::encode(wallet));
-        let err = handler(State(state), Path(hex)).await.unwrap_err();
+        let err = handler(State(state), auth(wallet)).await.unwrap_err();
         assert!(matches!(err, ServiceError::WalletRevoked));
     }
 }

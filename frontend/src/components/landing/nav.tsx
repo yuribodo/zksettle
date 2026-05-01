@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Logo } from "@/components/icons/logo";
 import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { buttonVariants } from "@/components/ui/button";
+import { MobileNavDrawer } from "@/components/landing/mobile-nav-drawer";
 import { cn } from "@/lib/cn";
 
 const LINKS: ReadonlyArray<{ label: string; href: string }> = [
@@ -45,6 +46,7 @@ export function Nav() {
           <Logo size={28} variant={scrolled ? "canvas-ink" : "forest-surface"} />
         </Link>
         <div className="flex items-center gap-1 md:gap-4">
+          <MobileNavDrawer scrolled={scrolled} />
           <ul className="hidden items-center gap-1 md:flex">
             {LINKS.map((link) => (
               <li key={link.href}>

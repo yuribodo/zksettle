@@ -172,7 +172,7 @@ export function ActThreeEngine() {
       <div
         ref={curtainRef}
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-20 bg-canvas"
+        className="pointer-events-none absolute inset-0 z-20 bg-canvas opacity-0 md:opacity-100"
       />
 
       <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col justify-center gap-8 px-6 py-16 md:px-8 lg:gap-7 lg:py-12">

@@ -1,0 +1,1968 @@
+{
+  "address": "AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo",
+  "metadata": {
+    "name": "zksettle",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "ZKSettle thin-slice verifier"
+  },
+  "instructions": [
+    {
+      "name": "check_attestation",
+      "discriminator": [
+        60,
+        141,
+        192,
+        150,
+        177,
+        205,
+        44,
+        208
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "issuer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "issuer.authority",
+                "account": "Issuer"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "nullifier_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "validity_proof",
+          "type": {
+            "defined": {
+              "name": "ValidityProof"
+            }
+          }
+        },
+        {
+          "name": "attestation_meta",
+          "type": {
+            "defined": {
+              "name": "CompressedAccountMetaReadOnly"
+            }
+          }
+        },
+        {
+          "name": "compressed_attestation",
+          "type": {
+            "defined": {
+              "name": "CompressedAttestation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "close_hook_payload",
+      "discriminator": [
+        53,
+        220,
+        226,
+        75,
+        158,
+        12,
+        231,
+        141
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "hook_payload",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  111,
+                  107,
+                  45,
+                  112,
+                  97,
+                  121,
+                  108,
+                  111,
+                  97,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "init_attestation_tree",
+      "discriminator": [
+        122,
+        232,
+        208,
+        57,
+        120,
+        193,
+        9,
+        19
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "issuer"
+          ]
+        },
+        {
+          "name": "issuer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  98,
+                  98,
+                  108,
+                  101,
+                  103,
+                  117,
+                  109,
+                  45,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "merkle_tree",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "tree_config",
+          "writable": true
+        },
+        {
+          "name": "tree_creator",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  98,
+                  98,
+                  108,
+                  101,
+                  103,
+                  117,
+                  109,
+                  45,
+                  116,
+                  114,
+                  101,
+                  101,
+                  45,
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bubblegum_program",
+          "address": "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY"
+        },
+        {
+          "name": "compression_program",
+          "address": "cmtDvXumGCrqC1Age74AVPhSRVXJMd8PJS91L8KbNCK"
+        },
+        {
+          "name": "log_wrapper",
+          "address": "noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "init_extra_account_meta_list",
+      "discriminator": [
+        16,
+        12,
+        254,
+        251,
+        252,
+        103,
+        115,
+        58
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "issuer"
+          ]
+        },
+        {
+          "name": "issuer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "docs": [
+            "unpacks as Token-2022 Mint and asserts the TransferHook extension points to",
+            "this program. Kept as UncheckedAccount to avoid Anchor Mint deser overhead",
+            "on a one-time setup instruction."
+          ]
+        },
+        {
+          "name": "extra_account_meta_list",
+          "docs": [
+            "and `ExtraAccountMetaList::init`. PDA seed matches the SPL transfer-hook",
+            "interface convention so Token-2022 can resolve it."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  116,
+                  114,
+                  97,
+                  45,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "extras",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "ExtraAccountMetaInput"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "register_issuer",
+      "discriminator": [
+        145,
+        117,
+        52,
+        59,
+        189,
+        27,
+        127,
+        18
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "issuer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "merkle_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "sanctions_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "jurisdiction_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "set_hook_payload",
+      "discriminator": [
+        139,
+        145,
+        21,
+        87,
+        155,
+        138,
+        100,
+        137
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "issuer"
+          ]
+        },
+        {
+          "name": "issuer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "hook_payload",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  111,
+                  107,
+                  45,
+                  112,
+                  97,
+                  121,
+                  108,
+                  111,
+                  97,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "proof_and_witness",
+          "type": "bytes"
+        },
+        {
+          "name": "nullifier_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "epoch",
+          "type": "u64"
+        },
+        {
+          "name": "recipient",
+          "type": "pubkey"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "light_args",
+          "type": {
+            "defined": {
+              "name": "StagedLightArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "settle_hook",
+      "docs": [
+        "Direct-call settlement. Issuer authority signs and receives rent refund",
+        "from the closed payload. Not invoked by Token-2022."
+      ],
+      "discriminator": [
+        188,
+        162,
+        182,
+        6,
+        30,
+        19,
+        21,
+        139
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "destination_token",
+          "docs": [
+            "UncheckedAccount because in the direct-call path `recipient` may be a",
+            "wallet address (matching `leaf_owner`) rather than a token account."
+          ]
+        },
+        {
+          "name": "hook_payload",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  111,
+                  107,
+                  45,
+                  112,
+                  97,
+                  121,
+                  108,
+                  111,
+                  97,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "leaf_owner"
+        },
+        {
+          "name": "issuer"
+        },
+        {
+          "name": "registry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  98,
+                  98,
+                  108,
+                  101,
+                  103,
+                  117,
+                  109,
+                  45,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "merkle_tree",
+          "writable": true
+        },
+        {
+          "name": "tree_config",
+          "writable": true
+        },
+        {
+          "name": "tree_creator",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  98,
+                  98,
+                  108,
+                  101,
+                  103,
+                  117,
+                  109,
+                  45,
+                  116,
+                  114,
+                  101,
+                  101,
+                  45,
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bubblegum_program",
+          "address": "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY"
+        },
+        {
+          "name": "compression_program",
+          "address": "cmtDvXumGCrqC1Age74AVPhSRVXJMd8PJS91L8KbNCK"
+        },
+        {
+          "name": "log_wrapper",
+          "address": "noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "transfer_hook",
+      "docs": [
+        "Token-2022 transfer-hook `Execute` entry. Discriminator matches",
+        "`sha256(\"spl-transfer-hook-interface:execute\")[..8]` — value taken from",
+        "`spl_transfer_hook_interface::instruction::ExecuteInstruction::SPL_DISCRIMINATOR`.",
+        "",
+        "Replay barrier: Light compressed-address collision on",
+        "`[NULLIFIER_SEED, issuer, nullifier_hash]` (ADR-007 + ADR-020). The",
+        "payload PDA is NOT closed here — SPL passes `owner` as read-only",
+        "(`AccountMeta::new_readonly`), blocking `close = owner`. Authority",
+        "calls `close_hook_payload` after the transfer to reclaim rent and",
+        "unblock the next `set_hook_payload`."
+      ],
+      "discriminator": [
+        105,
+        37,
+        101,
+        197,
+        75,
+        251,
+        102,
+        26
+      ],
+      "accounts": [
+        {
+          "name": "source_token"
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "destination_token"
+        },
+        {
+          "name": "owner",
+          "docs": [
+            "`hook_payload` via PDA seed."
+          ]
+        },
+        {
+          "name": "extra_account_meta_list",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  120,
+                  116,
+                  114,
+                  97,
+                  45,
+                  97,
+                  99,
+                  99,
+                  111,
+                  117,
+                  110,
+                  116,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ]
+          }
+        },
+        {
+          "name": "hook_payload",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  111,
+                  107,
+                  45,
+                  112,
+                  97,
+                  121,
+                  108,
+                  111,
+                  97,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "issuer"
+        },
+        {
+          "name": "registry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  98,
+                  98,
+                  108,
+                  101,
+                  103,
+                  117,
+                  109,
+                  45,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bubblegum_program",
+          "address": "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "update_issuer_root",
+      "discriminator": [
+        145,
+        255,
+        165,
+        254,
+        96,
+        129,
+        245,
+        249
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "issuer"
+          ]
+        },
+        {
+          "name": "issuer",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "merkle_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "sanctions_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "jurisdiction_root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "verify_proof",
+      "discriminator": [
+        217,
+        211,
+        191,
+        110,
+        144,
+        13,
+        186,
+        98
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "issuer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "issuer.authority",
+                "account": "Issuer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "registry",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  98,
+                  98,
+                  108,
+                  101,
+                  103,
+                  117,
+                  109,
+                  45,
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "leaf_owner"
+        },
+        {
+          "name": "merkle_tree",
+          "writable": true
+        },
+        {
+          "name": "tree_config",
+          "writable": true
+        },
+        {
+          "name": "tree_creator",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  98,
+                  98,
+                  108,
+                  101,
+                  103,
+                  117,
+                  109,
+                  45,
+                  116,
+                  114,
+                  101,
+                  101,
+                  45,
+                  99,
+                  114,
+                  101,
+                  97,
+                  116,
+                  111,
+                  114
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bubblegum_program",
+          "address": "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY"
+        },
+        {
+          "name": "compression_program",
+          "address": "cmtDvXumGCrqC1Age74AVPhSRVXJMd8PJS91L8KbNCK"
+        },
+        {
+          "name": "log_wrapper",
+          "address": "noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "proof_and_witness",
+          "type": "bytes"
+        },
+        {
+          "name": "nullifier_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "epoch",
+          "type": "u64"
+        },
+        {
+          "name": "recipient",
+          "type": "pubkey"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "validity_proof",
+          "type": {
+            "defined": {
+              "name": "ValidityProof"
+            }
+          }
+        },
+        {
+          "name": "address_tree_info",
+          "type": {
+            "defined": {
+              "name": "PackedAddressTreeInfo"
+            }
+          }
+        },
+        {
+          "name": "output_state_tree_index",
+          "type": "u8"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "BubblegumTreeRegistry",
+      "discriminator": [
+        221,
+        135,
+        203,
+        66,
+        156,
+        191,
+        157,
+        71
+      ]
+    },
+    {
+      "name": "HookPayload",
+      "discriminator": [
+        121,
+        171,
+        24,
+        111,
+        118,
+        53,
+        110,
+        99
+      ]
+    },
+    {
+      "name": "Issuer",
+      "discriminator": [
+        216,
+        19,
+        83,
+        230,
+        108,
+        53,
+        80,
+        14
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AttestationChecked",
+      "discriminator": [
+        26,
+        167,
+        242,
+        7,
+        86,
+        79,
+        184,
+        184
+      ]
+    },
+    {
+      "name": "ProofSettled",
+      "discriminator": [
+        108,
+        6,
+        201,
+        20,
+        0,
+        169,
+        42,
+        135
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "MalformedProof",
+      "msg": "Proof or witness bytes are malformed"
+    },
+    {
+      "code": 6001,
+      "name": "ProofInvalid",
+      "msg": "Proof verification failed"
+    },
+    {
+      "code": 6002,
+      "name": "ZeroMerkleRoot",
+      "msg": "Merkle root must be non-zero"
+    },
+    {
+      "code": 6003,
+      "name": "UnauthorizedIssuer",
+      "msg": "Signer is not the issuer authority"
+    },
+    {
+      "code": 6004,
+      "name": "MerkleRootMismatch",
+      "msg": "Witness merkle_root does not match issuer PDA"
+    },
+    {
+      "code": 6005,
+      "name": "NullifierMismatch",
+      "msg": "Witness nullifier does not match instruction argument"
+    },
+    {
+      "code": 6006,
+      "name": "WitnessTooShort",
+      "msg": "Witness has fewer public inputs than required"
+    },
+    {
+      "code": 6007,
+      "name": "RootStale",
+      "msg": "Issuer merkle root is stale; re-publish before verifying"
+    },
+    {
+      "code": 6008,
+      "name": "ZeroNullifier",
+      "msg": "Nullifier hash must be non-zero"
+    },
+    {
+      "code": 6009,
+      "name": "MintMismatch",
+      "msg": "Witness mint limbs do not match instruction argument"
+    },
+    {
+      "code": 6010,
+      "name": "EpochMismatch",
+      "msg": "Witness epoch does not match instruction argument"
+    },
+    {
+      "code": 6011,
+      "name": "RecipientMismatch",
+      "msg": "Witness recipient limbs do not match instruction argument"
+    },
+    {
+      "code": 6012,
+      "name": "AmountMismatch",
+      "msg": "Witness amount does not match instruction argument"
+    },
+    {
+      "code": 6013,
+      "name": "EpochInFuture",
+      "msg": "Proof epoch is in the future relative to on-chain clock"
+    },
+    {
+      "code": 6014,
+      "name": "EpochStale",
+      "msg": "Proof epoch is older than allowed freshness window"
+    },
+    {
+      "code": 6015,
+      "name": "AttestationExpired",
+      "msg": "Attestation has expired beyond the validity window"
+    },
+    {
+      "code": 6016,
+      "name": "NegativeClock",
+      "msg": "On-chain clock returned a negative unix timestamp"
+    },
+    {
+      "code": 6017,
+      "name": "LightTreeLookupFailed",
+      "msg": "Light Protocol tree pubkey lookup failed"
+    },
+    {
+      "code": 6018,
+      "name": "LightAccountPackFailed",
+      "msg": "Packing a compressed account for Light CPI failed"
+    },
+    {
+      "code": 6019,
+      "name": "LightInvokeFailed",
+      "msg": "Light Protocol CPI invoke failed"
+    },
+    {
+      "code": 6020,
+      "name": "InvalidLightAddress",
+      "msg": "Compressed account address is invalid"
+    },
+    {
+      "code": 6021,
+      "name": "HookPayloadInvalid",
+      "msg": "Hook payload is malformed or too large"
+    },
+    {
+      "code": 6022,
+      "name": "InvalidTransferAmount",
+      "msg": "Transfer amount must be non-zero"
+    },
+    {
+      "code": 6023,
+      "name": "IssuerMismatch",
+      "msg": "Hook payload issuer does not match issuer account"
+    },
+    {
+      "code": 6024,
+      "name": "NotToken2022",
+      "msg": "Source token account is not owned by Token-2022"
+    },
+    {
+      "code": 6025,
+      "name": "NotInTransfer",
+      "msg": "Transfer hook invoked outside an active Token-2022 transfer"
+    },
+    {
+      "code": 6026,
+      "name": "OwnerMismatch",
+      "msg": "Source token account owner does not match hook owner"
+    },
+    {
+      "code": 6027,
+      "name": "SanctionsRootMismatch",
+      "msg": "Witness sanctions_root does not match issuer PDA"
+    },
+    {
+      "code": 6028,
+      "name": "JurisdictionRootMismatch",
+      "msg": "Witness jurisdiction_root does not match issuer PDA"
+    },
+    {
+      "code": 6029,
+      "name": "TimestampMismatch",
+      "msg": "Witness timestamp does not match on-chain clock"
+    },
+    {
+      "code": 6030,
+      "name": "ZeroSanctionsRoot",
+      "msg": "Sanctions root must be non-zero"
+    },
+    {
+      "code": 6031,
+      "name": "ZeroJurisdictionRoot",
+      "msg": "Jurisdiction root must be non-zero"
+    },
+    {
+      "code": 6032,
+      "name": "BubblegumTreeNotConfigured",
+      "msg": "Bubblegum attestation tree is not initialized (run init_attestation_tree)"
+    },
+    {
+      "code": 6033,
+      "name": "BubblegumTreeMismatch",
+      "msg": "Merkle tree account does not match global Bubblegum registry"
+    },
+    {
+      "code": 6034,
+      "name": "BubblegumCpiFailed",
+      "msg": "Bubblegum create_tree_config or mint CPI failed"
+    },
+    {
+      "code": 6035,
+      "name": "BubblegumTailInvalid",
+      "msg": "Trailing Bubblegum account count is invalid for remaining_accounts split"
+    },
+    {
+      "code": 6036,
+      "name": "BubblegumLeafOwnerMismatch",
+      "msg": "Bubblegum leaf owner does not match settlement recipient"
+    },
+    {
+      "code": 6037,
+      "name": "MintHookMismatch",
+      "msg": "Mint's TransferHook extension does not point to this program"
+    }
+  ],
+  "types": [
+    {
+      "name": "AttestationChecked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "nullifier_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BubblegumTreeRegistry",
+      "docs": [
+        "One-time registry: which concurrent merkle tree Bubblegum uses for compliance cNFTs."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "merkle_tree",
+            "type": "pubkey"
+          },
+          {
+            "name": "tree_creator_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CompressedAccountMetaReadOnly",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "tree_info",
+            "docs": [
+              "State Merkle tree context."
+            ],
+            "type": {
+              "defined": {
+                "name": "PackedStateTreeInfo"
+              }
+            }
+          },
+          {
+            "name": "address",
+            "docs": [
+              "Address."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "CompressedAttestation",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "nullifier_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "merkle_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "sanctions_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "jurisdiction_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "mint",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "recipient",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "epoch",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          },
+          {
+            "name": "payer",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "CompressedProof",
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "a",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "b",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          },
+          {
+            "name": "c",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "ExtraAccountMetaInput",
+      "docs": [
+        "Anchor-serializable mirror of `ExtraAccountMeta` (which lacks Anchor derives)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "discriminator",
+            "type": "u8"
+          },
+          {
+            "name": "address_config",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "is_signer",
+            "type": "bool"
+          },
+          {
+            "name": "is_writable",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HookPayload",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "nullifier_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "epoch",
+            "type": "u64"
+          },
+          {
+            "name": "light_args",
+            "type": {
+              "defined": {
+                "name": "StagedLightArgs"
+              }
+            }
+          },
+          {
+            "name": "proof_and_witness",
+            "type": "bytes"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Issuer",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "merkle_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "sanctions_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "jurisdiction_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "root_slot",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PackedAddressTreeInfo",
+      "docs": [
+        "Packed address tree info for instruction data.",
+        "Contains indices to address tree accounts and root index."
+      ],
+      "repr": {
+        "kind": "c"
+      },
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "address_merkle_tree_pubkey_index",
+            "type": "u8"
+          },
+          {
+            "name": "address_queue_pubkey_index",
+            "type": "u8"
+          },
+          {
+            "name": "root_index",
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PackedStateTreeInfo",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "root_index",
+            "type": "u16"
+          },
+          {
+            "name": "prove_by_index",
+            "type": "bool"
+          },
+          {
+            "name": "merkle_tree_pubkey_index",
+            "type": "u8"
+          },
+          {
+            "name": "queue_pubkey_index",
+            "type": "u8"
+          },
+          {
+            "name": "leaf_index",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProofSettled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "issuer",
+            "type": "pubkey"
+          },
+          {
+            "name": "nullifier_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "merkle_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "sanctions_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "jurisdiction_root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "recipient",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "epoch",
+            "type": "u64"
+          },
+          {
+            "name": "timestamp",
+            "type": "u64"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          },
+          {
+            "name": "payer",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StagedLightArgs",
+      "docs": [
+        "Pre-staged Light CPI arguments stored in the hook payload so the Token-2022",
+        "Execute entry — which only receives `amount: u64` as instruction data — can",
+        "still drive a Light CPI. Clients must include `set_hook_payload` and the",
+        "Token-2022 transfer in a single atomic transaction (same-tx staging),",
+        "otherwise the tree-root index and validity proof go stale."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bubblegum_tail",
+            "docs": [
+              "Trailing accounts on Token-2022 `Execute` (after Light metas) for Bubblegum `MintV1`",
+              "(`BUBBLEGUM_MINT_V1_ACCOUNT_COUNT`) or `0` when not minting in the hook path."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "proof_present",
+            "docs": [
+              "Whether a compressed proof is present; mirrors `ValidityProof(Option<_>)`."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "proof_bytes",
+            "docs": [
+              "Packed Groth16 proof bytes, only meaningful when `proof_present` is true."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          },
+          {
+            "name": "address_mt_index",
+            "docs": [
+              "Index into remaining_accounts of the address merkle tree."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "address_queue_index",
+            "docs": [
+              "Index into remaining_accounts of the address queue."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "address_root_index",
+            "docs": [
+              "Address-tree root index (for replayability vs. live root)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "output_state_tree_index",
+            "docs": [
+              "Output state-tree index passed to `LightAccount::new_init`."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ValidityProof",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "option": {
+              "defined": {
+                "name": "CompressedProof"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

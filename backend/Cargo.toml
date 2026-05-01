@@ -3,6 +3,7 @@ members = [
     "programs/*",
     "crates/*",
     "crates/api-gateway/migration",
+    "crates/indexer/migration",
 ]
 resolver = "2"
 

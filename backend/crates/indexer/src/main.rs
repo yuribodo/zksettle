@@ -43,10 +43,16 @@ async fn main() -> anyhow::Result<()> {
     )
     .context("opening dedup store")?;
 
+    info!("connecting to database and running migrations");
+    let db = indexer::config::db::connect_and_migrate(&config.database_url)
+        .await
+        .context("database setup")?;
+
     let state = Arc::new(AppState {
         config: config.clone(),
         irys,
         dedup,
+        db: Some(db),
     });
 
     let addr = format!("0.0.0.0:{}", config.port);

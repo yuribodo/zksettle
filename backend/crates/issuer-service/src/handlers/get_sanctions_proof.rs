@@ -1,8 +1,9 @@
-use axum::extract::{Path, State};
+use axum::extract::State;
 use axum::Json;
 use serde::Serialize;
 
-use crate::convert::{fr_to_bytes_be, wallet_hex_to_bytes, wallet_to_fr};
+use crate::auth::WalletAuth;
+use crate::convert::{fr_to_bytes_be, wallet_to_fr};
 use crate::error::ServiceError;
 use crate::state::SharedState;
 
@@ -17,13 +18,12 @@ pub struct SanctionsProofResponse {
 
 pub async fn handler(
     State(state): State<SharedState>,
-    Path(wallet): Path<String>,
+    wallet_auth: WalletAuth,
 ) -> Result<Json<SanctionsProofResponse>, ServiceError> {
-    let wallet_bytes = wallet_hex_to_bytes(&wallet)?;
-    let wallet_fr = wallet_to_fr(&wallet)?;
+    let wallet_fr = wallet_to_fr(&wallet_auth.wallet_hex)?;
     let st = state.read().await;
 
-    if let Some(cred) = st.credentials.get(&wallet_bytes) {
+    if let Some(cred) = st.credentials.get(&wallet_auth.wallet_bytes) {
         if cred.revoked {
             return Err(ServiceError::WalletRevoked);
         }
@@ -33,7 +33,7 @@ pub async fn handler(
     let root = st.sanctions_tree.root();
 
     Ok(Json(SanctionsProofResponse {
-        wallet,
+        wallet: wallet_auth.wallet_hex,
         path: proof
             .path
             .iter()
@@ -53,19 +53,27 @@ mod tests {
     use tokio::sync::RwLock;
 
     use super::*;
+    use crate::auth::WalletAuth;
     use crate::state::{CredentialRecord, IssuerState};
+
+    fn auth(wallet: [u8; 32]) -> WalletAuth {
+        WalletAuth {
+            wallet_hex: format!("0x{}", hex::encode(wallet)),
+            wallet_bytes: wallet,
+        }
+    }
 
     #[tokio::test]
     async fn clean_wallet_yields_zero_leaf_exclusion_proof() {
         let state = Arc::new(RwLock::new(IssuerState::new()));
-        let wallet = format!("0x{}", hex::encode([5u8; 32]));
+        let wallet = [5u8; 32];
+        let wallet_hex = format!("0x{}", hex::encode(wallet));
 
-        let resp = handler(State(state), Path(wallet.clone())).await.unwrap().0;
+        let resp = handler(State(state), auth(wallet)).await.unwrap().0;
 
-        // exclusion proof must show the wallet's slot holds Fr::ZERO
         let leaf_bytes = hex::decode(&resp.leaf_value).unwrap();
         assert_eq!(leaf_bytes, fr_to_bytes_be(&ark_bn254::Fr::ZERO));
-        assert_eq!(resp.wallet, wallet);
+        assert_eq!(resp.wallet, wallet_hex);
     }
 
     #[tokio::test]
@@ -82,20 +90,10 @@ mod tests {
                 revoked: true,
             },
         );
-        let hex = format!("0x{}", hex::encode(wallet));
 
-        let err = handler(State(Arc::new(RwLock::new(st))), Path(hex))
+        let err = handler(State(Arc::new(RwLock::new(st))), auth(wallet))
             .await
             .unwrap_err();
         assert!(matches!(err, ServiceError::WalletRevoked));
-    }
-
-    #[tokio::test]
-    async fn invalid_hex_returns_invalid_hex() {
-        let state = Arc::new(RwLock::new(IssuerState::new()));
-        let err = handler(State(state), Path("not-hex".into()))
-            .await
-            .unwrap_err();
-        assert!(matches!(err, ServiceError::InvalidHex(_)));
     }
 }

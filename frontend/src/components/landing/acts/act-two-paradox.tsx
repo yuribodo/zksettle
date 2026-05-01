@@ -194,7 +194,7 @@ export function ActTwoParadox() {
       </div>
 
       {/* ── Mobile: simple stacked layout ── */}
-      <div className="flex flex-col items-center gap-20 bg-canvas px-6 py-28 text-center md:hidden">
+      <div className="flex flex-col items-center gap-10 bg-canvas px-6 py-16 text-center md:hidden">
         <h2 className="font-display text-[2rem] font-normal leading-tight tracking-tight text-ink">
           $9 trillion moves in the open.
         </h2>

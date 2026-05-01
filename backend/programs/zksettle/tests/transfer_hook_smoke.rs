@@ -22,18 +22,18 @@ use light_program_test::{utils::assert::assert_rpc_error, Rpc};
 use solana_signer::Signer;
 
 use zksettle::error::ZkSettleError;
-use zksettle::instructions::transfer_hook::{ExtraAccountMetaInput, MAX_HOOK_PROOF_BYTES};
+use zksettle::instructions::transfer_hook::MAX_HOOK_PROOF_BYTES;
 
 use helpers::{
-    boot_harness, close_hook_payload_ix, close_hook_payload_ix_with_pda,
-    create_token2022_mint_with_hook_ixs, default_light_args, execute_hook_ix, extra_meta_pda,
-    hook_payload_pda, init_extra_meta_ix, nonzero_nullifier, registered_issuer,
-    set_hook_payload_ix, ANCHOR_ERROR_CODE_OFFSET, CONSTRAINT_SEEDS,
+    boot_harness, close_hook_payload_ix, close_hook_payload_ix_with_pda, default_light_args,
+    execute_hook_ix, extra_meta_pda, hook_payload_pda, initialized_tree, mint_with_extra_meta,
+    nonzero_nullifier, registered_issuer, set_hook_payload_ix, settle_pda_keys,
+    ANCHOR_ERROR_CODE_OFFSET, CONSTRAINT_SEEDS,
 };
 
 async fn stage_default_payload(
-    rpc: &mut light_program_test::ProgramTestRpc,
-    authority: &impl Signer,
+    rpc: &mut light_program_test::LightProgramTest,
+    authority: &solana_keypair::Keypair,
     issuer_key: &Pubkey,
     proof_byte: u8,
     proof_len: usize,
@@ -165,35 +165,10 @@ async fn set_hook_payload_rejects_zero_amount() {
 
 #[tokio::test]
 async fn init_extra_account_meta_list_succeeds() {
-    use solana_keypair::Keypair;
-
     let mut rpc = boot_harness().await;
     let (authority, _) = registered_issuer(&mut rpc).await;
 
-    let mint_kp = Keypair::new();
-    let mint_ixs = create_token2022_mint_with_hook_ixs(&authority.pubkey(), &mint_kp.pubkey(), 6);
-    rpc.create_and_send_transaction(&mint_ixs, &authority.pubkey(), &[&authority, &mint_kp])
-        .await
-        .expect("create Token-2022 mint should succeed");
-
-    let meta = ExtraAccountMetaInput {
-        discriminator: 0,
-        address_config: authority.pubkey().to_bytes(),
-        is_signer: false,
-        is_writable: true,
-    };
-
-    rpc.create_and_send_transaction(
-        &[init_extra_meta_ix(
-            &authority.pubkey(),
-            &mint_kp.pubkey(),
-            vec![meta],
-        )],
-        &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("init_extra_account_meta_list should succeed");
+    let mint_kp = mint_with_extra_meta(&mut rpc, &authority).await;
 
     let (meta_pda, _) = extra_meta_pda(&mint_kp.pubkey());
     let info = rpc
@@ -376,22 +351,201 @@ async fn close_hook_payload_nonexistent_fails() {
 }
 
 #[tokio::test]
-#[ignore = "requires gnark fixture + bubblegum tree + Token-2022 mint infrastructure"]
-async fn transfer_hook_settles_and_blocks_replay() {
-    let _rpc = boot_harness().await;
-    // Blocked on:
-    //   1. Bubblegum tree registry + merkle tree init (init_attestation_tree)
-    //   2. Token-2022 mint with TransferHook extension (create_token2022_mint_with_hook_ixs helper exists)
-    //   3. gnark proof fixture for (mint, epoch, recipient, amount)
-    //
-    // Partial test plan (once bubblegum infra lands):
-    //   - register_issuer, init_attestation_tree, create Token-2022 mint
-    //   - set_hook_payload with dummy proof
-    //   - call settle_hook → expect MalformedProof from verify_bundle
-    //   - proves full account wiring up to the gnark boundary
-    //
-    // Full test:
-    //   - load valid gnark proof fixture
-    //   - Token-2022 transferChecked triggers hook → asserts Light attestation + ProofSettled event
-    //   - replay same payload → assert address-collision from Light CPI
+async fn transfer_hook_wiring_up_to_gnark_boundary() {
+    let mut rpc = boot_harness().await;
+    let (authority, issuer_key, merkle_tree_kp) = initialized_tree(&mut rpc).await;
+
+    let mint_kp = mint_with_extra_meta(&mut rpc, &authority).await;
+
+    let recipient = Pubkey::new_unique();
+    rpc.create_and_send_transaction(
+        &[set_hook_payload_ix(
+            &authority.pubkey(),
+            &issuer_key,
+            vec![0xaa; 256],
+            nonzero_nullifier(),
+            mint_kp.pubkey(),
+            10,
+            recipient,
+            500,
+            default_light_args(),
+        )],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("set_hook_payload");
+
+    let (registry_key, tree_creator_key, tree_config_key) =
+        settle_pda_keys(&merkle_tree_kp.pubkey());
+
+    let result = rpc
+        .create_and_send_transaction(
+            &[helpers::settle_hook_ix(
+                &authority.pubkey(),
+                &mint_kp.pubkey(),
+                &recipient,
+                &issuer_key,
+                &registry_key,
+                &merkle_tree_kp.pubkey(),
+                &tree_config_key,
+                &tree_creator_key,
+                500,
+            )],
+            &authority.pubkey(),
+            &[&authority],
+        )
+        .await;
+
+    assert_rpc_error(
+        result,
+        0,
+        ANCHOR_ERROR_CODE_OFFSET + zksettle::error::ZkSettleError::MalformedProof as u32,
+    )
+    .expect("expected MalformedProof at gnark verification boundary");
+}
+
+#[tokio::test]
+#[ignore = "un-ignore once gnark fixture exists at tests/fixtures/proof_and_witness.bin"]
+async fn transfer_hook_full_e2e_with_gnark_proof() {
+    use solana_keypair::Keypair;
+    use solana_signer::Signer;
+
+    let fixture_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/proof_and_witness.bin");
+    let proof_and_witness = std::fs::read(&fixture_path).expect(
+        "fixture not found — generate with: just circuit-fixture",
+    );
+    assert!(proof_and_witness.len() > 268, "fixture too short to contain proof + 8-input witness");
+
+    let mut rpc = boot_harness().await;
+
+    // Roots must match the circuit's Prover.toml values.
+    // TODO: parse from circuits/Prover.toml when fixture generation is automated.
+    let merkle_root = [1u8; 32];
+    let sanctions_root = [10u8; 32];
+    let jurisdiction_root = [11u8; 32];
+
+    let authority = helpers::funded_authority(&mut rpc, 10_000_000_000).await;
+
+    rpc.create_and_send_transaction(
+        &[helpers::register_ix_full(
+            &authority.pubkey(),
+            merkle_root,
+            sanctions_root,
+            jurisdiction_root,
+        )],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("register_issuer");
+
+    let issuer_key = helpers::issuer_pda(&authority.pubkey());
+
+    // init_attestation_tree
+    let merkle_tree_kp = Keypair::new();
+    rpc.create_and_send_transaction(
+        &[helpers::init_attestation_tree_ix(
+            &authority.pubkey(),
+            &merkle_tree_kp.pubkey(),
+        )],
+        &authority.pubkey(),
+        &[&authority, &merkle_tree_kp],
+    )
+    .await
+    .expect("init_attestation_tree");
+
+    let mint_kp = mint_with_extra_meta(&mut rpc, &authority).await;
+
+    // Fixture inputs — must match circuits/Prover.toml
+    let nullifier = nonzero_nullifier();
+    let recipient = Pubkey::new_unique();
+    let amount: u64 = 500;
+    // TODO: derive from fixture's Prover.toml once automated
+    let epoch: u64 = 10;
+
+    // set_hook_payload with real proof
+    rpc.create_and_send_transaction(
+        &[set_hook_payload_ix(
+            &authority.pubkey(),
+            &issuer_key,
+            proof_and_witness.clone(),
+            nullifier,
+            mint_kp.pubkey(),
+            epoch,
+            recipient,
+            amount,
+            default_light_args(),
+        )],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("set_hook_payload with real proof");
+
+    let (registry_key, tree_creator_key, tree_config_key) =
+        settle_pda_keys(&merkle_tree_kp.pubkey());
+
+    let result = rpc
+        .create_and_send_transaction(
+            &[helpers::settle_hook_ix(
+                &authority.pubkey(),
+                &mint_kp.pubkey(),
+                &recipient,
+                &issuer_key,
+                &registry_key,
+                &merkle_tree_kp.pubkey(),
+                &tree_config_key,
+                &tree_creator_key,
+                amount,
+            )],
+            &authority.pubkey(),
+            &[&authority],
+        )
+        .await;
+
+    result.expect("settle_hook should succeed with valid gnark proof");
+
+    // Replay same nullifier → should fail with Light address collision
+    rpc.create_and_send_transaction(
+        &[set_hook_payload_ix(
+            &authority.pubkey(),
+            &issuer_key,
+            proof_and_witness,
+            nullifier,
+            mint_kp.pubkey(),
+            epoch,
+            recipient,
+            amount,
+            default_light_args(),
+        )],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("re-stage same payload");
+
+    let replay = rpc
+        .create_and_send_transaction(
+            &[helpers::settle_hook_ix(
+                &authority.pubkey(),
+                &mint_kp.pubkey(),
+                &recipient,
+                &issuer_key,
+                &registry_key,
+                &merkle_tree_kp.pubkey(),
+                &tree_config_key,
+                &tree_creator_key,
+                amount,
+            )],
+            &authority.pubkey(),
+            &[&authority],
+        )
+        .await;
+
+    assert!(
+        replay.is_err(),
+        "replay with same nullifier should fail (Light address collision)"
+    );
 }

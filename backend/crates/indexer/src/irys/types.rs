@@ -14,7 +14,6 @@ pub struct AttestationRecord {
     pub epoch: u64,
     pub timestamp: u64,
     pub slot: u64,
-    pub payer: String,
 }
 
 impl From<&ProofSettled> for AttestationRecord {
@@ -31,7 +30,6 @@ impl From<&ProofSettled> for AttestationRecord {
             epoch: e.epoch,
             timestamp: e.timestamp,
             slot: e.slot,
-            payer: bs58::encode(e.payer).into_string(),
         }
     }
 }
