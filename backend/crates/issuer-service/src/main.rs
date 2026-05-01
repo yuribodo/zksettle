@@ -19,7 +19,7 @@ use solana_sdk::signer::Signer;
 use tokio::sync::{watch, RwLock};
 use zksettle_rpc::{RealSolanaRpc, SolanaRpc};
 
-use auth::ApiToken;
+use auth::{AllowUnauthenticated, ApiToken};
 use config::Config;
 use state::{IssuerState, PublishLock};
 
@@ -172,6 +172,7 @@ async fn main() {
         .layer(Extension(ProgramId(program_id)))
         .layer(Extension(publish_lock))
         .layer(Extension(StatePath(cfg.state_path)))
+        .layer(Extension(AllowUnauthenticated(allow_unauth)))
         .with_state(shared);
 
     let listener = tokio::net::TcpListener::bind(cfg.listen_addr).await.unwrap();

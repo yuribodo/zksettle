@@ -83,13 +83,13 @@ export function MarketCell({
             Inner div has overflow-hidden so content clips during animation.
           */}
           <div
-            className="mt-2 grid grid-rows-[0fr] opacity-0 transition-[grid-template-rows,opacity] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:grid-rows-[1fr] group-hover:opacity-100"
+            className="mt-2 grid grid-rows-[1fr] opacity-100 transition-[grid-template-rows,opacity] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] md:grid-rows-[0fr] md:opacity-0 md:group-hover:grid-rows-[1fr] md:group-hover:opacity-100"
             style={{ transitionDelay: "110ms" }}
           >
-            <div className="translate-y-1 overflow-hidden transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:translate-y-0">
+            <div className="translate-y-0 overflow-hidden transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] md:translate-y-1 md:group-hover:translate-y-0">
               <div
                 aria-hidden
-                className="mb-2 h-px w-full origin-left scale-x-75 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] group-hover:scale-x-100"
+                className="mb-2 h-px w-full origin-left scale-x-100 transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] md:scale-x-75 md:group-hover:scale-x-100"
                 style={{
                   backgroundImage:
                     "repeating-linear-gradient(to right, color-mix(in srgb, var(--color-forest) 36%, transparent) 0 4px, transparent 4px 8px)",

@@ -42,6 +42,7 @@ pub struct InitAttestationTree<'info> {
     #[account(mut)]
     pub tree_config: UncheckedAccount<'info>,
 
+    /// CHECK: PDA signer for Bubblegum `CreateTreeConfig` CPI; seed-constrained.
     #[account(seeds = [BUBBLEGUM_TREE_CREATOR_SEED], bump)]
     pub tree_creator: AccountInfo<'info>,
 
@@ -53,6 +54,7 @@ pub struct InitAttestationTree<'info> {
     #[account(address = SPL_ACCOUNT_COMPRESSION_ID)]
     pub compression_program: UncheckedAccount<'info>,
 
+    /// CHECK: SPL noop program; address-constrained.
     #[account(address = NOOP_PROGRAM_ID)]
     pub log_wrapper: UncheckedAccount<'info>,
 

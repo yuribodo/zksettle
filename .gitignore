@@ -11,3 +11,8 @@ backend/programs/zksettle/src/generated_vk.rs
 .env.*
 !.env.example
 .superpowers/
+scripts/devnet-hook/devnet-state.json
+backend/tests/fixtures/
+sdk/dist/
+sdk/node_modules/
+sdk/package-lock.json

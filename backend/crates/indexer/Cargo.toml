@@ -36,8 +36,12 @@ moka = { version = "0.12", features = ["sync"] }
 rocksdb = "0.24"
 sha2 = "0.10"
 mutants = "0.0.3"
+sea-orm = { version = "1", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
+indexer-migration = { path = "migration" }
 
 [dev-dependencies]
 axum-test = "16"
+http-body-util = "0.1"
+serial_test = "3"
 tempfile = "3"
 tower = { version = "0.5", features = ["util"] }

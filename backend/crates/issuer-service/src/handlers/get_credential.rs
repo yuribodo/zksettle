@@ -1,18 +1,17 @@
-use axum::extract::{Path, State};
+use axum::extract::State;
 use axum::Json;
 
-use crate::convert::wallet_hex_to_bytes;
+use crate::auth::WalletAuth;
 use crate::error::ServiceError;
 use crate::state::{CredentialRecord, SharedState};
 
 pub async fn handler(
     State(state): State<SharedState>,
-    Path(wallet): Path<String>,
+    wallet_auth: WalletAuth,
 ) -> Result<Json<CredentialRecord>, ServiceError> {
-    let wallet_bytes = wallet_hex_to_bytes(&wallet)?;
     let st = state.read().await;
     st.credentials
-        .get(&wallet_bytes)
+        .get(&wallet_auth.wallet_bytes)
         .cloned()
         .map(Json)
         .ok_or(ServiceError::WalletNotFound)
@@ -42,13 +41,19 @@ mod tests {
         Arc::new(RwLock::new(st))
     }
 
+    fn auth(wallet: [u8; 32]) -> WalletAuth {
+        WalletAuth {
+            wallet_hex: format!("0x{}", hex::encode(wallet)),
+            wallet_bytes: wallet,
+        }
+    }
+
     #[tokio::test]
     async fn returns_credential_for_known_wallet() {
         let wallet = [7u8; 32];
         let state = state_with(wallet);
-        let hex = format!("0x{}", hex::encode(wallet));
 
-        let resp = handler(State(state), Path(hex)).await.unwrap();
+        let resp = handler(State(state), auth(wallet)).await.unwrap();
         assert_eq!(resp.0.wallet, wallet);
         assert_eq!(resp.0.jurisdiction, "US");
     }
@@ -56,18 +61,8 @@ mod tests {
     #[tokio::test]
     async fn missing_wallet_returns_wallet_not_found() {
         let state = state_with([7u8; 32]);
-        let other = format!("0x{}", hex::encode([99u8; 32]));
 
-        let err = handler(State(state), Path(other)).await.unwrap_err();
+        let err = handler(State(state), auth([99u8; 32])).await.unwrap_err();
         assert!(matches!(err, ServiceError::WalletNotFound));
-    }
-
-    #[tokio::test]
-    async fn invalid_hex_returns_invalid_hex() {
-        let state = state_with([7u8; 32]);
-        let err = handler(State(state), Path("not-hex".into()))
-            .await
-            .unwrap_err();
-        assert!(matches!(err, ServiceError::InvalidHex(_)));
     }
 }

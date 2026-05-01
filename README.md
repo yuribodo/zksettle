@@ -223,7 +223,7 @@ zksettle/
 
 ## Getting started
 
-> **Note:** Full development setup is published alongside the SDK release. The steps below are placeholders pending the Week 1 build.
+> **Note:** Full development setup is published alongside the SDK release. The steps below cover environment configuration and the minimum build pipeline; service-specific runbooks land with each milestone.
 
 ### Prerequisites
 
@@ -233,6 +233,32 @@ zksettle/
 - Node.js 20+ with pnpm
 - Noir (via `noirup`) + Sunspot compiler
 - Docker (for local PostgreSQL and Redis)
+
+### Local development setup
+
+ZKSettle ships per-package `.env.example` files that document every variable the services read at startup. Copy them before running anything:
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env.local
+```
+
+A combined `.env.example` at the repo root is also provided as a single-file overview of every service variable (gateway, indexer, issuer service, sanctions updater, testing).
+
+#### CORS — required for the browser to talk to the gateway
+
+The api-gateway enforces CORS via `GATEWAY_CORS_ALLOWED_ORIGINS` (see `backend/crates/api-gateway/src/lib.rs`). When this variable is unset or empty:
+
+- The gateway logs a warning at startup
+- Every browser request from the frontend is **silently blocked** — the network tab shows the request, but the response never reaches the JS code
+
+For local development the frontend runs at `http://localhost:3000` (or `:3001` if `:3000` is taken by the issuer service). Set the variable to include both:
+
+```env
+GATEWAY_CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+```
+
+The frontend's `NEXT_PUBLIC_API_BASE_URL` must point at the gateway (default `http://localhost:4000`), and that gateway origin must be reachable — opening the gateway URL in a browser tab is a quick smoke test.
 
 ### Clone and build
 

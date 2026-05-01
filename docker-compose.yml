@@ -9,6 +9,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./scripts/init-test-dbs.sql:/docker-entrypoint-initdb.d/10-test-dbs.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U zksettle"]
       interval: 5s
@@ -58,6 +59,10 @@ services:
       INDEXER_PORT: "3001"
       INDEXER_HELIUS_AUTH_TOKEN: "${INDEXER_HELIUS_AUTH_TOKEN:?set INDEXER_HELIUS_AUTH_TOKEN}"
       INDEXER_PROGRAM_ID: "${INDEXER_PROGRAM_ID:?set INDEXER_PROGRAM_ID}"
+      INDEXER_DATABASE_URL: "postgres://zksettle:zksettle_dev@postgres:5432/zksettle_gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - indexer_data:/data
 
