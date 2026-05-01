@@ -459,15 +459,173 @@ async fn transfer_hook_wiring_up_to_gnark_boundary() {
 }
 
 #[tokio::test]
-#[ignore = "un-ignore once gnark fixture passes on-chain verification"]
+#[ignore = "un-ignore once gnark fixture exists at backend/tests/fixtures/proof_and_witness.bin"]
 async fn transfer_hook_full_e2e_with_gnark_proof() {
-    let _rpc = boot_harness().await;
-    // Full e2e test plan:
-    //   - register_issuer with roots from circuits/Prover.toml
-    //   - init_attestation_tree
-    //   - create Token-2022 mint
-    //   - set_hook_payload with real gnark proof from fixture
-    //   - settle_hook → expect Ok(())
-    //   - verify ProofSettled event emitted
-    //   - replay same payload → assert address-collision from Light CPI
+    use solana_keypair::Keypair;
+    use solana_signer::Signer;
+
+    let fixture_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/proof_and_witness.bin");
+    let proof_and_witness = std::fs::read(&fixture_path).expect(
+        "fixture not found — generate with: just circuit-fixture",
+    );
+    assert!(proof_and_witness.len() > 268, "fixture too short to contain proof + 8-input witness");
+
+    let mut rpc = boot_harness().await;
+
+    // Roots must match the circuit's Prover.toml values.
+    // TODO: parse from circuits/Prover.toml when fixture generation is automated.
+    let merkle_root = [1u8; 32];
+    let sanctions_root = [10u8; 32];
+    let jurisdiction_root = [11u8; 32];
+
+    let authority = helpers::funded_authority(&mut rpc, 10_000_000_000).await;
+
+    rpc.create_and_send_transaction(
+        &[helpers::register_ix_full(
+            &authority.pubkey(),
+            merkle_root,
+            sanctions_root,
+            jurisdiction_root,
+        )],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("register_issuer");
+
+    let issuer_key = helpers::issuer_pda(&authority.pubkey());
+
+    // init_attestation_tree
+    let merkle_tree_kp = Keypair::new();
+    rpc.create_and_send_transaction(
+        &[helpers::init_attestation_tree_ix(
+            &authority.pubkey(),
+            &merkle_tree_kp.pubkey(),
+        )],
+        &authority.pubkey(),
+        &[&authority, &merkle_tree_kp],
+    )
+    .await
+    .expect("init_attestation_tree");
+
+    // Token-2022 mint
+    let mint_kp = Keypair::new();
+    let mint_ixs = create_token2022_mint_with_hook_ixs(&authority.pubkey(), &mint_kp.pubkey(), 6);
+    rpc.create_and_send_transaction(&mint_ixs, &authority.pubkey(), &[&authority, &mint_kp])
+        .await
+        .expect("create Token-2022 mint");
+
+    // init_extra_account_meta_list
+    let meta = zksettle::instructions::transfer_hook::ExtraAccountMetaInput {
+        discriminator: 0,
+        address_config: authority.pubkey().to_bytes(),
+        is_signer: false,
+        is_writable: true,
+    };
+    rpc.create_and_send_transaction(
+        &[init_extra_meta_ix(
+            &authority.pubkey(),
+            &mint_kp.pubkey(),
+            vec![meta],
+        )],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("init_extra_account_meta_list");
+
+    // Fixture inputs — must match circuits/Prover.toml
+    let nullifier = nonzero_nullifier();
+    let recipient = Pubkey::new_unique();
+    let amount: u64 = 500;
+    // TODO: derive from fixture's Prover.toml once automated
+    let epoch: u64 = 10;
+
+    // set_hook_payload with real proof
+    rpc.create_and_send_transaction(
+        &[set_hook_payload_ix(
+            &authority.pubkey(),
+            &issuer_key,
+            proof_and_witness.clone(),
+            nullifier,
+            mint_kp.pubkey(),
+            epoch,
+            recipient,
+            amount,
+            default_light_args(),
+        )],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("set_hook_payload with real proof");
+
+    // settle_hook → should succeed with valid proof
+    let (registry_key, _) = helpers::registry_pda();
+    let (tree_creator_key, _) = helpers::tree_creator_pda();
+    let tree_config_key =
+        zksettle::instructions::bubblegum_mint::tree_config_pda(&merkle_tree_kp.pubkey()).0;
+
+    let result = rpc
+        .create_and_send_transaction(
+            &[helpers::settle_hook_ix(
+                &authority.pubkey(),
+                &mint_kp.pubkey(),
+                &recipient,
+                &issuer_key,
+                &registry_key,
+                &merkle_tree_kp.pubkey(),
+                &tree_config_key,
+                &tree_creator_key,
+                amount,
+            )],
+            &authority.pubkey(),
+            &[&authority],
+        )
+        .await;
+
+    result.expect("settle_hook should succeed with valid gnark proof");
+
+    // Replay same nullifier → should fail with Light address collision
+    rpc.create_and_send_transaction(
+        &[set_hook_payload_ix(
+            &authority.pubkey(),
+            &issuer_key,
+            proof_and_witness,
+            nullifier,
+            mint_kp.pubkey(),
+            epoch,
+            recipient,
+            amount,
+            default_light_args(),
+        )],
+        &authority.pubkey(),
+        &[&authority],
+    )
+    .await
+    .expect("re-stage same payload");
+
+    let replay = rpc
+        .create_and_send_transaction(
+            &[helpers::settle_hook_ix(
+                &authority.pubkey(),
+                &mint_kp.pubkey(),
+                &recipient,
+                &issuer_key,
+                &registry_key,
+                &merkle_tree_kp.pubkey(),
+                &tree_config_key,
+                &tree_creator_key,
+                amount,
+            )],
+            &authority.pubkey(),
+            &[&authority],
+        )
+        .await;
+
+    assert!(
+        replay.is_err(),
+        "replay with same nullifier should fail (Light address collision)"
+    );
 }
