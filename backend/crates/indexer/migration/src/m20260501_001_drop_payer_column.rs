@@ -22,19 +22,9 @@ impl MigrationTrait for Migration {
             .await
     }
 
-    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager
-            .alter_table(
-                Table::alter()
-                    .table(Events::Table)
-                    .add_column(
-                        ColumnDef::new(Events::Payer)
-                            .text()
-                            .not_null()
-                            .default(""),
-                    )
-                    .to_owned(),
-            )
-            .await
+    async fn down(&self, _manager: &SchemaManager) -> Result<(), DbErr> {
+        Err(DbErr::Migration(
+            "irreversible: payer data was dropped".into(),
+        ))
     }
 }
