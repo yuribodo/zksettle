@@ -157,6 +157,10 @@ restart service:
 devnet-setup:
     cd scripts/devnet-hook && npx ts-node setup.ts
 
+# Run devnet transfer (set_hook_payload + settle_hook)
+devnet-transfer *args:
+    cd scripts/devnet-hook && npx ts-node transfer.ts {{args}}
+
 # Install devnet script deps
 devnet-install:
     cd scripts/devnet-hook && npm install
