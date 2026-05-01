@@ -93,7 +93,10 @@ function loadState(): DevnetState {
 
 function loadProofFixture(): Buffer {
   const fixturePath = process.env.PROOF_FIXTURE;
-  if (fixturePath && fs.existsSync(fixturePath)) {
+  if (fixturePath) {
+    if (!fs.existsSync(fixturePath)) {
+      throw new Error(`PROOF_FIXTURE not found: ${fixturePath}`);
+    }
     console.log(`Loading proof fixture from ${fixturePath}`);
     return fs.readFileSync(fixturePath);
   }
@@ -106,9 +109,18 @@ function parseArgs(): { amount: number; closeOnly: boolean } {
   let amount = 500;
   let closeOnly = false;
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--amount" && args[i + 1]) {
-      amount = parseInt(args[i + 1], 10);
+    if (args[i] === "--amount") {
+      const raw = args[i + 1];
+      if (!raw || raw.startsWith("--")) {
+        throw new Error("--amount requires a positive integer value");
+      }
+      const parsed = parseInt(raw, 10);
+      if (isNaN(parsed) || parsed <= 0) {
+        throw new Error("--amount must be a positive integer");
+      }
+      amount = parsed;
       i++;
+      continue;
     }
     if (args[i] === "--close-only") {
       closeOnly = true;
@@ -118,6 +130,14 @@ function parseArgs(): { amount: number; closeOnly: boolean } {
 }
 
 function currentEpoch(): number {
+  const override = process.env.PROOF_EPOCH;
+  if (override) {
+    const epoch = parseInt(override, 10);
+    if (isNaN(epoch) || epoch < 0) {
+      throw new Error("PROOF_EPOCH must be a non-negative integer");
+    }
+    return epoch;
+  }
   return Math.floor(Date.now() / 1000 / 86400);
 }
 
