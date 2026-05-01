@@ -4,7 +4,8 @@
   "private": true,
   "description": "Devnet wiring script for Token-2022 transfer hook end-to-end test",
   "scripts": {
-    "setup": "ts-node setup.ts"
+    "setup": "ts-node setup.ts",
+    "transfer": "ts-node transfer.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
