@@ -196,60 +196,11 @@ export function AttestationExplorerPanel() {
         />
       ) : null}
 
-      {/* Recent wallets */}
-      <section
-        aria-labelledby="recent-heading"
-        className="rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6"
-      >
-        <div className="flex items-baseline justify-between">
-          <span
-            id="recent-heading"
-            className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase"
-          >
-            Recent lookups (this browser)
-          </span>
-          <span className="font-mono text-xs text-muted">{recent.length} stored</span>
-        </div>
-
-        {recent.length === 0 ? (
-          <p className="mt-4 font-mono text-xs text-muted">
-            No lookups yet. The last 8 wallets you check will appear here.
-          </p>
-        ) : (
-          <ul className="mt-4 flex flex-col divide-y divide-border-subtle">
-            {recent.map((entry) => (
-              <li
-                key={entry.wallet}
-                className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
-              >
-                <button
-                  type="button"
-                  onClick={() => pickRecent(entry.wallet)}
-                  className="flex flex-1 items-center gap-3 text-left font-mono text-sm text-ink hover:text-forest focus-visible:rounded-[2px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
-                >
-                  <span>{truncateWallet(entry.wallet, 8, 8)}</span>
-                  <span className="font-mono text-[11px] text-muted">
-                    {new Date(entry.lastSeenAt).toLocaleString("en-US", {
-                      month: "short",
-                      day: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                </button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`Forget ${entry.wallet}`}
-                  onClick={() => forgetWallet(entry.wallet)}
-                >
-                  <Xmark aria-hidden="true" className="size-4" />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <RecentWalletsSection
+        recent={recent}
+        onPick={pickRecent}
+        onForget={forgetWallet}
+      />
     </div>
   );
 }
@@ -404,6 +355,72 @@ function ProofCard({
           </div>
         ) : null}
       </div>
+    </section>
+  );
+}
+
+function RecentWalletsSection({
+  recent,
+  onPick,
+  onForget,
+}: Readonly<{
+  recent: { wallet: string; lastSeenAt: number }[];
+  onPick: (wallet: string) => void;
+  onForget: (wallet: string) => void;
+}>) {
+  return (
+    <section
+      aria-labelledby="recent-heading"
+      className="rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6"
+    >
+      <div className="flex items-baseline justify-between">
+        <span
+          id="recent-heading"
+          className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase"
+        >
+          Recent lookups (this browser)
+        </span>
+        <span className="font-mono text-xs text-muted">{recent.length} stored</span>
+      </div>
+
+      {recent.length === 0 ? (
+        <p className="mt-4 font-mono text-xs text-muted">
+          No lookups yet. The last 8 wallets you check will appear here.
+        </p>
+      ) : (
+        <ul className="mt-4 flex flex-col divide-y divide-border-subtle">
+          {recent.map((entry) => (
+            <li
+              key={entry.wallet}
+              className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+            >
+              <button
+                type="button"
+                onClick={() => onPick(entry.wallet)}
+                className="flex flex-1 items-center gap-3 text-left font-mono text-sm text-ink hover:text-forest focus-visible:rounded-[2px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
+              >
+                <span>{truncateWallet(entry.wallet, 8, 8)}</span>
+                <span className="font-mono text-[11px] text-muted">
+                  {new Date(entry.lastSeenAt).toLocaleString("en-US", {
+                    month: "short",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              </button>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`Forget ${entry.wallet}`}
+                onClick={() => onForget(entry.wallet)}
+              >
+                <Xmark aria-hidden="true" className="size-4" />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
