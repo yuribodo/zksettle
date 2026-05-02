@@ -8,7 +8,7 @@ use light_sdk::{
     instruction::{account_meta::CompressedAccountMetaReadOnly, ValidityProof},
 };
 
-use crate::constants::MAX_ROOT_AGE_SLOTS;
+use crate::constants::MAX_ATTESTATION_AGE_SLOTS;
 use crate::error::ZkSettleError;
 use crate::state::{compressed::CompressedAttestation, Issuer, ISSUER_SEED};
 
@@ -37,10 +37,8 @@ pub(crate) fn validate_attestation(
     nullifier_hash: &[u8; 32],
     issuer_key: &Pubkey,
 ) -> Result<()> {
-    // TODO(post-hackathon): reuses MAX_ROOT_AGE_SLOTS (~2 days). Consider a
-    // separate MAX_ATTESTATION_AGE_SLOTS if attestation lifetime should differ.
     let age = current_slot.saturating_sub(attestation.slot);
-    require!(age <= MAX_ROOT_AGE_SLOTS, ZkSettleError::AttestationExpired);
+    require!(age <= MAX_ATTESTATION_AGE_SLOTS, ZkSettleError::AttestationExpired);
     require!(
         attestation.nullifier_hash == *nullifier_hash,
         ZkSettleError::NullifierMismatch
@@ -129,7 +127,7 @@ mod tests {
         let issuer = Pubkey::new_unique();
         let nullifier = [7u8; 32];
         let att = sample_attestation(1_000_000, &issuer, nullifier);
-        let current_slot = 1_000_000 + MAX_ROOT_AGE_SLOTS;
+        let current_slot = 1_000_000 + MAX_ATTESTATION_AGE_SLOTS;
         assert!(validate_attestation(current_slot, &att, &nullifier, &issuer).is_ok());
     }
 
@@ -138,7 +136,7 @@ mod tests {
         let issuer = Pubkey::new_unique();
         let nullifier = [7u8; 32];
         let att = sample_attestation(1_000_000, &issuer, nullifier);
-        let current_slot = 1_000_000 + MAX_ROOT_AGE_SLOTS + 1;
+        let current_slot = 1_000_000 + MAX_ATTESTATION_AGE_SLOTS + 1;
         assert_eq!(
             err_code(validate_attestation(current_slot, &att, &nullifier, &issuer)),
             ERROR_CODE_OFFSET + ZkSettleError::AttestationExpired as u32,
@@ -150,7 +148,7 @@ mod tests {
         let issuer = Pubkey::new_unique();
         let nullifier = [7u8; 32];
         let att = sample_attestation(500, &issuer, nullifier);
-        let current_slot = 500 + MAX_ROOT_AGE_SLOTS;
+        let current_slot = 500 + MAX_ATTESTATION_AGE_SLOTS;
         assert!(validate_attestation(current_slot, &att, &nullifier, &issuer).is_ok());
     }
 
@@ -159,7 +157,7 @@ mod tests {
         let issuer = Pubkey::new_unique();
         let nullifier = [7u8; 32];
         let att = sample_attestation(500, &issuer, nullifier);
-        let current_slot = 500 + MAX_ROOT_AGE_SLOTS + 1;
+        let current_slot = 500 + MAX_ATTESTATION_AGE_SLOTS + 1;
         assert_eq!(
             err_code(validate_attestation(current_slot, &att, &nullifier, &issuer)),
             ERROR_CODE_OFFSET + ZkSettleError::AttestationExpired as u32,
