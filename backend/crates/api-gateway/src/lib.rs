@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::http::{HeaderValue, Method};
-use axum::routing::{any, delete, get};
+use axum::routing::{any, delete, get, post};
 use axum::Router;
 use sea_orm::DatabaseConnection;
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -50,6 +50,9 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api-keys/{key_hash}", delete(routes::keys::delete_key))
         .route("/usage", get(routes::usage::get_usage))
         .route("/usage/history", get(routes::usage::get_usage_history))
+        .route("/auth/login", post(routes::auth::login))
+        .route("/auth/logout", post(routes::auth::logout))
+        .route("/auth/me", get(routes::auth::me))
         .route("/v1/{*path}", any(proxy::proxy_to_upstream))
         .layer(TraceLayer::new_for_http())
         .layer(cors)
@@ -69,7 +72,9 @@ fn build_cors_layer(allowed_origins: &[String]) -> CorsLayer {
         .allow_headers([
             axum::http::header::AUTHORIZATION,
             axum::http::header::CONTENT_TYPE,
+            axum::http::header::COOKIE,
         ])
+        .allow_credentials(true)
         .max_age(Duration::from_secs(600));
 
     if allowed_origins.is_empty() {

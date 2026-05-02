@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use zksettle_types::gateway::Tier;
 
+use crate::auth_jwt::MaybeAuthenticatedTenant;
 use crate::config::Config;
 use crate::error::GatewayError;
 use crate::key_store;
@@ -75,34 +76,54 @@ fn verify_admin(config: &Config, headers: &HeaderMap) -> Result<(), GatewayError
 
 pub async fn create_key(
     State(state): State<Arc<AppState>>,
+    MaybeAuthenticatedTenant(maybe_tenant): MaybeAuthenticatedTenant,
     headers: HeaderMap,
     Json(body): Json<CreateKeyRequest>,
 ) -> Result<Json<CreateKeyResponse>, GatewayError> {
-    verify_admin(&state.config, &headers)?;
-
     let raw_key = key_store::generate_key();
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
 
-    key_store::insert(&state.db, &raw_key, body.owner.clone(), Tier::Developer, now, None).await?;
+    let owner = if let Some(tenant) = maybe_tenant {
+        let owner = tenant.wallet.clone();
+        key_store::insert(
+            &state.db,
+            &raw_key,
+            owner.clone(),
+            Tier::Developer,
+            now,
+            Some(tenant.tenant_id),
+        )
+        .await?;
+        owner
+    } else {
+        verify_admin(&state.config, &headers)?;
+        key_store::insert(&state.db, &raw_key, body.owner.clone(), Tier::Developer, now, None).await?;
+        body.owner.clone()
+    };
 
     Ok(Json(CreateKeyResponse {
         api_key: raw_key,
         tier: Tier::Developer,
-        owner: body.owner,
+        owner,
     }))
 }
 
 pub async fn list_keys(
     State(state): State<Arc<AppState>>,
+    MaybeAuthenticatedTenant(maybe_tenant): MaybeAuthenticatedTenant,
     headers: HeaderMap,
 ) -> Result<Json<ListKeysResponse>, GatewayError> {
-    verify_admin(&state.config, &headers)?;
+    let records = if let Some(tenant) = maybe_tenant {
+        key_store::list_by_tenant(&state.db, tenant.tenant_id).await?
+    } else {
+        verify_admin(&state.config, &headers)?;
+        key_store::list(&state.db).await?
+    };
 
-    let mut keys: Vec<ListedKey> = key_store::list(&state.db)
-        .await?
+    let mut keys: Vec<ListedKey> = records
         .into_iter()
         .map(|r| ListedKey {
             key_hash: r.key_hash,
@@ -118,16 +139,20 @@ pub async fn list_keys(
 
 pub async fn delete_key(
     State(state): State<Arc<AppState>>,
+    MaybeAuthenticatedTenant(maybe_tenant): MaybeAuthenticatedTenant,
     headers: HeaderMap,
     Path(key_hash): Path<String>,
 ) -> Result<Json<DeleteKeyResponse>, GatewayError> {
-    verify_admin(&state.config, &headers)?;
+    let removed = if let Some(tenant) = maybe_tenant {
+        key_store::remove_by_hash_and_tenant(&state.db, &key_hash, tenant.tenant_id).await?
+    } else {
+        verify_admin(&state.config, &headers)?;
+        key_store::remove_by_hash(&state.db, &key_hash).await?
+    };
 
-    let removed = key_store::remove_by_hash(&state.db, &key_hash).await?;
     if !removed {
         return Err(GatewayError::NotFound);
     }
-    // CASCADE handles usage_records + daily_usage cleanup
     Ok(Json(DeleteKeyResponse {
         key_hash,
         deleted: true,
