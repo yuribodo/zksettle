@@ -86,6 +86,7 @@ mod tests {
 
     fn fixture_event() -> ProofSettled {
         ProofSettled {
+            version: 1,
             issuer: [1u8; 32],
             nullifier_hash: [2u8; 32],
             merkle_root: [3u8; 32],

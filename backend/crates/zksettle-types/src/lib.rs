@@ -69,6 +69,6 @@ mod tests {
     fn struct_sizes_available_without_serde_or_borsh() {
         assert_eq!(Issuer::LEN, 137);
         assert_eq!(CompressedAttestation::LEN, 288);
-        assert_eq!(ProofSettled::LEN, 288);
+        assert_eq!(ProofSettled::LEN, 289);
     }
 }

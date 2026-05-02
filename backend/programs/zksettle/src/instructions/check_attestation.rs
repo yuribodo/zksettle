@@ -26,6 +26,7 @@ pub struct CheckAttestation<'info> {
 
 #[event]
 pub struct AttestationChecked {
+    pub version: u8,
     pub issuer: Pubkey,
     pub nullifier_hash: [u8; 32],
     pub slot: u64,
@@ -85,6 +86,7 @@ pub fn check_handler<'info>(
         .map_err(crate::map_light_err!("Light CPI invoke failed", ZkSettleError::LightInvokeFailed))?;
 
     emit!(AttestationChecked {
+        version: 1,
         issuer: ctx.accounts.issuer.key(),
         nullifier_hash,
         slot,

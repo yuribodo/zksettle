@@ -52,6 +52,7 @@ mod tests {
 
     fn make_test_event() -> ProofSettled {
         ProofSettled {
+            version: 1,
             issuer: [9u8; 32],
             nullifier_hash: [8u8; 32],
             merkle_root: [7u8; 32],

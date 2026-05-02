@@ -11,6 +11,7 @@ use super::VerifyProof;
 
 #[event]
 pub struct ProofSettled {
+    pub version: u8,
     pub issuer: Pubkey,
     pub nullifier_hash: [u8; 32],
     pub merkle_root: [u8; 32],

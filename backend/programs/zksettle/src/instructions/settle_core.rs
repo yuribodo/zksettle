@@ -118,6 +118,7 @@ pub(crate) fn settle_core(params: SettlementParams<'_, '_>) -> Result<()> {
         ))?;
 
     emit!(ProofSettled {
+        version: 1,
         issuer: params.issuer_key,
         nullifier_hash: params.nullifier_hash,
         merkle_root: params.merkle_root,
