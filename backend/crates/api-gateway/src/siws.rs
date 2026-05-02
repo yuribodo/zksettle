@@ -1,0 +1,328 @@
+use ed25519_dalek::{Signature, VerifyingKey};
+
+use crate::error::GatewayError;
+
+#[derive(Debug)]
+pub struct SiwsMessage {
+    pub domain: String,
+    pub address: String,
+    pub statement: Option<String>,
+    pub uri: Option<String>,
+    pub version: Option<String>,
+    pub chain_id: Option<String>,
+    pub nonce: String,
+    pub issued_at: String,
+    pub expiration_time: Option<String>,
+}
+
+pub fn parse_message(message: &str) -> Result<SiwsMessage, GatewayError> {
+    let lines: Vec<&str> = message.lines().collect();
+    if lines.len() < 2 {
+        return Err(GatewayError::InvalidMessage);
+    }
+
+    let domain = lines[0]
+        .strip_suffix(" wants you to sign in with your Solana account:")
+        .ok_or(GatewayError::InvalidMessage)?
+        .to_owned();
+
+    let address = lines[1].trim().to_owned();
+    if address.is_empty() {
+        return Err(GatewayError::InvalidMessage);
+    }
+
+    let mut statement = None;
+    let mut field_start = 2;
+
+    if lines.len() > 2 && lines[2].is_empty() {
+        let mut stmt_lines = Vec::new();
+        let mut i = 3;
+        while i < lines.len() && !lines[i].is_empty() && !lines[i].contains(": ") {
+            stmt_lines.push(lines[i]);
+            i += 1;
+        }
+        if !stmt_lines.is_empty() {
+            statement = Some(stmt_lines.join("\n"));
+            field_start = i;
+            if field_start < lines.len() && lines[field_start].is_empty() {
+                field_start += 1;
+            }
+        } else {
+            field_start = 3;
+        }
+    }
+
+    let mut uri = None;
+    let mut version = None;
+    let mut chain_id = None;
+    let mut nonce = None;
+    let mut issued_at = None;
+    let mut expiration_time = None;
+
+    for line in &lines[field_start..] {
+        if let Some(val) = line.strip_prefix("URI: ") {
+            uri = Some(val.to_owned());
+        } else if let Some(val) = line.strip_prefix("Version: ") {
+            version = Some(val.to_owned());
+        } else if let Some(val) = line.strip_prefix("Chain ID: ") {
+            chain_id = Some(val.to_owned());
+        } else if let Some(val) = line.strip_prefix("Nonce: ") {
+            nonce = Some(val.to_owned());
+        } else if let Some(val) = line.strip_prefix("Issued At: ") {
+            issued_at = Some(val.to_owned());
+        } else if let Some(val) = line.strip_prefix("Expiration Time: ") {
+            expiration_time = Some(val.to_owned());
+        }
+    }
+
+    let nonce = nonce.ok_or(GatewayError::InvalidMessage)?;
+    let issued_at = issued_at.ok_or(GatewayError::InvalidMessage)?;
+
+    Ok(SiwsMessage {
+        domain,
+        address,
+        statement,
+        uri,
+        version,
+        chain_id,
+        nonce,
+        issued_at,
+        expiration_time,
+    })
+}
+
+pub fn verify_signature(
+    address: &str,
+    message: &[u8],
+    signature: &[u8],
+) -> Result<(), GatewayError> {
+    let pubkey_bytes: [u8; 32] = bs58::decode(address)
+        .into_vec()
+        .map_err(|_| GatewayError::InvalidWallet)?
+        .try_into()
+        .map_err(|_| GatewayError::InvalidWallet)?;
+
+    let verifying_key =
+        VerifyingKey::from_bytes(&pubkey_bytes).map_err(|_| GatewayError::InvalidWallet)?;
+
+    let sig =
+        Signature::from_slice(signature).map_err(|_| GatewayError::InvalidSignature)?;
+
+    verifying_key
+        .verify_strict(message, &sig)
+        .map_err(|_| GatewayError::InvalidSignature)
+}
+
+pub fn validate_message(
+    msg: &SiwsMessage,
+    now: u64,
+    expected_domain: Option<&str>,
+) -> Result<(), GatewayError> {
+    if let Some(domain) = expected_domain {
+        if msg.domain != domain {
+            return Err(GatewayError::InvalidMessage);
+        }
+    }
+
+    // Nonce: at least 8 alphanumeric chars
+    if msg.nonce.len() < 8 || !msg.nonce.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return Err(GatewayError::InvalidMessage);
+    }
+
+    let issued_ts = parse_iso8601(&msg.issued_at).ok_or(GatewayError::InvalidMessage)?;
+    if now.abs_diff(issued_ts) > 300 {
+        return Err(GatewayError::MessageExpired);
+    }
+
+    if let Some(ref exp) = msg.expiration_time {
+        let exp_ts = parse_iso8601(exp).ok_or(GatewayError::InvalidMessage)?;
+        if now > exp_ts {
+            return Err(GatewayError::MessageExpired);
+        }
+    }
+
+    Ok(())
+}
+
+fn parse_iso8601(s: &str) -> Option<u64> {
+    let s = s.trim();
+    let s = s.strip_suffix('Z').or_else(|| s.strip_suffix("+00:00"))?;
+
+    let (date_part, time_part) = s.split_once('T')?;
+    let mut date_iter = date_part.split('-');
+    let year: u64 = date_iter.next()?.parse().ok()?;
+    let month: u64 = date_iter.next()?.parse().ok()?;
+    let day: u64 = date_iter.next()?.parse().ok()?;
+
+    let time_part = time_part.split('.').next()?; // strip fractional seconds
+    let mut time_iter = time_part.split(':');
+    let hour: u64 = time_iter.next()?.parse().ok()?;
+    let minute: u64 = time_iter.next()?.parse().ok()?;
+    let second: u64 = time_iter.next()?.parse().ok()?;
+
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) || hour > 23 || minute > 59 || second > 59 {
+        return None;
+    }
+
+    // Days from year 0 to the start of the given year (simplified)
+    let y = if month <= 2 { year - 1 } else { year };
+    let m = if month <= 2 { month + 9 } else { month - 3 };
+    let days = 365 * y + y / 4 - y / 100 + y / 400 + (m * 306 + 5) / 10 + day - 1 - 719469;
+
+    Some(days * 86400 + hour * 3600 + minute * 60 + second)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SAMPLE_MESSAGE: &str = "\
+localhost wants you to sign in with your Solana account:
+4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU
+
+Sign in to the dashboard
+
+URI: http://localhost:3000
+Version: 1
+Chain ID: mainnet
+Nonce: abcd1234efgh
+Issued At: 2026-05-02T12:00:00Z
+Expiration Time: 2026-05-02T13:00:00Z";
+
+    #[test]
+    fn parse_valid_message() {
+        let msg = parse_message(SAMPLE_MESSAGE).unwrap();
+        assert_eq!(msg.domain, "localhost");
+        assert_eq!(msg.address, "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
+        assert_eq!(msg.statement.as_deref(), Some("Sign in to the dashboard"));
+        assert_eq!(msg.uri.as_deref(), Some("http://localhost:3000"));
+        assert_eq!(msg.version.as_deref(), Some("1"));
+        assert_eq!(msg.chain_id.as_deref(), Some("mainnet"));
+        assert_eq!(msg.nonce, "abcd1234efgh");
+        assert_eq!(msg.issued_at, "2026-05-02T12:00:00Z");
+        assert_eq!(msg.expiration_time.as_deref(), Some("2026-05-02T13:00:00Z"));
+    }
+
+    #[test]
+    fn parse_minimal_message() {
+        let msg_text = "\
+example.com wants you to sign in with your Solana account:
+4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU
+
+Nonce: abcdefgh
+Issued At: 2026-05-02T12:00:00Z";
+        let msg = parse_message(msg_text).unwrap();
+        assert_eq!(msg.domain, "example.com");
+        assert!(msg.statement.is_none());
+        assert!(msg.expiration_time.is_none());
+    }
+
+    #[test]
+    fn parse_rejects_empty() {
+        assert!(parse_message("").is_err());
+    }
+
+    #[test]
+    fn parse_rejects_bad_header() {
+        assert!(parse_message("not a valid header\naddress").is_err());
+    }
+
+    #[test]
+    fn validate_rejects_short_nonce() {
+        let mut msg = parse_message(SAMPLE_MESSAGE).unwrap();
+        msg.nonce = "abc".into();
+        assert!(validate_message(&msg, 1777752000, None).is_err());
+    }
+
+    #[test]
+    fn validate_rejects_non_alphanumeric_nonce() {
+        let mut msg = parse_message(SAMPLE_MESSAGE).unwrap();
+        msg.nonce = "abcd!@#$efgh".into();
+        assert!(validate_message(&msg, 1777752000, None).is_err());
+    }
+
+    #[test]
+    fn validate_rejects_wrong_domain() {
+        let msg = parse_message(SAMPLE_MESSAGE).unwrap();
+        assert!(validate_message(&msg, 1777752000, Some("other.com")).is_err());
+    }
+
+    #[test]
+    fn validate_accepts_correct_domain() {
+        let msg = parse_message(SAMPLE_MESSAGE).unwrap();
+        assert!(validate_message(&msg, 1777752000, Some("localhost")).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_stale_issued_at() {
+        let msg = parse_message(SAMPLE_MESSAGE).unwrap();
+        // 1777752000 is 2026-05-02T12:00:00Z, +600 exceeds ±5min
+        assert!(validate_message(&msg, 1777752000 + 600, None).is_err());
+    }
+
+    #[test]
+    fn validate_accepts_within_drift() {
+        let msg = parse_message(SAMPLE_MESSAGE).unwrap();
+        assert!(validate_message(&msg, 1777752000 + 200, None).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_expired() {
+        let msg = parse_message(SAMPLE_MESSAGE).unwrap();
+        // Expiration is 2026-05-02T13:00:00Z = 1777755600
+        assert!(validate_message(&msg, 1777755601, None).is_err());
+    }
+
+    #[test]
+    fn parse_iso8601_basic() {
+        assert_eq!(parse_iso8601("2026-05-02T12:00:00Z"), Some(1777752000));
+    }
+
+    #[test]
+    fn parse_iso8601_with_fractional() {
+        assert_eq!(parse_iso8601("2026-05-02T12:00:00.000Z"), Some(1777752000));
+    }
+
+    #[test]
+    fn parse_iso8601_with_offset() {
+        assert_eq!(parse_iso8601("2026-05-02T12:00:00+00:00"), Some(1777752000));
+    }
+
+    #[test]
+    fn verify_signature_rejects_bad_address() {
+        assert!(verify_signature("not-base58!", b"msg", &[0u8; 64]).is_err());
+    }
+
+    #[test]
+    fn verify_signature_rejects_wrong_length_address() {
+        let short = bs58::encode(&[0u8; 16]).into_string();
+        assert!(verify_signature(&short, b"msg", &[0u8; 64]).is_err());
+    }
+
+    #[test]
+    fn verify_signature_rejects_bad_signature_length() {
+        let addr = bs58::encode(&[1u8; 32]).into_string();
+        assert!(verify_signature(&addr, b"msg", &[0u8; 32]).is_err());
+    }
+
+    #[test]
+    fn verify_signature_end_to_end() {
+        use ed25519_dalek::{Signer, SigningKey};
+        let signing_key = SigningKey::from_bytes(&[42u8; 32]);
+        let verifying_key = signing_key.verifying_key();
+        let address = bs58::encode(verifying_key.as_bytes()).into_string();
+        let message = b"test message to sign";
+        let sig = signing_key.sign(message);
+        assert!(verify_signature(&address, message, &sig.to_bytes()).is_ok());
+    }
+
+    #[test]
+    fn verify_signature_rejects_wrong_message() {
+        use ed25519_dalek::{Signer, SigningKey};
+        let signing_key = SigningKey::from_bytes(&[42u8; 32]);
+        let verifying_key = signing_key.verifying_key();
+        let address = bs58::encode(verifying_key.as_bytes()).into_string();
+        let sig = signing_key.sign(b"original");
+        assert!(verify_signature(&address, b"tampered", &sig.to_bytes()).is_err());
+    }
+}

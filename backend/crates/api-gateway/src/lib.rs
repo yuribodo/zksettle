@@ -10,14 +10,18 @@ use tower_http::trace::TraceLayer;
 use tracing::warn;
 
 pub mod auth;
+pub mod auth_jwt;
 pub mod config;
 pub mod entity;
 pub mod error;
+pub mod jwt;
 pub mod key_store;
 pub mod metering;
 pub mod proxy;
 pub mod rate_limit;
 pub mod routes;
+pub mod siws;
+pub mod tenant_store;
 pub mod upstream;
 
 use config::Config;
