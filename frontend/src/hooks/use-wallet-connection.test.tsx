@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { useConnectedWallet } from "./use-wallet-connection";
 
-const useWalletMock = vi.fn();
+const useWalletMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@solana/wallet-adapter-react", () => ({
   useConnection: vi.fn(),

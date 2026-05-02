@@ -10,9 +10,17 @@ async function loadConfig() {
   return import("./config");
 }
 
+function restoreEnv(key: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[key];
+    return;
+  }
+  process.env[key] = value;
+}
+
 afterEach(() => {
-  process.env.NEXT_PUBLIC_SOLANA_NETWORK = ORIGINAL_ENV.NEXT_PUBLIC_SOLANA_NETWORK;
-  process.env.NEXT_PUBLIC_SOLANA_RPC_URL = ORIGINAL_ENV.NEXT_PUBLIC_SOLANA_RPC_URL;
+  restoreEnv("NEXT_PUBLIC_SOLANA_NETWORK", ORIGINAL_ENV.NEXT_PUBLIC_SOLANA_NETWORK);
+  restoreEnv("NEXT_PUBLIC_SOLANA_RPC_URL", ORIGINAL_ENV.NEXT_PUBLIC_SOLANA_RPC_URL);
 });
 
 describe("config", () => {

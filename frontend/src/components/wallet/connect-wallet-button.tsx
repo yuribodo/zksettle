@@ -38,7 +38,7 @@ export function ConnectWalletButton({
     <div className="flex items-center gap-2">
       {connected ? (
         <WalletMultiButton className={buttonClassName}>
-          {showAddress ? "Wallet" : truncatedAddress}
+          {showAddress ? "Wallet" : (truncatedAddress ?? "Wallet")}
         </WalletMultiButton>
       ) : (
         <WalletModalButton className={buttonClassName}>

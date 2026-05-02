@@ -5,7 +5,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { PublicKey } from "@solana/web3.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const useWalletMock = vi.fn();
+const useWalletMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/hooks/use-wallet-connection", () => ({
   useWallet: () => useWalletMock(),
@@ -78,5 +78,13 @@ describe("ConnectWalletButton", () => {
 
     expect(screen.getByTestId("wallet-multi-button").textContent).toContain("1111…1111");
     expect(screen.queryByText("Wallet")).toBeNull();
+  });
+
+  it("falls back to 'Wallet' label when connected but publicKey is null", () => {
+    useWalletMock.mockReturnValue({ connected: true, publicKey: null });
+
+    render(<ConnectWalletButton />);
+
+    expect(screen.getByTestId("wallet-multi-button").textContent).toContain("Wallet");
   });
 });
