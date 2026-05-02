@@ -12,6 +12,7 @@ use crate::{Hash32, Pubkey};
 #[cfg_attr(feature = "borsh", derive(BorshSerialize, BorshDeserialize))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ProofSettled {
+    pub version: u8,
     pub issuer: Pubkey,
     pub nullifier_hash: Hash32,
     pub merkle_root: Hash32,
@@ -27,13 +28,14 @@ pub struct ProofSettled {
 }
 
 impl ProofSettled {
-    pub const LEN: usize = 32 * 8 + 8 * 4;
+    pub const LEN: usize = 1 + 32 * 8 + 8 * 4;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "borsh", derive(BorshSerialize, BorshDeserialize))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AttestationChecked {
+    pub version: u8,
     pub issuer: Pubkey,
     pub nullifier_hash: Hash32,
     pub slot: u64,
@@ -44,12 +46,13 @@ mod tests {
     use super::*;
 
     const PROOF_SETTLED_PAYLOAD_LEN: usize = ProofSettled::LEN;
-    const ATTESTATION_CHECKED_PAYLOAD_LEN: usize = 32 + 32 + 8;
+    const ATTESTATION_CHECKED_PAYLOAD_LEN: usize = 1 + 32 + 32 + 8;
 
     #[cfg(feature = "borsh")]
     #[test]
     fn proof_settled_borsh_roundtrip() {
         let original = ProofSettled {
+            version: 1,
             issuer: [9u8; 32],
             nullifier_hash: [8u8; 32],
             merkle_root: [7u8; 32],
@@ -73,6 +76,7 @@ mod tests {
     #[test]
     fn attestation_checked_borsh_roundtrip() {
         let original = AttestationChecked {
+            version: 1,
             issuer: [1u8; 32],
             nullifier_hash: [2u8; 32],
             slot: 999,
