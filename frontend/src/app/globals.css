@@ -181,10 +181,19 @@ em {
   line-height: inherit;
   height: auto;
   border-radius: var(--radius-3);
+  background-color: transparent !important;
   transition:
     color 150ms var(--ease-brand),
     background-color 150ms var(--ease-brand),
     border-color 150ms var(--ease-brand);
+}
+
+.wallet-adapter-button-trigger {
+  background-color: transparent !important;
+}
+
+.wallet-adapter-button .wallet-adapter-button-end-icon {
+  display: none;
 }
 
 .wallet-adapter-button:not([disabled]):focus-visible {
@@ -196,8 +205,11 @@ em {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-6);
   background: var(--color-ink);
-  box-shadow: 0 18px 40px rgb(26 25 23 / 20%);
+  box-shadow:
+    0 4px 12px rgb(26 25 23 / 8%),
+    0 18px 40px rgb(26 25 23 / 20%);
   font-family: var(--font-sans);
+  padding: 4px;
 }
 
 .wallet-adapter-dropdown-list-item {
@@ -205,10 +217,18 @@ em {
   color: var(--color-canvas);
   border-radius: var(--radius-3);
   font-weight: 500;
+  font-size: 0.875rem;
+  padding: 8px 12px;
+  transition: background-color 150ms var(--ease-brand);
 }
 
 .wallet-adapter-dropdown-list-item:not([disabled]):hover {
   background: rgb(250 250 247 / 12%);
+}
+
+.wallet-adapter-dropdown-list-item:not([disabled]):focus-visible {
+  outline: 2px solid var(--color-forest);
+  outline-offset: -2px;
 }
 
 .wallet-adapter-modal-overlay {
