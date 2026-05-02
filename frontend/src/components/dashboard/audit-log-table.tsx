@@ -10,6 +10,7 @@ import { useEvents, type EventsFilters } from "@/hooks/use-events";
 import { ApiError } from "@/lib/api/client";
 import type { EventDto } from "@/lib/api/schemas";
 import { cn } from "@/lib/cn";
+import { exportToCsv, exportToJson } from "@/lib/export";
 import { fmtAmount, fmtCompact, truncateWallet } from "@/lib/format";
 import { isValidWalletHex, normalizeWalletHex } from "@/lib/wallet";
 
@@ -112,9 +113,9 @@ export function AuditLogTable() {
     setRange("30d");
   };
 
-  const exportToast = useCallback((label: string) => {
+  const showToast = useCallback((message: string) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToast(`${label} not yet wired · backend exposes JSON via GET /v1/events`);
+    setToast(message);
     toastTimerRef.current = setTimeout(() => {
       setToast(null);
       toastTimerRef.current = null;
@@ -158,10 +159,26 @@ export function AuditLogTable() {
               <Refresh aria-hidden="true" className="size-4" />
               Refresh
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => exportToast("CSV export")}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                events.length
+                  ? exportToCsv(events, "zksettle-audit-log.csv")
+                  : showToast("No events to export")
+              }
+            >
               Export CSV
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => exportToast("JSON export")}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                events.length
+                  ? exportToJson(events, "zksettle-audit-log.json")
+                  : showToast("No events to export")
+              }
+            >
               Export JSON
             </Button>
           </div>

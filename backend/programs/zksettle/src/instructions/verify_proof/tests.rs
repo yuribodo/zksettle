@@ -82,10 +82,10 @@ mod bindings {
         sanctions_root: [u8; 32],
         jurisdiction_root: [u8; 32],
         timestamp: u64,
-    ) -> GnarkWitness<8> {
+    ) -> GnarkWitness<11> {
         let (mint_lo, mint_hi) = pubkey_to_limbs(mint);
         let (rcpt_lo, rcpt_hi) = pubkey_to_limbs(recipient);
-        let mut entries = [[0u8; 32]; 8];
+        let mut entries = [[0u8; 32]; 11];
         entries[MERKLE_ROOT_IDX] = root;
         entries[NULLIFIER_IDX] = nullifier;
         entries[MINT_LO_IDX] = mint_lo;
@@ -94,7 +94,9 @@ mod bindings {
         entries[RECIPIENT_LO_IDX] = rcpt_lo;
         entries[RECIPIENT_HI_IDX] = rcpt_hi;
         entries[AMOUNT_IDX] = u64_to_field_bytes(amount);
-        let _ = (sanctions_root, jurisdiction_root, timestamp);
+        entries[SANCTIONS_ROOT_IDX] = sanctions_root;
+        entries[JURISDICTION_ROOT_IDX] = jurisdiction_root;
+        entries[TIMESTAMP_IDX] = u64_to_field_bytes(timestamp);
         GnarkWitness { entries }
     }
 
@@ -139,7 +141,7 @@ mod bindings {
             }
         }
 
-        fn witness(&self) -> GnarkWitness<8> {
+        fn witness(&self) -> GnarkWitness<11> {
             witness_for(
                 self.root,
                 self.nul,
@@ -152,6 +154,16 @@ mod bindings {
                 self.timestamp,
             )
         }
+    }
+
+    #[test]
+    fn rejects_witness_too_short() {
+        let s = sample();
+        let short = GnarkWitness { entries: [[0u8; 32]; 8] };
+        assert_eq!(
+            err_code(check_bindings(&short, &s.inputs())),
+            ERROR_CODE_OFFSET + ZkSettleError::WitnessTooShort as u32,
+        );
     }
 
     #[test]
@@ -228,101 +240,6 @@ mod bindings {
             err_code(check_bindings(&s.witness(), &inputs)),
             ERROR_CODE_OFFSET + ZkSettleError::AmountMismatch as u32,
         );
-    }
-
-}
-
-mod bindings_11 {
-    use super::*;
-
-    fn witness_for_11(
-        root: [u8; 32],
-        nullifier: [u8; 32],
-        mint: &Pubkey,
-        epoch: u64,
-        recipient: &Pubkey,
-        amount: u64,
-        sanctions_root: [u8; 32],
-        jurisdiction_root: [u8; 32],
-        timestamp: u64,
-    ) -> GnarkWitness<11> {
-        let (mint_lo, mint_hi) = pubkey_to_limbs(mint);
-        let (rcpt_lo, rcpt_hi) = pubkey_to_limbs(recipient);
-        let mut entries = [[0u8; 32]; 11];
-        entries[MERKLE_ROOT_IDX] = root;
-        entries[NULLIFIER_IDX] = nullifier;
-        entries[MINT_LO_IDX] = mint_lo;
-        entries[MINT_HI_IDX] = mint_hi;
-        entries[EPOCH_IDX] = u64_to_field_bytes(epoch);
-        entries[RECIPIENT_LO_IDX] = rcpt_lo;
-        entries[RECIPIENT_HI_IDX] = rcpt_hi;
-        entries[AMOUNT_IDX] = u64_to_field_bytes(amount);
-        entries[SANCTIONS_ROOT_IDX] = sanctions_root;
-        entries[JURISDICTION_ROOT_IDX] = jurisdiction_root;
-        entries[TIMESTAMP_IDX] = u64_to_field_bytes(timestamp);
-        GnarkWitness { entries }
-    }
-
-    struct Sample {
-        root: [u8; 32],
-        nul: [u8; 32],
-        mint: Pubkey,
-        epoch: u64,
-        rcpt: Pubkey,
-        amt: u64,
-        sanctions_root: [u8; 32],
-        jurisdiction_root: [u8; 32],
-        timestamp: u64,
-    }
-
-    fn sample() -> Sample {
-        Sample {
-            root: [1u8; 32],
-            nul: [2u8; 32],
-            mint: Pubkey::new_unique(),
-            epoch: 42,
-            rcpt: Pubkey::new_unique(),
-            amt: 1_000,
-            sanctions_root: [3u8; 32],
-            jurisdiction_root: [4u8; 32],
-            timestamp: 1_700_000_000,
-        }
-    }
-
-    impl Sample {
-        fn inputs(&self) -> BindingInputs<'_> {
-            BindingInputs {
-                merkle_root: &self.root,
-                nullifier_hash: &self.nul,
-                mint: &self.mint,
-                epoch: self.epoch,
-                recipient: &self.rcpt,
-                amount: self.amt,
-                sanctions_root: &self.sanctions_root,
-                jurisdiction_root: &self.jurisdiction_root,
-                timestamp: self.timestamp,
-            }
-        }
-
-        fn witness(&self) -> GnarkWitness<11> {
-            witness_for_11(
-                self.root,
-                self.nul,
-                &self.mint,
-                self.epoch,
-                &self.rcpt,
-                self.amt,
-                self.sanctions_root,
-                self.jurisdiction_root,
-                self.timestamp,
-            )
-        }
-    }
-
-    #[test]
-    fn accepts_matching_11_tuple() {
-        let s = sample();
-        assert!(check_bindings(&s.witness(), &s.inputs()).is_ok());
     }
 
     #[test]
