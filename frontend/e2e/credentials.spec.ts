@@ -61,7 +61,7 @@ test.describe("Wallets & Credentials", () => {
       await expect(result).toBeVisible({ timeout: 10_000 });
     } else {
       // Credential already exists or an error occurred — verify we see a status
-      const status = credentialSection.getByText(/Active|Revoked|Not found|Error|Unauthorized|Not authorized/);
+      const status = credentialSection.getByText(/Active|Revoked|Not found|Unauthorized/).first();
       await expect(status).toBeVisible({ timeout: 10_000 });
     }
   });
@@ -83,7 +83,7 @@ test.describe("Wallets & Credentials", () => {
       await expect(result).toBeVisible({ timeout: 10_000 });
     } else {
       // No active credential to revoke — verify we see not-found or already-revoked status
-      const status = credentialSection.getByText(/Not found|Revoked|Error|Issue credential/);
+      const status = credentialSection.getByText(/Not found|Revoked|Unauthorized|Issue credential/).first();
       await expect(status).toBeVisible({ timeout: 10_000 });
     }
   });
