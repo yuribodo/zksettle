@@ -12,9 +12,11 @@ test.describe("Counterparties & Issuer Status", () => {
   });
 
   test("shows root fields: membership, sanctions, jurisdiction", async ({ page }) => {
-    await expect(page.getByText("Membership root")).toBeVisible();
-    await expect(page.getByText("Sanctions root")).toBeVisible();
-    await expect(page.getByText("Jurisdiction root")).toBeVisible();
+    // Root field labels are rendered once /v1/roots responds (success or loading state).
+    // Use a longer timeout to give the backend time to respond.
+    await expect(page.getByText("Membership root")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Sanctions root")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Jurisdiction root")).toBeVisible({ timeout: 10_000 });
   });
 
   test("shows wallet count and last publish stats", async ({ page }) => {
