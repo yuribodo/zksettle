@@ -19,7 +19,7 @@ test.describe("Dashboard health", () => {
   test("displays page header on transactions page", async ({ page }) => {
     await page.goto("/dashboard/transactions");
 
-    await expect(page.getByText("Wallets & credentials")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Wallets & credentials" })).toBeVisible();
   });
 
   test("navigates between dashboard pages via sidebar", async ({ page }) => {
@@ -27,10 +27,10 @@ test.describe("Dashboard health", () => {
 
     await page.getByLabel("Dashboard navigation").getByText("API keys").click();
     await expect(page).toHaveURL(/\/dashboard\/api-keys/);
-    await expect(page.getByText("API keys")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "API keys" })).toBeVisible();
 
     await page.getByLabel("Dashboard navigation").getByText("Billing").click();
     await expect(page).toHaveURL(/\/dashboard\/billing/);
-    await expect(page.getByText("Billing")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Billing" })).toBeVisible();
   });
 });

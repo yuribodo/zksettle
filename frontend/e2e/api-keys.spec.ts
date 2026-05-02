@@ -23,7 +23,7 @@ test.describe("API Keys management", () => {
     await expect(createButton).toBeEnabled();
   });
 
-  test("creates a new API key and shows it in the list", async ({ page }) => {
+  test("creates a new API key and shows it in the list", { tag: "@backend" }, async ({ page }) => {
     const ownerName = `e2e-test-${Date.now()}`;
     await page.getByPlaceholder("e.g. backend-prod").fill(ownerName);
     await page.getByRole("button", { name: "Create key" }).click();
@@ -47,7 +47,7 @@ test.describe("API Keys management", () => {
     await expect(page.getByText(ownerName)).toBeVisible();
   });
 
-  test("shows key count in the provisioned keys section", async ({ page }) => {
+  test("shows key count in the provisioned keys section", { tag: "@backend" }, async ({ page }) => {
     // Wait for loading to finish
     await expect(page.getByText("loading…")).not.toBeVisible({ timeout: 10_000 });
 

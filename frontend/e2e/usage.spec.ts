@@ -9,7 +9,7 @@ test.describe("Billing & Usage", () => {
     await expect(page.getByText("Current tier")).toBeVisible();
 
     // Should show tier name or loading/error state
-    const tierOrState = page.getByText(/Developer|Startup|Growth|Enterprise|Unavailable|—/);
+    const tierOrState = page.getByText(/Developer|Startup|Growth|Enterprise|Unavailable|—/).first();
     await expect(tierOrState).toBeVisible({ timeout: 10_000 });
   });
 

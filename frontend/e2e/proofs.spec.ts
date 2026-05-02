@@ -10,11 +10,11 @@ test.describe("Attestation Explorer", () => {
   test("shows the attestation search form", async ({ page }) => {
     await expect(page.getByText("Search wallet attestation")).toBeVisible();
     await expect(page.getByPlaceholder("0x… (64 hex chars)")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Search" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Search", exact: true })).toBeVisible();
   });
 
   test("search button is disabled with empty input", async ({ page }) => {
-    await expect(page.getByRole("button", { name: "Search" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Search", exact: true })).toBeDisabled();
   });
 
   test("shows validation error for invalid wallet", async ({ page }) => {
@@ -24,7 +24,7 @@ test.describe("Attestation Explorer", () => {
 
   test("searches for a wallet and shows compliance status", async ({ page }) => {
     await page.getByPlaceholder("0x… (64 hex chars)").fill(MOCK_WALLET);
-    await page.getByRole("button", { name: "Search" }).click();
+    await page.getByRole("button", { name: "Search", exact: true }).click();
 
     // Should show compliance status section
     const statusSection = page.locator("section", { has: page.getByText("Compliance status") });

@@ -32,7 +32,7 @@ test.describe("Wallets & Credentials", () => {
     await page.getByRole("button", { name: "Look up" }).click();
 
     // Should show credential section (loading then result or error)
-    const credentialSection = page.locator("section", { has: page.getByText("Credential") });
+    const credentialSection = page.getByRole("region", { name: "Credential", exact: true });
     await expect(credentialSection).toBeVisible({ timeout: 10_000 });
 
     // The wallet address should be displayed

@@ -6,7 +6,7 @@ test.describe("Audit Log", () => {
   });
 
   test("shows the audit log page with filters", async ({ page }) => {
-    await expect(page.getByText("Audit log")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Audit log" })).toBeVisible();
 
     // Filter controls
     await expect(page.getByText("Range")).toBeVisible();
