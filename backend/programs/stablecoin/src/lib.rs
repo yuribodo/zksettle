@@ -1,0 +1,20 @@
+#![allow(deprecated)] // anchor 0.31 macro emits AccountInfo::realloc; fixed in anchor 1.0
+
+pub mod error;
+pub mod instructions;
+pub mod state;
+
+use anchor_lang::prelude::*;
+
+pub use instructions::*;
+
+declare_id!("2CdXRSPo6QLfLBJTikmrqmBiWwa1HpuuYJ2Qu6Yy3Liv");
+
+#[program]
+pub mod stablecoin {
+    use super::*;
+
+    pub fn initialize_mint(ctx: Context<InitializeMint>, decimals: u8) -> Result<()> {
+        instructions::initialize_mint::handler(ctx, decimals)
+    }
+}
