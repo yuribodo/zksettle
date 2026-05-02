@@ -8,9 +8,11 @@ skip-lint = true
 
 [programs.devnet]
 zksettle = "AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo"
+stablecoin = "2CdXRSPo6QLfLBJTikmrqmBiWwa1HpuuYJ2Qu6Yy3Liv"
 
 [programs.localnet]
 zksettle = "AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo"
+stablecoin = "2CdXRSPo6QLfLBJTikmrqmBiWwa1HpuuYJ2Qu6Yy3Liv"
 
 [provider]
 cluster = "devnet"
