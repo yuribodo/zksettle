@@ -27,19 +27,14 @@ test.describe("Counterparties & Issuer Status", () => {
   });
 
   test("fetches /v1/roots on page load", { tag: "@backend" }, async ({ page }) => {
-    let rootsCalled = false;
-    page.on("request", (req) => {
-      if (req.url().includes("/v1/roots") && !req.url().includes("/publish")) {
-        rootsCalled = true;
-      }
-    });
+    const rootsRequest = page.waitForRequest(
+      (req) => req.url().includes("/v1/roots") && !req.url().includes("/publish"),
+    );
 
     await page.goto("/dashboard/counterparties");
 
-    // Wait for the roots section to render (always present)
     await expect(page.getByText("Merkle roots", { exact: true })).toBeVisible({ timeout: 10_000 });
-    await page.waitForTimeout(2_000);
-    expect(rootsCalled).toBe(true);
+    await rootsRequest;
   });
 
   test("clicks publish roots and gets response", { tag: "@backend" }, async ({ page }) => {

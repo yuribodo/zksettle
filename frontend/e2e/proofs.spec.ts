@@ -39,15 +39,13 @@ test.describe("Attestation Explorer", () => {
   });
 
   test("fetches /v1/roots when the attestation page loads", { tag: "@backend" }, async ({ page }) => {
-    let rootsCalled = false;
-    page.on("request", (req) => {
-      if (req.url().includes("/v1/roots") && !req.url().includes("/publish")) {
-        rootsCalled = true;
-      }
-    });
+    const rootsRequest = page.waitForRequest(
+      (req) => req.url().includes("/v1/roots") && !req.url().includes("/publish"),
+    );
 
     await page.goto("/dashboard/attestations");
-    await page.waitForTimeout(2_000);
-    expect(rootsCalled).toBe(true);
+
+    await expect(page.getByText("Search wallet attestation")).toBeVisible({ timeout: 10_000 });
+    await rootsRequest;
   });
 });

@@ -50,16 +50,19 @@ test.describe("Wallets & Credentials", () => {
     const credentialSection = page.getByRole("region", { name: "Credential", exact: true });
     await expect(credentialSection).toBeVisible({ timeout: 10_000 });
 
-    // If not found, the issue form should appear
     const issueButton = credentialSection.getByRole("button", { name: /Issue credential/ });
-    if (await issueButton.isVisible().catch(() => false)) {
-      // Fill jurisdiction and issue
+    const hasIssueButton = await issueButton.isVisible().catch(() => false);
+
+    if (hasIssueButton) {
       await credentialSection.getByRole("textbox").fill("US");
       await issueButton.click();
 
-      // Should show credential details or error
       const result = credentialSection.getByText(/Active|Wallet already has|Error|Revoked/);
       await expect(result).toBeVisible({ timeout: 10_000 });
+    } else {
+      // Credential already exists or an error occurred — verify we see a status
+      const status = credentialSection.getByText(/Active|Revoked|Not found|Error|Unauthorized|Not authorized/);
+      await expect(status).toBeVisible({ timeout: 10_000 });
     }
   });
 
@@ -70,14 +73,18 @@ test.describe("Wallets & Credentials", () => {
     const credentialSection = page.getByRole("region", { name: "Credential", exact: true });
     await expect(credentialSection).toBeVisible({ timeout: 10_000 });
 
-    // If credential exists and is active, the revoke button should appear
     const revokeButton = credentialSection.getByRole("button", { name: /Revoke/ });
-    if (await revokeButton.isVisible().catch(() => false)) {
+    const hasRevokeButton = await revokeButton.isVisible().catch(() => false);
+
+    if (hasRevokeButton) {
       await revokeButton.click();
 
-      // Should show revoked status or error
       const result = credentialSection.getByText(/Revoked|Error|Not found/);
       await expect(result).toBeVisible({ timeout: 10_000 });
+    } else {
+      // No active credential to revoke — verify we see not-found or already-revoked status
+      const status = credentialSection.getByText(/Not found|Revoked|Error|Issue credential/);
+      await expect(status).toBeVisible({ timeout: 10_000 });
     }
   });
 });

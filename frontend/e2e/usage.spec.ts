@@ -39,21 +39,14 @@ test.describe("Billing & Usage", () => {
   });
 
   test("fetches /usage and /usage/history endpoints", { tag: "@backend" }, async ({ page }) => {
-    let usageCalled = false;
-    let historyCalled = false;
-    page.on("request", (req) => {
-      const url = req.url();
-      if (url.includes("/usage/history")) historyCalled = true;
-      else if (url.includes("/usage")) usageCalled = true;
-    });
+    const usageRequest = page.waitForRequest(
+      (req) => req.url().includes("/usage") && !req.url().includes("/usage/history"),
+    );
+    const historyRequest = page.waitForRequest((req) => req.url().includes("/usage/history"));
 
     await page.goto("/dashboard/billing");
 
-    // Wait for billing page to fully load (Current tier section always renders)
     await expect(page.getByText("Current tier")).toBeVisible({ timeout: 10_000 });
-    await page.waitForTimeout(2_000);
-
-    expect(usageCalled).toBe(true);
-    expect(historyCalled).toBe(true);
+    await Promise.all([usageRequest, historyRequest]);
   });
 });

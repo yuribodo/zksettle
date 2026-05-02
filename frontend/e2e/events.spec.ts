@@ -34,7 +34,7 @@ test.describe("Audit Log", () => {
   test("shows loading or events or error state", async ({ page }) => {
     // The page should show one of: loading, events data, error, or empty state
     const loadingOrContent = page.getByText(
-      /loading…|event[s]? loaded|Unavailable|No events match/,
+      /loading…|events? loaded|Unavailable|No events match/,
     );
     await expect(loadingOrContent).toBeVisible({ timeout: 10_000 });
   });
@@ -61,16 +61,11 @@ test.describe("Audit Log", () => {
   });
 
   test("fetches events from /v1/events endpoint", { tag: "@backend" }, async ({ page }) => {
-    let eventsCalled = false;
-    page.on("request", (req) => {
-      if (req.url().includes("/v1/events")) eventsCalled = true;
-    });
+    const eventsRequest = page.waitForRequest((req) => req.url().includes("/v1/events"));
 
     await page.goto("/dashboard/audit-log");
 
-    // Wait for events to load or show empty/error state
-    const content = page.getByText(/No events match|Unavailable|Loading events/);
-    await expect(content).toBeVisible({ timeout: 10_000 });
-    expect(eventsCalled).toBe(true);
+    await expect(page.getByRole("heading", { name: "Audit log" })).toBeVisible({ timeout: 10_000 });
+    await eventsRequest;
   });
 });
