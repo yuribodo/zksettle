@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 mod helpers;
 
 use helpers::*;
@@ -7,16 +8,7 @@ use stablecoin::error::StablecoinError;
 
 #[test]
 fn mint_tokens_happy_path() {
-    let TestEnv { mut svm, admin, mint_kp, .. } = setup();
-
-    let token_kp = Keypair::new();
-    let create_ixs = create_token_account_ix(
-        &admin.pubkey(),
-        &token_kp.pubkey(),
-        &mint_kp.pubkey(),
-        &admin.pubkey(),
-    );
-    send_tx(&mut svm, &create_ixs, &admin, &[&admin, &token_kp]).unwrap();
+    let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_token_account();
 
     let ix = mint_tokens_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 5000);
     send_tx(&mut svm, &[ix], &admin, &[&admin]).expect("mint should succeed");
@@ -28,16 +20,7 @@ fn mint_tokens_happy_path() {
 
 #[test]
 fn mint_tokens_counter_accumulates() {
-    let TestEnv { mut svm, admin, mint_kp, .. } = setup();
-
-    let token_kp = Keypair::new();
-    let create_ixs = create_token_account_ix(
-        &admin.pubkey(),
-        &token_kp.pubkey(),
-        &mint_kp.pubkey(),
-        &admin.pubkey(),
-    );
-    send_tx(&mut svm, &create_ixs, &admin, &[&admin, &token_kp]).unwrap();
+    let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_token_account();
 
     let ix = mint_tokens_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 1000);
     send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
@@ -51,16 +34,7 @@ fn mint_tokens_counter_accumulates() {
 
 #[test]
 fn mint_tokens_zero_amount_rejected() {
-    let TestEnv { mut svm, admin, mint_kp, .. } = setup();
-
-    let token_kp = Keypair::new();
-    let create_ixs = create_token_account_ix(
-        &admin.pubkey(),
-        &token_kp.pubkey(),
-        &mint_kp.pubkey(),
-        &admin.pubkey(),
-    );
-    send_tx(&mut svm, &create_ixs, &admin, &[&admin, &token_kp]).unwrap();
+    let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_token_account();
 
     let ix = mint_tokens_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 0);
     let result = send_tx(&mut svm, &[ix], &admin, &[&admin]);
@@ -69,19 +43,10 @@ fn mint_tokens_zero_amount_rejected() {
 
 #[test]
 fn mint_tokens_rejects_non_operator() {
-    let TestEnv { mut svm, admin, mint_kp, .. } = setup();
+    let TestEnvWithToken { mut svm, admin: _, mint_kp, token_kp } = setup_with_token_account();
 
     let attacker = Keypair::new();
     svm.airdrop(&attacker.pubkey(), 1_000_000_000).unwrap();
-
-    let token_kp = Keypair::new();
-    let create_ixs = create_token_account_ix(
-        &admin.pubkey(),
-        &token_kp.pubkey(),
-        &mint_kp.pubkey(),
-        &admin.pubkey(),
-    );
-    send_tx(&mut svm, &create_ixs, &admin, &[&admin, &token_kp]).unwrap();
 
     let ix = mint_tokens_ix(&attacker.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 1000);
     let result = send_tx(&mut svm, &[ix], &attacker, &[&attacker]);
@@ -90,19 +55,7 @@ fn mint_tokens_rejects_non_operator() {
 
 #[test]
 fn burn_tokens_happy_path() {
-    let TestEnv { mut svm, admin, mint_kp, .. } = setup();
-
-    let token_kp = Keypair::new();
-    let create_ixs = create_token_account_ix(
-        &admin.pubkey(),
-        &token_kp.pubkey(),
-        &mint_kp.pubkey(),
-        &admin.pubkey(),
-    );
-    send_tx(&mut svm, &create_ixs, &admin, &[&admin, &token_kp]).unwrap();
-
-    let ix = mint_tokens_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 5000);
-    send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
+    let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_funded_token(5000);
 
     let ix = burn_tokens_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 2000);
     send_tx(&mut svm, &[ix], &admin, &[&admin]).expect("burn should succeed");
@@ -114,19 +67,7 @@ fn burn_tokens_happy_path() {
 
 #[test]
 fn burn_tokens_zero_amount_rejected() {
-    let TestEnv { mut svm, admin, mint_kp, .. } = setup();
-
-    let token_kp = Keypair::new();
-    let create_ixs = create_token_account_ix(
-        &admin.pubkey(),
-        &token_kp.pubkey(),
-        &mint_kp.pubkey(),
-        &admin.pubkey(),
-    );
-    send_tx(&mut svm, &create_ixs, &admin, &[&admin, &token_kp]).unwrap();
-
-    let ix = mint_tokens_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 1000);
-    send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
+    let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_funded_token(1000);
 
     let ix = burn_tokens_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 0);
     let result = send_tx(&mut svm, &[ix], &admin, &[&admin]);
@@ -135,19 +76,7 @@ fn burn_tokens_zero_amount_rejected() {
 
 #[test]
 fn burn_tokens_counter_accumulates() {
-    let TestEnv { mut svm, admin, mint_kp, .. } = setup();
-
-    let token_kp = Keypair::new();
-    let create_ixs = create_token_account_ix(
-        &admin.pubkey(),
-        &token_kp.pubkey(),
-        &mint_kp.pubkey(),
-        &admin.pubkey(),
-    );
-    send_tx(&mut svm, &create_ixs, &admin, &[&admin, &token_kp]).unwrap();
-
-    let ix = mint_tokens_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 5000);
-    send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
+    let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_funded_token(5000);
 
     let ix = burn_tokens_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 1000);
     send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();

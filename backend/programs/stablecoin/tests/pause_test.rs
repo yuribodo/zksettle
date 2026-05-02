@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 mod helpers;
 
 use helpers::*;
@@ -32,11 +33,7 @@ fn pause_rejects_non_admin() {
 
     let ix = pause_ix(&attacker.pubkey(), &mint_kp.pubkey());
     let result = send_tx(&mut svm, &[ix], &attacker, &[&attacker]);
-
-    assert_anchor_error(
-        result,
-        ANCHOR_ERROR_CODE_OFFSET + StablecoinError::UnauthorizedAdmin as u32,
-    );
+    assert_anchor_error(result, ANCHOR_ERROR_CODE_OFFSET + StablecoinError::UnauthorizedAdmin as u32);
 }
 
 #[test]
@@ -48,10 +45,7 @@ fn pause_rejects_already_paused() {
 
     let ix = pause_ix(&admin.pubkey(), &mint_kp.pubkey());
     let result = send_tx(&mut svm, &[ix], &admin, &[&admin]);
-    assert_anchor_error(
-        result,
-        ANCHOR_ERROR_CODE_OFFSET + StablecoinError::AlreadyInState as u32,
-    );
+    assert_anchor_error(result, ANCHOR_ERROR_CODE_OFFSET + StablecoinError::AlreadyInState as u32);
 }
 
 #[test]
@@ -60,75 +54,36 @@ fn unpause_rejects_already_unpaused() {
 
     let ix = unpause_ix(&admin.pubkey(), &mint_kp.pubkey());
     let result = send_tx(&mut svm, &[ix], &admin, &[&admin]);
-    assert_anchor_error(
-        result,
-        ANCHOR_ERROR_CODE_OFFSET + StablecoinError::AlreadyInState as u32,
-    );
+    assert_anchor_error(result, ANCHOR_ERROR_CODE_OFFSET + StablecoinError::AlreadyInState as u32);
 }
 
 #[test]
 fn mint_rejected_when_paused() {
-    let TestEnv { mut svm, admin, mint_kp, .. } = setup();
-
-    let token_kp = Keypair::new();
-    let create_ixs = create_token_account_ix(
-        &admin.pubkey(),
-        &token_kp.pubkey(),
-        &mint_kp.pubkey(),
-        &admin.pubkey(),
-    );
-    send_tx(&mut svm, &create_ixs, &admin, &[&admin, &token_kp]).unwrap();
+    let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_token_account();
 
     let ix = pause_ix(&admin.pubkey(), &mint_kp.pubkey());
     send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
 
     let ix = mint_tokens_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 1000);
     let result = send_tx(&mut svm, &[ix], &admin, &[&admin]);
-    assert_anchor_error(
-        result,
-        ANCHOR_ERROR_CODE_OFFSET + StablecoinError::Paused as u32,
-    );
+    assert_anchor_error(result, ANCHOR_ERROR_CODE_OFFSET + StablecoinError::Paused as u32);
 }
 
 #[test]
 fn burn_rejected_when_paused() {
-    let TestEnv { mut svm, admin, mint_kp, .. } = setup();
-
-    let token_kp = Keypair::new();
-    let create_ixs = create_token_account_ix(
-        &admin.pubkey(),
-        &token_kp.pubkey(),
-        &mint_kp.pubkey(),
-        &admin.pubkey(),
-    );
-    send_tx(&mut svm, &create_ixs, &admin, &[&admin, &token_kp]).unwrap();
-
-    let ix = mint_tokens_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 1000);
-    send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
+    let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_funded_token(1000);
 
     let ix = pause_ix(&admin.pubkey(), &mint_kp.pubkey());
     send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
 
     let ix = burn_tokens_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 500);
     let result = send_tx(&mut svm, &[ix], &admin, &[&admin]);
-    assert_anchor_error(
-        result,
-        ANCHOR_ERROR_CODE_OFFSET + StablecoinError::Paused as u32,
-    );
+    assert_anchor_error(result, ANCHOR_ERROR_CODE_OFFSET + StablecoinError::Paused as u32);
 }
 
 #[test]
 fn mint_works_after_unpause() {
-    let TestEnv { mut svm, admin, mint_kp, .. } = setup();
-
-    let token_kp = Keypair::new();
-    let create_ixs = create_token_account_ix(
-        &admin.pubkey(),
-        &token_kp.pubkey(),
-        &mint_kp.pubkey(),
-        &admin.pubkey(),
-    );
-    send_tx(&mut svm, &create_ixs, &admin, &[&admin, &token_kp]).unwrap();
+    let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_token_account();
 
     let ix = pause_ix(&admin.pubkey(), &mint_kp.pubkey());
     send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();

@@ -184,13 +184,20 @@ pub fn transfer_authority_ix(
     }
 }
 
-pub fn freeze_account_ix(
+fn freeze_or_thaw_ix(
     admin: &Pubkey,
     mint: &Pubkey,
     target_account: &Pubkey,
+    freeze: bool,
 ) -> Instruction {
     let (treasury, _) = treasury_pda(mint);
     let (freeze_authority, _) = freeze_authority_pda(&treasury);
+
+    let data = if freeze {
+        stablecoin::instruction::FreezeAccount {}.data()
+    } else {
+        stablecoin::instruction::ThawAccount {}.data()
+    };
 
     Instruction {
         program_id: stablecoin::ID,
@@ -202,30 +209,16 @@ pub fn freeze_account_ix(
             AccountMeta::new(*target_account, false),
             AccountMeta::new_readonly(spl_token_2022::ID, false),
         ],
-        data: stablecoin::instruction::FreezeAccount {}.data(),
+        data,
     }
 }
 
-pub fn thaw_account_ix(
-    admin: &Pubkey,
-    mint: &Pubkey,
-    target_account: &Pubkey,
-) -> Instruction {
-    let (treasury, _) = treasury_pda(mint);
-    let (freeze_authority, _) = freeze_authority_pda(&treasury);
+pub fn freeze_account_ix(admin: &Pubkey, mint: &Pubkey, target: &Pubkey) -> Instruction {
+    freeze_or_thaw_ix(admin, mint, target, true)
+}
 
-    Instruction {
-        program_id: stablecoin::ID,
-        accounts: vec![
-            AccountMeta::new_readonly(*admin, true),
-            AccountMeta::new_readonly(treasury, false),
-            AccountMeta::new_readonly(*mint, false),
-            AccountMeta::new_readonly(freeze_authority, false),
-            AccountMeta::new(*target_account, false),
-            AccountMeta::new_readonly(spl_token_2022::ID, false),
-        ],
-        data: stablecoin::instruction::ThawAccount {}.data(),
-    }
+pub fn thaw_account_ix(admin: &Pubkey, mint: &Pubkey, target: &Pubkey) -> Instruction {
+    freeze_or_thaw_ix(admin, mint, target, false)
 }
 
 pub fn read_treasury(svm: &LiteSVM, mint: &Pubkey) -> stablecoin::state::Treasury {
@@ -269,6 +262,38 @@ pub fn setup() -> TestEnv {
     svm.send_transaction(tx).expect("initialize_mint should succeed");
 
     TestEnv { svm, admin, mint_kp }
+}
+
+pub struct TestEnvWithToken {
+    pub svm: LiteSVM,
+    pub admin: Keypair,
+    pub mint_kp: Keypair,
+    pub token_kp: Keypair,
+}
+
+pub fn setup_with_token_account() -> TestEnvWithToken {
+    let TestEnv { mut svm, admin, mint_kp } = setup();
+    let token_kp = Keypair::new();
+    let create_ixs = create_token_account_ix(
+        &admin.pubkey(),
+        &token_kp.pubkey(),
+        &mint_kp.pubkey(),
+        &admin.pubkey(),
+    );
+    send_tx(&mut svm, &create_ixs, &admin, &[&admin, &token_kp]).unwrap();
+    TestEnvWithToken { svm, admin, mint_kp, token_kp }
+}
+
+pub fn setup_with_funded_token(amount: u64) -> TestEnvWithToken {
+    let mut env = setup_with_token_account();
+    let ix = mint_tokens_ix(
+        &env.admin.pubkey(),
+        &env.mint_kp.pubkey(),
+        &env.token_kp.pubkey(),
+        amount,
+    );
+    send_tx(&mut env.svm, &[ix], &env.admin, &[&env.admin]).unwrap();
+    env
 }
 
 pub fn send_tx(

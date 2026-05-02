@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 mod helpers;
 
 use anchor_lang::prelude::Pubkey;

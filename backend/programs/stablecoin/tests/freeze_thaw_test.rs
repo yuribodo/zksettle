@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 mod helpers;
 
 use helpers::*;
@@ -7,16 +8,7 @@ use stablecoin::error::StablecoinError;
 
 #[test]
 fn freeze_and_thaw_happy_path() {
-    let TestEnv { mut svm, admin, mint_kp, .. } = setup();
-
-    let token_kp = Keypair::new();
-    let create_ixs = create_token_account_ix(
-        &admin.pubkey(),
-        &token_kp.pubkey(),
-        &mint_kp.pubkey(),
-        &admin.pubkey(),
-    );
-    send_tx(&mut svm, &create_ixs, &admin, &[&admin, &token_kp]).unwrap();
+    let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_token_account();
 
     let ix = freeze_account_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey());
     send_tx(&mut svm, &[ix], &admin, &[&admin]).expect("freeze should succeed");
@@ -27,19 +19,10 @@ fn freeze_and_thaw_happy_path() {
 
 #[test]
 fn freeze_rejects_non_admin() {
-    let TestEnv { mut svm, admin, mint_kp, .. } = setup();
+    let TestEnvWithToken { mut svm, admin: _, mint_kp, token_kp } = setup_with_token_account();
 
     let attacker = Keypair::new();
     svm.airdrop(&attacker.pubkey(), 1_000_000_000).unwrap();
-
-    let token_kp = Keypair::new();
-    let create_ixs = create_token_account_ix(
-        &admin.pubkey(),
-        &token_kp.pubkey(),
-        &mint_kp.pubkey(),
-        &admin.pubkey(),
-    );
-    send_tx(&mut svm, &create_ixs, &admin, &[&admin, &token_kp]).unwrap();
 
     let ix = freeze_account_ix(&attacker.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey());
     let result = send_tx(&mut svm, &[ix], &attacker, &[&attacker]);
@@ -48,16 +31,7 @@ fn freeze_rejects_non_admin() {
 
 #[test]
 fn freeze_rejected_when_paused() {
-    let TestEnv { mut svm, admin, mint_kp, .. } = setup();
-
-    let token_kp = Keypair::new();
-    let create_ixs = create_token_account_ix(
-        &admin.pubkey(),
-        &token_kp.pubkey(),
-        &mint_kp.pubkey(),
-        &admin.pubkey(),
-    );
-    send_tx(&mut svm, &create_ixs, &admin, &[&admin, &token_kp]).unwrap();
+    let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_token_account();
 
     let ix = pause_ix(&admin.pubkey(), &mint_kp.pubkey());
     send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
@@ -69,16 +43,7 @@ fn freeze_rejected_when_paused() {
 
 #[test]
 fn thaw_works_when_paused() {
-    let TestEnv { mut svm, admin, mint_kp, .. } = setup();
-
-    let token_kp = Keypair::new();
-    let create_ixs = create_token_account_ix(
-        &admin.pubkey(),
-        &token_kp.pubkey(),
-        &mint_kp.pubkey(),
-        &admin.pubkey(),
-    );
-    send_tx(&mut svm, &create_ixs, &admin, &[&admin, &token_kp]).unwrap();
+    let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_token_account();
 
     let ix = freeze_account_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey());
     send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
@@ -92,16 +57,7 @@ fn thaw_works_when_paused() {
 
 #[test]
 fn mint_rejected_after_freeze() {
-    let TestEnv { mut svm, admin, mint_kp, .. } = setup();
-
-    let token_kp = Keypair::new();
-    let create_ixs = create_token_account_ix(
-        &admin.pubkey(),
-        &token_kp.pubkey(),
-        &mint_kp.pubkey(),
-        &admin.pubkey(),
-    );
-    send_tx(&mut svm, &create_ixs, &admin, &[&admin, &token_kp]).unwrap();
+    let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_token_account();
 
     let ix = freeze_account_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey());
     send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
@@ -113,16 +69,7 @@ fn mint_rejected_after_freeze() {
 
 #[test]
 fn mint_works_after_thaw() {
-    let TestEnv { mut svm, admin, mint_kp, .. } = setup();
-
-    let token_kp = Keypair::new();
-    let create_ixs = create_token_account_ix(
-        &admin.pubkey(),
-        &token_kp.pubkey(),
-        &mint_kp.pubkey(),
-        &admin.pubkey(),
-    );
-    send_tx(&mut svm, &create_ixs, &admin, &[&admin, &token_kp]).unwrap();
+    let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_token_account();
 
     let ix = freeze_account_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey());
     send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
