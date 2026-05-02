@@ -42,6 +42,8 @@ fn signer_seeds<'a>(treasury_key: &'a [u8], bump: &'a [u8]) -> [&'a [u8]; 3] {
 }
 
 pub fn freeze_handler(ctx: Context<FreezeOrThaw>) -> Result<()> {
+    require!(!ctx.accounts.treasury.paused, StablecoinError::Paused);
+
     let treasury_key = ctx.accounts.treasury.key();
     let bump = [ctx.accounts.treasury.freeze_authority_bump];
     let seeds = signer_seeds(treasury_key.as_ref(), &bump);

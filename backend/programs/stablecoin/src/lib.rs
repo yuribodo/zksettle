@@ -41,4 +41,12 @@ pub mod stablecoin {
     ) -> Result<()> {
         instructions::transfer_authority_handler(ctx, new_admin, new_operator)
     }
+
+    pub fn pause(ctx: Context<PauseOrUnpause>) -> Result<()> {
+        instructions::pause_handler(ctx)
+    }
+
+    pub fn unpause(ctx: Context<PauseOrUnpause>) -> Result<()> {
+        instructions::unpause_handler(ctx)
+    }
 }

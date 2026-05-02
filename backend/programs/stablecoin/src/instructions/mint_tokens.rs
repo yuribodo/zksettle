@@ -40,6 +40,7 @@ pub struct MintTokens<'info> {
 }
 
 pub fn mint_tokens_handler(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
+    require!(!ctx.accounts.treasury.paused, StablecoinError::Paused);
     require!(amount > 0, StablecoinError::ZeroMintAmount);
 
     let treasury_key = ctx.accounts.treasury.key();
