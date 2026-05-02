@@ -276,8 +276,8 @@ em {
 
 .wallet-adapter-modal-button-close svg {
   fill: var(--color-muted);
-  width: 10px;
-  height: 10px;
+  width: 14px;
+  height: 14px;
   transition: fill 150ms var(--ease-brand);
 }
 
