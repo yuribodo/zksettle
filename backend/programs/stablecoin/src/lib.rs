@@ -25,4 +25,12 @@ pub mod stablecoin {
     pub fn burn_tokens(ctx: Context<BurnTokens>, amount: u64) -> Result<()> {
         instructions::burn_tokens::handler(ctx, amount)
     }
+
+    pub fn freeze_account(ctx: Context<FreezeAccount>) -> Result<()> {
+        instructions::freeze_account::handler(ctx)
+    }
+
+    pub fn thaw_account(ctx: Context<ThawAccount>) -> Result<()> {
+        instructions::thaw_account::handler(ctx)
+    }
 }
