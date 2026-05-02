@@ -4,6 +4,7 @@ use std::sync::Arc;
 use dashmap::DashMap;
 use governor::clock::DefaultClock;
 use governor::state::{InMemoryState, NotKeyed};
+use governor::state::keyed::DashMapStateStore;
 use governor::{Quota, RateLimiter};
 use zksettle_types::gateway::Tier;
 
@@ -27,6 +28,29 @@ impl RateLimitStore {
             .or_insert_with(|| Arc::new(build_limiter(tier)))
             .clone();
         limiter.check().is_ok()
+    }
+}
+
+pub struct LoginRateLimiter {
+    limiter: Arc<RateLimiter<String, DashMapStateStore<String>, DefaultClock>>,
+}
+
+impl LoginRateLimiter {
+    pub fn new() -> Self {
+        let quota = Quota::per_minute(NonZeroU32::new(5).unwrap());
+        Self {
+            limiter: Arc::new(RateLimiter::dashmap(quota)),
+        }
+    }
+
+    pub fn check(&self, ip: &str) -> bool {
+        self.limiter.check_key(&ip.to_owned()).is_ok()
+    }
+}
+
+impl Default for LoginRateLimiter {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

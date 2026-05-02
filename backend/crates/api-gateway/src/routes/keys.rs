@@ -86,7 +86,7 @@ pub async fn create_key(
         .unwrap()
         .as_secs();
 
-    key_store::insert(&state.db, &raw_key, body.owner.clone(), Tier::Developer, now).await?;
+    key_store::insert(&state.db, &raw_key, body.owner.clone(), Tier::Developer, now, None).await?;
 
     Ok(Json(CreateKeyResponse {
         api_key: raw_key,
@@ -142,7 +142,7 @@ mod tests {
     use http_body_util::BodyExt;
     use tower::ServiceExt;
 
-    use crate::config::Config;
+    use crate::config::{Config, CookieSameSite};
     use crate::rate_limit::RateLimitStore;
     use crate::{build_router, test_app, test_cleanup, test_db, AppState};
     use serial_test::serial;
@@ -183,11 +183,17 @@ mod tests {
             cors_allowed_origins: vec![],
             indexer_url: None,
             database_url: String::new(),
+            jwt_secret: None,
+            jwt_ttl_secs: 86400,
+            siws_domain: None,
+            cookie_secure: false,
+            cookie_same_site: CookieSameSite::Lax,
         };
         let state = Arc::new(AppState {
             config,
             db,
             rate_limiter: RateLimitStore::new(),
+            login_rate_limiter: crate::rate_limit::LoginRateLimiter::new(),
             upstream: Arc::new(crate::upstream::ReqwestUpstream::new(reqwest::Client::new())),
         });
         (build_router(state.clone()), state)
@@ -205,11 +211,17 @@ mod tests {
             cors_allowed_origins: vec![],
             indexer_url: None,
             database_url: String::new(),
+            jwt_secret: None,
+            jwt_ttl_secs: 86400,
+            siws_domain: None,
+            cookie_secure: false,
+            cookie_same_site: CookieSameSite::Lax,
         };
         let state = Arc::new(AppState {
             config,
             db,
             rate_limiter: RateLimitStore::new(),
+            login_rate_limiter: crate::rate_limit::LoginRateLimiter::new(),
             upstream: Arc::new(crate::upstream::ReqwestUpstream::new(reqwest::Client::new())),
         });
         build_router(state)
@@ -297,10 +309,10 @@ mod tests {
     #[serial]
     async fn list_keys_returns_provisioned_records() {
         let (app, state) = app_with_admin_key().await;
-        key_store::insert(&state.db, "zks_a", "alice".into(), Tier::Developer, 100)
+        key_store::insert(&state.db, "zks_a", "alice".into(), Tier::Developer, 100, None)
             .await
             .unwrap();
-        key_store::insert(&state.db, "zks_b", "bob".into(), Tier::Startup, 200)
+        key_store::insert(&state.db, "zks_b", "bob".into(), Tier::Startup, 200, None)
             .await
             .unwrap();
 
@@ -396,7 +408,7 @@ mod tests {
     async fn delete_key_evicts_and_invalidates_subsequent_auth() {
         let (app, state) = app_with_admin_key().await;
         let raw = "zks_to_delete";
-        key_store::insert(&state.db, raw, "carol".into(), Tier::Developer, 300)
+        key_store::insert(&state.db, raw, "carol".into(), Tier::Developer, 300, None)
             .await
             .unwrap();
         let hash = key_store::hash_key(raw);

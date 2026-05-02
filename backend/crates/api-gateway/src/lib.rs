@@ -21,13 +21,16 @@ pub mod routes;
 pub mod upstream;
 
 use config::Config;
-use rate_limit::RateLimitStore;
+#[cfg(test)]
+use config::CookieSameSite;
+use rate_limit::{LoginRateLimiter, RateLimitStore};
 use upstream::HttpUpstream;
 
 pub struct AppState {
     pub config: Config,
     pub db: DatabaseConnection,
     pub rate_limiter: RateLimitStore,
+    pub login_rate_limiter: LoginRateLimiter,
     pub upstream: Arc<dyn HttpUpstream>,
 }
 
@@ -98,6 +101,7 @@ pub async fn test_db() -> DatabaseConnection {
 pub async fn test_cleanup(db: &DatabaseConnection) {
     use sea_orm::EntityTrait;
     entity::api_key::Entity::delete_many().exec(db).await.unwrap();
+    entity::tenant::Entity::delete_many().exec(db).await.unwrap();
 }
 
 #[cfg(test)]
@@ -112,11 +116,17 @@ pub async fn test_state() -> Arc<AppState> {
         cors_allowed_origins: vec![],
         indexer_url: None,
         database_url: String::new(),
+        jwt_secret: None,
+        jwt_ttl_secs: 86400,
+        siws_domain: None,
+        cookie_secure: false,
+        cookie_same_site: CookieSameSite::Lax,
     };
     Arc::new(AppState {
         config,
         db,
         rate_limiter: RateLimitStore::new(),
+        login_rate_limiter: LoginRateLimiter::new(),
         upstream: Arc::new(upstream::ReqwestUpstream::new(reqwest::Client::new())),
     })
 }
@@ -145,11 +155,17 @@ mod tests {
             cors_allowed_origins: origins.into_iter().map(String::from).collect(),
             indexer_url: None,
             database_url: String::new(),
+            jwt_secret: None,
+            jwt_ttl_secs: 86400,
+            siws_domain: None,
+            cookie_secure: false,
+            cookie_same_site: CookieSameSite::Lax,
         };
         let state = Arc::new(AppState {
             config,
             db,
             rate_limiter: RateLimitStore::new(),
+            login_rate_limiter: LoginRateLimiter::new(),
             upstream: Arc::new(upstream::ReqwestUpstream::new(reqwest::Client::new())),
         });
         build_router(state)

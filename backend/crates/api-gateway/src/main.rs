@@ -6,7 +6,7 @@ use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
 use api_gateway::config::{db, Config};
-use api_gateway::rate_limit::RateLimitStore;
+use api_gateway::rate_limit::{LoginRateLimiter, RateLimitStore};
 use api_gateway::upstream::ReqwestUpstream;
 use api_gateway::{build_router, AppState};
 
@@ -37,6 +37,7 @@ async fn main() -> anyhow::Result<()> {
         config: config.clone(),
         db,
         rate_limiter: RateLimitStore::new(),
+        login_rate_limiter: LoginRateLimiter::new(),
         upstream: Arc::new(ReqwestUpstream::new(http)),
     });
 

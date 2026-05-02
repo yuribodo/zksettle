@@ -1,5 +1,25 @@
 use crate::error::GatewayError;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CookieSameSite {
+    Strict,
+    Lax,
+    None,
+}
+
+impl CookieSameSite {
+    pub fn parse(s: &str) -> Result<Self, GatewayError> {
+        match s.to_lowercase().as_str() {
+            "strict" => Ok(Self::Strict),
+            "lax" => Ok(Self::Lax),
+            "none" => Ok(Self::None),
+            other => Err(GatewayError::Config(format!(
+                "GATEWAY_COOKIE_SAME_SITE must be strict, lax, or none; got: {other}"
+            ))),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Config {
     pub port: u16,
@@ -14,6 +34,11 @@ pub struct Config {
     /// Set `GATEWAY_CORS_ALLOWED_ORIGINS=https://app.example.com,http://localhost:3000`.
     pub cors_allowed_origins: Vec<String>,
     pub database_url: String,
+    pub jwt_secret: Option<String>,
+    pub jwt_ttl_secs: u64,
+    pub siws_domain: Option<String>,
+    pub cookie_secure: bool,
+    pub cookie_same_site: CookieSameSite,
 }
 
 impl std::fmt::Debug for Config {
@@ -27,6 +52,11 @@ impl std::fmt::Debug for Config {
             .field("allow_open_keys", &self.allow_open_keys)
             .field("cors_allowed_origins", &self.cors_allowed_origins)
             .field("database_url", &"[REDACTED]")
+            .field("jwt_secret", &self.jwt_secret.as_ref().map(|_| "[REDACTED]"))
+            .field("jwt_ttl_secs", &self.jwt_ttl_secs)
+            .field("siws_domain", &self.siws_domain)
+            .field("cookie_secure", &self.cookie_secure)
+            .field("cookie_same_site", &self.cookie_same_site)
             .finish()
     }
 }
@@ -49,6 +79,18 @@ impl Config {
                 .map(|v| parse_origins(&v))
                 .unwrap_or_default(),
             database_url: read_var("GATEWAY_DATABASE_URL")?,
+            jwt_secret: read_var("GATEWAY_JWT_SECRET").ok(),
+            jwt_ttl_secs: read_var("GATEWAY_JWT_TTL_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(86400),
+            siws_domain: read_var("GATEWAY_SIWS_DOMAIN").ok(),
+            cookie_secure: read_var("GATEWAY_COOKIE_SECURE")
+                .map(|v| v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false),
+            cookie_same_site: read_var("GATEWAY_COOKIE_SAME_SITE")
+                .map(|v| CookieSameSite::parse(&v))
+                .unwrap_or(Ok(CookieSameSite::Lax))?,
         })
     }
 }
@@ -104,10 +146,16 @@ mod tests {
             cors_allowed_origins: vec![],
             indexer_url: None,
             database_url: "postgres://secret@localhost/db".into(),
+            jwt_secret: Some("my_jwt_secret".into()),
+            jwt_ttl_secs: 86400,
+            siws_domain: None,
+            cookie_secure: false,
+            cookie_same_site: CookieSameSite::Lax,
         };
         let dbg = format!("{cfg:?}");
         assert!(!dbg.contains("my_admin_secret"));
         assert!(!dbg.contains("postgres://secret"));
+        assert!(!dbg.contains("my_jwt_secret"));
         assert!(dbg.contains("[REDACTED]"));
     }
 }

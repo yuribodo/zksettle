@@ -1,5 +1,6 @@
 use sea_orm::*;
 use sha2::{Digest, Sha256};
+use uuid::Uuid;
 use zksettle_types::gateway::{ApiKeyRecord, Tier};
 
 use crate::entity::api_key;
@@ -24,6 +25,7 @@ pub async fn insert(
     owner: String,
     tier: Tier,
     created_at: u64,
+    tenant_id: Option<Uuid>,
 ) -> Result<(), GatewayError> {
     let hash = hash_key(raw_key);
     let model = api_key::ActiveModel {
@@ -31,9 +33,34 @@ pub async fn insert(
         owner: Set(owner),
         tier: Set(tier.to_string()),
         created_at: Set(created_at as i64),
+        tenant_id: Set(tenant_id),
     };
     api_key::Entity::insert(model).exec(db).await?;
     Ok(())
+}
+
+pub async fn list_by_tenant(
+    db: &DatabaseConnection,
+    tenant_id: Uuid,
+) -> Result<Vec<ApiKeyRecord>, GatewayError> {
+    let results = api_key::Entity::find()
+        .filter(api_key::Column::TenantId.eq(tenant_id))
+        .all(db)
+        .await?;
+    results.into_iter().map(model_to_record).collect()
+}
+
+pub async fn remove_by_hash_and_tenant(
+    db: &DatabaseConnection,
+    key_hash: &str,
+    tenant_id: Uuid,
+) -> Result<bool, GatewayError> {
+    let result = api_key::Entity::delete_many()
+        .filter(api_key::Column::KeyHash.eq(key_hash))
+        .filter(api_key::Column::TenantId.eq(tenant_id))
+        .exec(db)
+        .await?;
+    Ok(result.rows_affected > 0)
 }
 
 pub async fn lookup_by_hash(
@@ -80,7 +107,7 @@ mod tests {
     async fn insert_and_lookup() {
         let db = test_db().await;
         test_cleanup(&db).await;
-        insert(&db, "test-key", "alice".into(), Tier::Developer, 1000)
+        insert(&db, "test-key", "alice".into(), Tier::Developer, 1000, None)
             .await
             .unwrap();
         let record = lookup_by_hash(&db, &hash_key("test-key"))
@@ -107,7 +134,7 @@ mod tests {
     async fn remove_key() {
         let db = test_db().await;
         test_cleanup(&db).await;
-        insert(&db, "key", "bob".into(), Tier::Startup, 2000)
+        insert(&db, "key", "bob".into(), Tier::Startup, 2000, None)
             .await
             .unwrap();
         let hash = hash_key("key");
@@ -128,10 +155,10 @@ mod tests {
     async fn list_returns_all_records() {
         let db = test_db().await;
         test_cleanup(&db).await;
-        insert(&db, "a", "alice".into(), Tier::Developer, 100)
+        insert(&db, "a", "alice".into(), Tier::Developer, 100, None)
             .await
             .unwrap();
-        insert(&db, "b", "bob".into(), Tier::Startup, 200)
+        insert(&db, "b", "bob".into(), Tier::Startup, 200, None)
             .await
             .unwrap();
         let mut owners: Vec<String> = list(&db)
@@ -149,10 +176,10 @@ mod tests {
     async fn insert_duplicate_key_hash_errors() {
         let db = test_db().await;
         test_cleanup(&db).await;
-        insert(&db, "dup", "alice".into(), Tier::Developer, 100)
+        insert(&db, "dup", "alice".into(), Tier::Developer, 100, None)
             .await
             .unwrap();
-        let result = insert(&db, "dup", "bob".into(), Tier::Developer, 200).await;
+        let result = insert(&db, "dup", "bob".into(), Tier::Developer, 200, None).await;
         assert!(result.is_err());
     }
 
