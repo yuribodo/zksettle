@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, Trash, WarningTriangle, Xmark } from "iconoir-react";
+import { Check, Plus, Search, Trash, WarningTriangle, Xmark } from "iconoir-react";
 import { useState, type FormEvent } from "react";
 
 import { StatusPill } from "@/components/dashboard/status-pill";
@@ -16,6 +16,7 @@ import {
   useRecentWallets,
   useRecordWallet,
 } from "@/hooks/use-recent-wallets";
+import { useRegisterWallet } from "@/hooks/use-register-wallet";
 import { ApiError } from "@/lib/api/client";
 import type { Credential } from "@/lib/api/schemas";
 import { truncateWallet } from "@/lib/format";
@@ -43,19 +44,47 @@ function describeError(err: unknown): { kind: "not-found" | "auth" | "conflict" 
   return { kind: "other", message: err instanceof Error ? err.message : "Unknown error" };
 }
 
+function describeRegisterError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 409) return "Wallet is already registered in the membership tree.";
+    if (err.status === 400) return "Invalid wallet hex (need exactly 64 hex characters).";
+    if (err.status === 401 || err.status === 403)
+      return "Not authorized. Check NEXT_PUBLIC_API_KEY.";
+    return err.message;
+  }
+  return err instanceof Error ? err.message : "Unknown error";
+}
+
 export function WalletsCredentialsPanel() {
   const [walletInput, setWalletInput] = useState("");
   const [activeWallet, setActiveWallet] = useState<string | null>(null);
   const [issueJurisdiction, setIssueJurisdiction] = useState("US");
+  const [registerInput, setRegisterInput] = useState("");
 
   const credentialQuery = useCredential(activeWallet);
   const issue = useIssueCredential();
   const revoke = useRevokeCredential();
+  const register = useRegisterWallet();
   const { data: recent = [] } = useRecentWallets();
   const recordWallet = useRecordWallet();
   const forgetWallet = useForgetWallet();
+  const registerInputValid = isValidWalletHex(registerInput);
 
   const inputValid = isValidWalletHex(walletInput);
+
+  const onRegister = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!registerInputValid) return;
+    const normalized = normalizeWalletHex(registerInput);
+    register.reset();
+    try {
+      await register.mutateAsync(normalized);
+      recordWallet(normalized);
+      setRegisterInput("");
+    } catch {
+      // error surfaced via register.error
+    }
+  };
 
   const lookup = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -99,6 +128,83 @@ export function WalletsCredentialsPanel() {
 
   return (
     <div className="flex flex-col gap-6">
+      <section
+        aria-labelledby="register-heading"
+        className="rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6"
+      >
+        <span
+          id="register-heading"
+          className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase"
+        >
+          Register wallet
+        </span>
+        <p className="mt-1 text-sm text-stone">
+          Add a wallet to the membership tree. Paste a 32-byte pubkey as 64 hex
+          chars (with or without <span className="font-mono">0x</span>).
+        </p>
+
+        <form
+          onSubmit={onRegister}
+          className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center"
+        >
+          <Input
+            value={registerInput}
+            onChange={(e) => {
+              setRegisterInput(e.target.value);
+              register.reset();
+            }}
+            placeholder="0x… (64 hex chars)"
+            spellCheck={false}
+            autoComplete="off"
+            aria-invalid={registerInput.length > 0 && !registerInputValid}
+            aria-describedby="register-help"
+            className="font-mono"
+            disabled={register.isPending}
+          />
+          <Button
+            type="submit"
+            variant="primary"
+            size="md"
+            disabled={!registerInputValid || register.isPending}
+          >
+            <Plus aria-hidden="true" className="size-4" />
+            {register.isPending ? "Registering…" : "Register"}
+          </Button>
+        </form>
+
+        {registerInput.length > 0 && !registerInputValid ? (
+          <p id="register-help" className="mt-2 font-mono text-xs text-rust">
+            Wallet must be 64 hex characters.
+          </p>
+        ) : (
+          <p id="register-help" className="mt-2 font-mono text-xs text-muted">
+            Calls <span className="text-quill">POST /v1/wallets</span>.
+          </p>
+        )}
+
+        {register.isSuccess ? (
+          <output
+            className="mt-3 flex items-start gap-2 font-mono text-xs text-forest"
+          >
+            <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            Wallet registered — {register.data.message}
+          </output>
+        ) : null}
+
+        {register.isError ? (
+          <p
+            role="alert"
+            className="mt-3 flex items-start gap-2 font-mono text-xs text-rust"
+          >
+            <WarningTriangle
+              aria-hidden="true"
+              className="mt-0.5 size-4 shrink-0"
+            />
+            {describeRegisterError(register.error)}
+          </p>
+        ) : null}
+      </section>
+
       <section
         aria-labelledby="lookup-heading"
         className="rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6"
@@ -237,7 +343,7 @@ function CredentialCard({
   revokePending,
   issueError,
   revokeError,
-}: CredentialCardProps) {
+}: Readonly<CredentialCardProps>) {
   const { data: credential, isLoading, isError, error } = query;
   const errorInfo = isError ? describeError(error) : null;
 
@@ -362,13 +468,13 @@ function CredentialStatus({
   credential,
   authError,
   otherError,
-}: {
+}: Readonly<{
   loading: boolean;
   notFound: boolean;
   credential: Credential | null;
   authError: boolean;
   otherError: boolean;
-}) {
+}>) {
   if (loading) return <StatusPill kind="info" label="Loading" />;
   if (notFound) return <StatusPill kind="warning" label="Not found" />;
   if (authError) return <StatusPill kind="warning" label="Unauthorized" />;
@@ -378,7 +484,7 @@ function CredentialStatus({
   return null;
 }
 
-function CredentialDetails({ credential }: { credential: Credential }) {
+function CredentialDetails({ credential }: Readonly<{ credential: Credential }>) {
   const walletHex = bytesToHex(credential.wallet);
   return (
     <dl className="mt-5 grid gap-y-3 sm:grid-cols-[140px_1fr]">

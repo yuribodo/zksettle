@@ -7,6 +7,7 @@ import {
   ListEventsResponseSchema,
   ListKeysResponseSchema,
   MembershipProofSchema,
+  RegisterWalletResponseSchema,
   RootsSchema,
   SanctionsProofSchema,
   UsageHistorySchema,
@@ -18,6 +19,7 @@ import {
   type ListEventsResponse,
   type ListKeysResponse,
   type MembershipProof,
+  type RegisterWalletResponse,
   type Roots,
   type SanctionsProof,
   type Usage,
@@ -44,6 +46,14 @@ export const getMembershipProof = async (wallet: string): Promise<MembershipProo
 
 export const getSanctionsProof = async (wallet: string): Promise<SanctionsProof> =>
   SanctionsProofSchema.parse(await apiFetch(`/v1/proofs/sanctions/${wallet}`));
+
+export const registerWallet = async (wallet: string): Promise<RegisterWalletResponse> =>
+  RegisterWalletResponseSchema.parse(
+    await apiFetch("/v1/wallets", {
+      method: "POST",
+      body: JSON.stringify({ wallet }),
+    }),
+  );
 
 export const issueCredential = (body: { wallet: string; jurisdiction?: string }) =>
   apiFetch<{ wallet: string; leaf_index: number; jurisdiction: string }>("/v1/credentials", {
@@ -95,7 +105,6 @@ export const listEvents = async (
   if (params.issuer) search.set("issuer", params.issuer);
   if (params.recipient) search.set("recipient", params.recipient);
   const query = search.toString();
-  return ListEventsResponseSchema.parse(
-    await apiFetch(`/v1/events${query ? `?${query}` : ""}`),
-  );
+  const path = query ? `/v1/events?${query}` : "/v1/events";
+  return ListEventsResponseSchema.parse(await apiFetch(path));
 };
