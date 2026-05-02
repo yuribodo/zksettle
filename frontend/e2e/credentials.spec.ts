@@ -1,0 +1,45 @@
+import { test, expect } from "@playwright/test";
+
+const MOCK_WALLET = "a".repeat(64);
+
+test.describe("Wallets & Credentials", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/dashboard/transactions");
+  });
+
+  test("shows the credential lookup form", async ({ page }) => {
+    await expect(page.getByText("Look up wallet credential")).toBeVisible();
+    await expect(page.getByPlaceholder("0x… (64 hex chars)")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Look up" })).toBeVisible();
+  });
+
+  test("look up button is disabled with empty input", async ({ page }) => {
+    await expect(page.getByRole("button", { name: "Look up" })).toBeDisabled();
+  });
+
+  test("shows validation error for invalid wallet", async ({ page }) => {
+    await page.getByPlaceholder("0x… (64 hex chars)").fill("not-a-valid-hex");
+    await expect(page.getByText("Wallet must be 64 hex characters")).toBeVisible();
+  });
+
+  test("enables look up button with valid 64-char hex", async ({ page }) => {
+    await page.getByPlaceholder("0x… (64 hex chars)").fill(MOCK_WALLET);
+    await expect(page.getByRole("button", { name: "Look up" })).toBeEnabled();
+  });
+
+  test("looks up a wallet and shows credential status", async ({ page }) => {
+    await page.getByPlaceholder("0x… (64 hex chars)").fill(MOCK_WALLET);
+    await page.getByRole("button", { name: "Look up" }).click();
+
+    // Should show credential section (loading then result or error)
+    const credentialSection = page.locator("section", { has: page.getByText("Credential") });
+    await expect(credentialSection).toBeVisible({ timeout: 10_000 });
+
+    // The wallet address should be displayed
+    await expect(credentialSection.getByText(MOCK_WALLET)).toBeVisible();
+  });
+
+  test("shows recent lookups section", async ({ page }) => {
+    await expect(page.getByText("Recent lookups (this browser)")).toBeVisible();
+  });
+});
