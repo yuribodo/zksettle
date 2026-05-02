@@ -20,7 +20,7 @@ jobs:
 
       - name: Set fallback password
         if: env.POSTGRES_PASSWORD == ''
-        run: echo "POSTGRES_PASSWORD=e2e_test_pw_ci" >> "$GITHUB_ENV"
+        run: echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
 
       - name: Start E2E backend
         run: docker compose -f docker-compose.e2e.yml up -d --build

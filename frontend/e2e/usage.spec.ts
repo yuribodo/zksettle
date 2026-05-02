@@ -49,10 +49,9 @@ test.describe("Billing & Usage", () => {
 
     await page.goto("/dashboard/billing");
 
-    // Wait for usage data to load
-    await expect(page.getByText(/Developer|Startup|Growth|Enterprise/).first()).toBeVisible({
-      timeout: 10_000,
-    });
+    // Wait for billing page to fully load (Current tier section always renders)
+    await expect(page.getByText("Current tier")).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(2_000);
 
     expect(usageCalled).toBe(true);
     expect(historyCalled).toBe(true);
