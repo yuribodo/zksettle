@@ -17,4 +17,12 @@ pub mod stablecoin {
     pub fn initialize_mint(ctx: Context<InitializeMint>, decimals: u8) -> Result<()> {
         instructions::initialize_mint::handler(ctx, decimals)
     }
+
+    pub fn mint_tokens(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
+        instructions::mint_tokens::handler(ctx, amount)
+    }
+
+    pub fn burn_tokens(ctx: Context<BurnTokens>, amount: u64) -> Result<()> {
+        instructions::burn_tokens::handler(ctx, amount)
+    }
 }
