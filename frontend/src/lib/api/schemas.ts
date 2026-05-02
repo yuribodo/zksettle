@@ -45,6 +45,12 @@ export const CredentialSchema = z.object({
 });
 export type Credential = z.infer<typeof CredentialSchema>;
 
+export const RegisterWalletResponseSchema = z.object({
+  wallet: z.string(),
+  message: z.string(),
+});
+export type RegisterWalletResponse = z.infer<typeof RegisterWalletResponseSchema>;
+
 export const MembershipProofSchema = z.object({
   wallet: z.string(),
   leaf_index: z.number().int().nonnegative(),
