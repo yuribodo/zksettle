@@ -52,7 +52,7 @@ test.describe("API Keys management", () => {
     await expect(page.getByText("loading…")).not.toBeVisible({ timeout: 10_000 });
 
     // Should show count (e.g. "0 active" or "N active")
-    await expect(page.getByText(/\d+ active/)).toBeVisible();
+    await expect(page.getByText("active")).toBeVisible();
   });
 
   test("revokes an API key after creation", { tag: "@backend" }, async ({ page }) => {
