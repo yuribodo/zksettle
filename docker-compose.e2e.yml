@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: zksettle
+      POSTGRES_PASSWORD: zksettle_dev
+      POSTGRES_DB: zksettle_gateway
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./scripts/init-test-dbs.sql:/docker-entrypoint-initdb.d/10-test-dbs.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zksettle"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+
+  api-gateway:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: api-gateway
+    ports:
+      - "4000:4000"
+    environment:
+      GATEWAY_PORT: "4000"
+      GATEWAY_UPSTREAM_URL: "http://localhost:3333"
+      GATEWAY_INDEXER_URL: "http://localhost:3334"
+      GATEWAY_DATABASE_URL: "postgres://zksettle:zksettle_dev@postgres:5432/zksettle_gateway"
+      GATEWAY_ALLOW_OPEN_KEYS: "true"
+      GATEWAY_CORS_ALLOWED_ORIGINS: "http://localhost:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
