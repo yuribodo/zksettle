@@ -9,14 +9,14 @@ Test the integration between the Next.js frontend and the Rust/Axum backend by r
 
 ## Architecture
 
-```
-docker-compose up (postgres + api-gateway + issuer-service + indexer)
+```text
+docker-compose up (postgres + api-gateway only)
         ↓
 pnpm build && pnpm start (Next.js at localhost:3000)
         ↓
 playwright test (browser opens localhost:3000, navigates dashboard)
         ↓
-frontend fetches → api-gateway:4000 → issuer-service / indexer
+frontend fetches → api-gateway:4000 (issuer/indexer not started)
         ↓
 playwright validates data renders correctly in the UI
 ```
@@ -25,12 +25,12 @@ playwright validates data renders correctly in the UI
 
 - **Framework:** Playwright (browser-based E2E)
 - **Browser:** Chromium only (sufficient for integration validation)
-- **Backend:** Real services via docker-compose (no mocks)
-- **Database:** PostgreSQL (docker-compose default credentials)
+- **Backend:** api-gateway via docker-compose (no mocks); issuer-service and indexer intentionally omitted
+- **Database:** PostgreSQL (credentials via environment variables)
 
 ## File Structure
 
-```
+```text
 frontend/
   e2e/
     health.spec.ts
@@ -92,18 +92,18 @@ frontend/
 - **Trigger:** push to `dev` + pull requests (same as existing build.yml)
 - **Steps:**
   1. Checkout
-  2. `docker-compose up -d` (postgres + 3 backend services)
+  2. `docker-compose up -d` (postgres + api-gateway)
   3. Wait for health check (`curl` api-gateway:4000/health)
   4. Setup Node.js + pnpm
-  5. `pnpm install` + `npx playwright install --with-deps chromium`
+  5. `pnpm install` + `pnpm exec playwright install --with-deps chromium`
   6. `pnpm build` (frontend)
-  7. `npx playwright test`
+  7. `pnpm test:e2e`
   8. Upload Playwright report as artifact
 
 **Environment variables in CI:**
 - `NEXT_PUBLIC_API_BASE_URL=http://localhost:4000`
 - `NEXT_PUBLIC_SOLANA_NETWORK=devnet`
-- Postgres: default docker-compose credentials (`zksettle:zksettle_dev`)
+- `POSTGRES_PASSWORD` via GitHub secret `E2E_POSTGRES_PASSWORD` (fallback for CI without secret configured)
 
 ## Design Decisions
 

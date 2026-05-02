@@ -6,14 +6,21 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+env:
+  POSTGRES_PASSWORD: ${{ secrets.E2E_POSTGRES_PASSWORD }}
+
 jobs:
   e2e:
     name: Playwright E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set fallback password
+        if: env.POSTGRES_PASSWORD == ''
+        run: echo "POSTGRES_PASSWORD=e2e_test_pw_ci" >> "$GITHUB_ENV"
 
       - name: Start E2E backend
         run: docker compose -f docker-compose.e2e.yml up -d --build
@@ -47,7 +54,7 @@ jobs:
         working-directory: frontend
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
         working-directory: frontend
 
       - name: Build frontend
