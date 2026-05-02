@@ -25,7 +25,7 @@ export function ConnectWalletButton({
   showAddress = false,
   size = "md",
   variant = "primary",
-}: ConnectWalletButtonProps) {
+}: Readonly<ConnectWalletButtonProps>) {
   const { connected, publicKey } = useWallet();
   const truncatedAddress = publicKey ? truncateWallet(publicKey.toBase58()) : null;
   const buttonClassName = cn(
