@@ -36,7 +36,7 @@ test.describe("Wallets & Credentials", () => {
     await expect(credentialSection).toBeVisible({ timeout: 10_000 });
 
     // The wallet address should be displayed
-    await expect(credentialSection.getByText(MOCK_WALLET)).toBeVisible();
+    await expect(credentialSection.getByText(MOCK_WALLET).first()).toBeVisible();
   });
 
   test("shows recent lookups section", async ({ page }) => {

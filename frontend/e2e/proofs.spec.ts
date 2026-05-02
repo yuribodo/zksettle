@@ -31,7 +31,7 @@ test.describe("Attestation Explorer", () => {
     await expect(statusSection).toBeVisible({ timeout: 10_000 });
 
     // The wallet should appear in the status section
-    await expect(statusSection.getByText(MOCK_WALLET)).toBeVisible();
+    await expect(statusSection.getByText(MOCK_WALLET, { exact: true })).toBeVisible();
   });
 
   test("shows recent lookups section", async ({ page }) => {
