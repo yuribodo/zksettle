@@ -13,11 +13,6 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
-    server: {
-      deps: {
-        inline: ["whatwg-url", "@exodus/bytes"],
-      },
-    },
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],

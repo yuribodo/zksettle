@@ -72,7 +72,8 @@
   },
   "pnpm": {
     "overrides": {
-      "html-encoding-sniffer": "4.0.0"
+      "html-encoding-sniffer": "4.0.0",
+      "whatwg-url": "14.2.0"
     }
   }
 }
