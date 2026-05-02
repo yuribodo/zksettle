@@ -48,4 +48,18 @@ test.describe("Attestation Explorer", () => {
     await expect(page.getByText("Search wallet attestation")).toBeVisible({ timeout: 10_000 });
     await rootsRequest;
   });
+
+  test("fetches membership and sanctions proofs on search", { tag: "@backend" }, async ({ page }) => {
+    const membershipRequest = page.waitForRequest(
+      (req) => req.url().includes("/v1/proofs/membership/"),
+    );
+    const sanctionsRequest = page.waitForRequest(
+      (req) => req.url().includes("/v1/proofs/sanctions/"),
+    );
+
+    await page.getByPlaceholder("0x… (64 hex chars)").fill(MOCK_WALLET);
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+
+    await Promise.all([membershipRequest, sanctionsRequest]);
+  });
 });

@@ -39,6 +39,9 @@ frontend/
     proofs.spec.ts
     events.spec.ts
     usage.spec.ts
+    counterparties.spec.ts
+    policies.spec.ts
+    team.spec.ts
   playwright.config.ts
 ```
 
