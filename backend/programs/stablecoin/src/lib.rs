@@ -33,4 +33,12 @@ pub mod stablecoin {
     pub fn thaw_account(ctx: Context<ThawAccount>) -> Result<()> {
         instructions::thaw_account::handler(ctx)
     }
+
+    pub fn transfer_authority(
+        ctx: Context<TransferAuthority>,
+        new_admin: Option<Pubkey>,
+        new_operator: Option<Pubkey>,
+    ) -> Result<()> {
+        instructions::transfer_authority::handler(ctx, new_admin, new_operator)
+    }
 }
