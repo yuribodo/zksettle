@@ -10215,8 +10215,14 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
+ "litesvm",
+ "solana-instruction 2.3.3",
  "solana-keypair",
+ "solana-message",
+ "solana-pubkey 2.4.0",
  "solana-signer 2.2.1",
+ "solana-transaction",
+ "solana-transaction-error 2.2.1",
  "spl-token-2022 6.0.0",
 ]
 

@@ -32,7 +32,9 @@ pub struct BurnTokens<'info> {
     pub token_program: Program<'info, Token2022>,
 }
 
-pub fn handler(ctx: Context<BurnTokens>, amount: u64) -> Result<()> {
+// Any holder can burn their own tokens. total_burned includes user-initiated burns by design.
+pub fn burn_tokens_handler(ctx: Context<BurnTokens>, amount: u64) -> Result<()> {
+    require!(!ctx.accounts.treasury.paused, StablecoinError::Paused);
     require!(amount > 0, StablecoinError::ZeroBurnAmount);
 
     let cpi_accounts = token_2022::Burn {
