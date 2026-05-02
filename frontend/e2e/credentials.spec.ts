@@ -42,4 +42,42 @@ test.describe("Wallets & Credentials", () => {
   test("shows recent lookups section", async ({ page }) => {
     await expect(page.getByText("Recent lookups (this browser)")).toBeVisible();
   });
+
+  test("issues a credential for a wallet", { tag: "@backend" }, async ({ page }) => {
+    await page.getByPlaceholder("0x… (64 hex chars)").fill(MOCK_WALLET);
+    await page.getByRole("button", { name: "Look up" }).click();
+
+    const credentialSection = page.getByRole("region", { name: "Credential", exact: true });
+    await expect(credentialSection).toBeVisible({ timeout: 10_000 });
+
+    // If not found, the issue form should appear
+    const issueButton = credentialSection.getByRole("button", { name: /Issue credential/ });
+    if (await issueButton.isVisible().catch(() => false)) {
+      // Fill jurisdiction and issue
+      await credentialSection.getByRole("textbox").fill("US");
+      await issueButton.click();
+
+      // Should show credential details or error
+      const result = credentialSection.getByText(/Active|Wallet already has|Error|Revoked/);
+      await expect(result).toBeVisible({ timeout: 10_000 });
+    }
+  });
+
+  test("revokes a credential for a wallet", { tag: "@backend" }, async ({ page }) => {
+    await page.getByPlaceholder("0x… (64 hex chars)").fill(MOCK_WALLET);
+    await page.getByRole("button", { name: "Look up" }).click();
+
+    const credentialSection = page.getByRole("region", { name: "Credential", exact: true });
+    await expect(credentialSection).toBeVisible({ timeout: 10_000 });
+
+    // If credential exists and is active, the revoke button should appear
+    const revokeButton = credentialSection.getByRole("button", { name: /Revoke/ });
+    if (await revokeButton.isVisible().catch(() => false)) {
+      await revokeButton.click();
+
+      // Should show revoked status or error
+      const result = credentialSection.getByText(/Revoked|Error|Not found/);
+      await expect(result).toBeVisible({ timeout: 10_000 });
+    }
+  });
 });

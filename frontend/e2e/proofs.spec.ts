@@ -37,4 +37,17 @@ test.describe("Attestation Explorer", () => {
   test("shows recent lookups section", async ({ page }) => {
     await expect(page.getByText("Recent lookups (this browser)")).toBeVisible();
   });
+
+  test("fetches /v1/roots when the attestation page loads", { tag: "@backend" }, async ({ page }) => {
+    let rootsCalled = false;
+    page.on("request", (req) => {
+      if (req.url().includes("/v1/roots") && !req.url().includes("/publish")) {
+        rootsCalled = true;
+      }
+    });
+
+    await page.goto("/dashboard/attestations");
+    await page.waitForTimeout(2_000);
+    expect(rootsCalled).toBe(true);
+  });
 });

@@ -33,4 +33,14 @@ test.describe("Dashboard health", () => {
     await expect(page).toHaveURL(/\/dashboard\/billing/);
     await expect(page.getByRole("heading", { name: "Billing" })).toBeVisible();
   });
+
+  test("dashboard loads without console errors", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (err) => errors.push(err.message));
+
+    await page.goto("/dashboard/transactions");
+    await expect(page.getByRole("heading", { name: "Wallets & credentials" })).toBeVisible();
+
+    expect(errors).toHaveLength(0);
+  });
 });

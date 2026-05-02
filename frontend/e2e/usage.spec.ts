@@ -37,4 +37,24 @@ test.describe("Billing & Usage", () => {
     const upgradeButton = page.getByRole("button", { name: /Upgrade plan/ });
     await expect(upgradeButton).toBeDisabled();
   });
+
+  test("fetches /usage and /usage/history endpoints", { tag: "@backend" }, async ({ page }) => {
+    let usageCalled = false;
+    let historyCalled = false;
+    page.on("request", (req) => {
+      const url = req.url();
+      if (url.includes("/usage/history")) historyCalled = true;
+      else if (url.includes("/usage")) usageCalled = true;
+    });
+
+    await page.goto("/dashboard/billing");
+
+    // Wait for usage data to load
+    await expect(page.getByText(/Developer|Startup|Growth|Enterprise/).first()).toBeVisible({
+      timeout: 10_000,
+    });
+
+    expect(usageCalled).toBe(true);
+    expect(historyCalled).toBe(true);
+  });
 });

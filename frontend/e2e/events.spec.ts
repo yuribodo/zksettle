@@ -59,4 +59,18 @@ test.describe("Audit Log", () => {
     await page.getByRole("button", { name: "Clear" }).click();
     await expect(rangeSelect).toHaveValue("30d");
   });
+
+  test("fetches events from /v1/events endpoint", { tag: "@backend" }, async ({ page }) => {
+    let eventsCalled = false;
+    page.on("request", (req) => {
+      if (req.url().includes("/v1/events")) eventsCalled = true;
+    });
+
+    await page.goto("/dashboard/audit-log");
+
+    // Wait for events to load or show empty/error state
+    const content = page.getByText(/No events match|Unavailable|Loading events/);
+    await expect(content).toBeVisible({ timeout: 10_000 });
+    expect(eventsCalled).toBe(true);
+  });
 });

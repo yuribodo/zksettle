@@ -54,4 +54,30 @@ test.describe("API Keys management", () => {
     // Should show count (e.g. "0 active" or "N active")
     await expect(page.getByText(/\d+ active/)).toBeVisible();
   });
+
+  test("revokes an API key after creation", { tag: "@backend" }, async ({ page }) => {
+    const ownerName = `e2e-revoke-${Date.now()}`;
+
+    // Create a key first
+    await page.getByPlaceholder("e.g. backend-prod").fill(ownerName);
+    await page.getByRole("button", { name: "Create key" }).click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
+    await dialog.getByRole("button", { name: "I saved it" }).click();
+    await expect(dialog).not.toBeVisible();
+
+    // The key should appear in the list
+    await expect(page.getByText(ownerName)).toBeVisible();
+
+    // Accept the confirm dialog when revoking
+    page.on("dialog", (d) => d.accept());
+
+    // Click revoke on the row containing the owner name
+    const row = page.locator("tr", { hasText: ownerName });
+    await row.getByRole("button", { name: /Revoke/ }).click();
+
+    // The key should disappear from the list
+    await expect(page.getByText(ownerName)).not.toBeVisible({ timeout: 10_000 });
+  });
 });
