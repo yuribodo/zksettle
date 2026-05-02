@@ -416,7 +416,7 @@ async fn transfer_hook_full_e2e_with_gnark_proof() {
     let proof_and_witness = std::fs::read(&fixture_path).expect(
         "fixture not found — generate with: just circuit-fixture",
     );
-    assert!(proof_and_witness.len() > 268, "fixture too short to contain proof + 8-input witness");
+    assert!(proof_and_witness.len() > 620, "fixture too short to contain proof + 11-input witness");
 
     let mut rpc = boot_harness().await;
 
