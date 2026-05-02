@@ -39,7 +39,7 @@ pub struct MintTokens<'info> {
     pub token_program: Program<'info, Token2022>,
 }
 
-pub fn handler(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
+pub fn mint_tokens_handler(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
     require!(amount > 0, StablecoinError::ZeroMintAmount);
 
     let treasury_key = ctx.accounts.treasury.key();

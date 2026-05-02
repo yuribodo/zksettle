@@ -15,23 +15,23 @@ pub mod stablecoin {
     use super::*;
 
     pub fn initialize_mint(ctx: Context<InitializeMint>, decimals: u8) -> Result<()> {
-        instructions::initialize_mint::handler(ctx, decimals)
+        instructions::initialize_mint_handler(ctx, decimals)
     }
 
     pub fn mint_tokens(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
-        instructions::mint_tokens::handler(ctx, amount)
+        instructions::mint_tokens_handler(ctx, amount)
     }
 
     pub fn burn_tokens(ctx: Context<BurnTokens>, amount: u64) -> Result<()> {
-        instructions::burn_tokens::handler(ctx, amount)
+        instructions::burn_tokens_handler(ctx, amount)
     }
 
     pub fn freeze_account(ctx: Context<FreezeOrThaw>) -> Result<()> {
-        instructions::freeze_thaw::freeze_handler(ctx)
+        instructions::freeze_handler(ctx)
     }
 
     pub fn thaw_account(ctx: Context<FreezeOrThaw>) -> Result<()> {
-        instructions::freeze_thaw::thaw_handler(ctx)
+        instructions::thaw_handler(ctx)
     }
 
     pub fn transfer_authority(
@@ -39,6 +39,6 @@ pub mod stablecoin {
         new_admin: Option<Pubkey>,
         new_operator: Option<Pubkey>,
     ) -> Result<()> {
-        instructions::transfer_authority::handler(ctx, new_admin, new_operator)
+        instructions::transfer_authority_handler(ctx, new_admin, new_operator)
     }
 }

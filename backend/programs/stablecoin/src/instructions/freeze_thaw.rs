@@ -58,10 +58,10 @@ pub fn freeze_handler(ctx: Context<FreezeOrThaw>) -> Result<()> {
         signer_seeds,
     ))?;
 
-    msg!("Account frozen: {}", ctx.accounts.target_account.key());
     Ok(())
 }
 
+// Thaw is exempt from pause guard — emergency unfreeze of wrongly-frozen accounts must work while paused.
 pub fn thaw_handler(ctx: Context<FreezeOrThaw>) -> Result<()> {
     let treasury_key = ctx.accounts.treasury.key();
     let bump = [ctx.accounts.treasury.freeze_authority_bump];
@@ -79,6 +79,5 @@ pub fn thaw_handler(ctx: Context<FreezeOrThaw>) -> Result<()> {
         signer_seeds,
     ))?;
 
-    msg!("Account thawed: {}", ctx.accounts.target_account.key());
     Ok(())
 }
