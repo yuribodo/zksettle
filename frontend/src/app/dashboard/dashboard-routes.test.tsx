@@ -44,6 +44,10 @@ vi.mock("@/components/dashboard/billing-cards", () => ({
   BillingCards: () => <section data-testid="billing-cards">Billing cards</section>,
 }));
 
+vi.mock("@/components/dashboard/attestation-explorer-panel", () => ({
+  AttestationExplorerPanel: () => <section data-testid="attestation-explorer">Attestation explorer</section>,
+}));
+
 vi.mock("@/components/dashboard/tier-b-scaffold", () => ({
   TierBScaffold: ({
     title,
@@ -124,13 +128,15 @@ describe("dashboard routes", () => {
     expect(screen.getByTestId("billing-cards")).toBeTruthy();
   });
 
-  it("renders the scaffolded dashboard pages with their copy", () => {
-    const { rerender } = render(<AttestationsPage />);
-    expect(screen.getByTestId("tier-b-scaffold").getAttribute("data-title")).toBe(
-      "Attestation explorer · coming soon",
-    );
+  it("renders the attestations page with explorer panel", () => {
+    render(<AttestationsPage />);
+    expect(screen.getByTestId("page-header").getAttribute("data-title")).toBe("Attestations");
+    expect(screen.getByTestId("attestation-explorer")).toBeTruthy();
+    cleanup();
+  });
 
-    rerender(<PoliciesPage />);
+  it("renders the scaffolded dashboard pages with their copy", () => {
+    const { rerender } = render(<PoliciesPage />);
     expect(screen.getByTestId("tier-b-scaffold").getAttribute("data-title")).toBe(
       "Policy editor · coming soon",
     );
