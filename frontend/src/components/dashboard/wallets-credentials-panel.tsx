@@ -80,6 +80,7 @@ export function WalletsCredentialsPanel() {
     try {
       await register.mutateAsync(normalized);
       recordWallet(normalized);
+      setRegisterInput("");
     } catch {
       // error surfaced via register.error
     }
@@ -182,13 +183,12 @@ export function WalletsCredentialsPanel() {
         )}
 
         {register.isSuccess ? (
-          <p
-            role="status"
+          <output
             className="mt-3 flex items-start gap-2 font-mono text-xs text-forest"
           >
             <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
             Wallet registered — {register.data.message}
-          </p>
+          </output>
         ) : null}
 
         {register.isError ? (
@@ -343,7 +343,7 @@ function CredentialCard({
   revokePending,
   issueError,
   revokeError,
-}: CredentialCardProps) {
+}: Readonly<CredentialCardProps>) {
   const { data: credential, isLoading, isError, error } = query;
   const errorInfo = isError ? describeError(error) : null;
 
@@ -468,13 +468,13 @@ function CredentialStatus({
   credential,
   authError,
   otherError,
-}: {
+}: Readonly<{
   loading: boolean;
   notFound: boolean;
   credential: Credential | null;
   authError: boolean;
   otherError: boolean;
-}) {
+}>) {
   if (loading) return <StatusPill kind="info" label="Loading" />;
   if (notFound) return <StatusPill kind="warning" label="Not found" />;
   if (authError) return <StatusPill kind="warning" label="Unauthorized" />;
@@ -484,7 +484,7 @@ function CredentialStatus({
   return null;
 }
 
-function CredentialDetails({ credential }: { credential: Credential }) {
+function CredentialDetails({ credential }: Readonly<{ credential: Credential }>) {
   const walletHex = bytesToHex(credential.wallet);
   return (
     <dl className="mt-5 grid gap-y-3 sm:grid-cols-[140px_1fr]">

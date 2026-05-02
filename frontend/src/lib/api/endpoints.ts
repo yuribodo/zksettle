@@ -105,7 +105,6 @@ export const listEvents = async (
   if (params.issuer) search.set("issuer", params.issuer);
   if (params.recipient) search.set("recipient", params.recipient);
   const query = search.toString();
-  return ListEventsResponseSchema.parse(
-    await apiFetch(`/v1/events${query ? `?${query}` : ""}`),
-  );
+  const path = query ? `/v1/events?${query}` : "/v1/events";
+  return ListEventsResponseSchema.parse(await apiFetch(path));
 };
