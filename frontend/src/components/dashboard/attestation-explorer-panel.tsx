@@ -1,7 +1,7 @@
 "use client";
 
 import { Copy, NavArrowDown, Search, WarningTriangle, Xmark } from "iconoir-react";
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 
 import { StatusPill, type StatusKind } from "@/components/dashboard/status-pill";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,6 @@ import {
 import { useRoots } from "@/hooks/use-roots";
 import { useSanctionsProof } from "@/hooks/use-sanctions-proof";
 import { ApiError } from "@/lib/api/client";
-import type { MembershipProof, SanctionsProof } from "@/lib/api/schemas";
 import { cn } from "@/lib/cn";
 import { truncateWallet } from "@/lib/format";
 import { isValidWalletHex, normalizeWalletHex } from "@/lib/wallet";
@@ -31,6 +30,7 @@ function deriveStatus(
   if (membership.isLoading || sanctions.isLoading) return "loading";
   if (membership.isError && sanctions.isError) return "error";
   if (membership.isError) return "unknown";
+  if (sanctions.isError) return "error";
   if (sanctions.data && sanctions.data.leaf_value !== EMPTY_LEAF) return "sanctioned";
   return "compliant";
 }
@@ -166,12 +166,34 @@ export function AttestationExplorerPanel() {
 
       {/* Membership proof */}
       {membershipQuery.data ? (
-        <MembershipProofCard proof={membershipQuery.data} />
+        <ProofCard
+          id="membership"
+          title="Membership proof"
+          proof={membershipQuery.data}
+          extraFields={
+            <><dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Leaf index</dt>
+            <dd className="font-mono text-sm text-ink">{membershipQuery.data.leaf_index}</dd></>
+          }
+        />
       ) : null}
 
       {/* Sanctions proof */}
       {sanctionsQuery.data ? (
-        <SanctionsProofCard proof={sanctionsQuery.data} />
+        <ProofCard
+          id="sanctions"
+          title="Sanctions proof"
+          proof={sanctionsQuery.data}
+          extraFields={
+            <><dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Leaf value</dt>
+            <dd className="flex items-center gap-2 font-mono text-sm text-ink">
+              {sanctionsQuery.data.leaf_value !== EMPTY_LEAF ? (
+                <StatusPill kind="blocked" label="Present (sanctioned)" />
+              ) : (
+                <StatusPill kind="verified" label="Empty (not sanctioned)" />
+              )}
+            </dd></>
+          }
+        />
       ) : null}
 
       {/* Recent wallets */}
@@ -243,14 +265,14 @@ function AttestationStatusSection({
   sanctionsQuery,
   membershipRootMatch,
   sanctionsRootMatch,
-}: {
+}: Readonly<{
   wallet: string;
   status: ComplianceStatus;
   membershipQuery: ReturnType<typeof useMembershipProof>;
   sanctionsQuery: ReturnType<typeof useSanctionsProof>;
   membershipRootMatch: boolean | null;
   sanctionsRootMatch: boolean | null;
-}) {
+}>) {
   const pill = STATUS_MAP[status];
   const membershipError = membershipQuery.isError ? describeProofError(membershipQuery.error) : null;
   const sanctionsError = sanctionsQuery.isError ? describeProofError(sanctionsQuery.error) : null;
@@ -305,106 +327,36 @@ function AttestationStatusSection({
   );
 }
 
-function MembershipProofCard({ proof }: { proof: MembershipProof }) {
+function ProofCard({
+  id,
+  title,
+  proof,
+  extraFields,
+}: Readonly<{
+  id: string;
+  title: string;
+  proof: { wallet: string; path: string[]; path_indices: number[]; root: string };
+  extraFields?: ReactNode;
+}>) {
   const [expanded, setExpanded] = useState(false);
 
   return (
     <section
-      aria-labelledby="membership-heading"
+      aria-labelledby={`${id}-heading`}
       className="rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6"
     >
       <span
-        id="membership-heading"
+        id={`${id}-heading`}
         className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase"
       >
-        Membership proof
+        {title}
       </span>
 
       <dl className="mt-4 grid gap-y-3 sm:grid-cols-[140px_1fr]">
         <dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Wallet</dt>
         <dd className="font-mono text-sm text-ink break-all">{proof.wallet}</dd>
 
-        <dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Leaf index</dt>
-        <dd className="font-mono text-sm text-ink">{proof.leaf_index}</dd>
-
-        <dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Root</dt>
-        <dd className="flex items-center gap-2 font-mono text-sm text-ink break-all">
-          {truncateWallet(proof.root, 10, 10)}
-          <button
-            type="button"
-            onClick={() => copyToClipboard(proof.root)}
-            className="shrink-0 text-muted hover:text-ink"
-            aria-label="Copy root"
-          >
-            <Copy className="size-3.5" />
-          </button>
-        </dd>
-
-        <dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Tree depth</dt>
-        <dd className="font-mono text-sm text-ink">{proof.path.length}</dd>
-      </dl>
-
-      <div className="mt-5 border-t border-border-subtle pt-4">
-        <button
-          type="button"
-          onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-2 font-mono text-xs text-quill hover:text-ink"
-        >
-          <NavArrowDown
-            className={cn("size-4 transition-transform", expanded && "rotate-180")}
-            aria-hidden="true"
-          />
-          {expanded ? "Hide" : "Show"} Merkle path ({proof.path.length} levels)
-        </button>
-
-        {expanded ? (
-          <div className="mt-3">
-            <MerklePathTable path={proof.path} pathIndices={proof.path_indices} />
-            <div className="mt-3 flex justify-end">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => copyToClipboard(JSON.stringify(proof, null, 2))}
-              >
-                <Copy aria-hidden="true" className="size-3.5" />
-                Copy full proof
-              </Button>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
-function SanctionsProofCard({ proof }: { proof: SanctionsProof }) {
-  const [expanded, setExpanded] = useState(false);
-  const isSanctioned = proof.leaf_value !== EMPTY_LEAF;
-
-  return (
-    <section
-      aria-labelledby="sanctions-heading"
-      className="rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6"
-    >
-      <span
-        id="sanctions-heading"
-        className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase"
-      >
-        Sanctions proof
-      </span>
-
-      <dl className="mt-4 grid gap-y-3 sm:grid-cols-[140px_1fr]">
-        <dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Wallet</dt>
-        <dd className="font-mono text-sm text-ink break-all">{proof.wallet}</dd>
-
-        <dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Leaf value</dt>
-        <dd className="flex items-center gap-2 font-mono text-sm text-ink">
-          {isSanctioned ? (
-            <StatusPill kind="blocked" label="Present (sanctioned)" />
-          ) : (
-            <StatusPill kind="verified" label="Empty (not sanctioned)" />
-          )}
-        </dd>
+        {extraFields}
 
         <dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Root</dt>
         <dd className="flex items-center gap-2 font-mono text-sm text-ink break-all">
@@ -459,10 +411,10 @@ function SanctionsProofCard({ proof }: { proof: SanctionsProof }) {
 function MerklePathTable({
   path,
   pathIndices,
-}: {
+}: Readonly<{
   path: string[];
   pathIndices: number[];
-}) {
+}>) {
   return (
     <div className="overflow-x-auto rounded-[var(--radius-3)] border border-border-subtle">
       <table className="w-full border-collapse text-left">
