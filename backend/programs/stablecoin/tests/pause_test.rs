@@ -37,6 +37,21 @@ fn pause_rejects_non_admin() {
 }
 
 #[test]
+fn unpause_rejects_non_admin() {
+    let TestEnv { mut svm, admin, mint_kp, .. } = setup();
+
+    let ix = pause_ix(&admin.pubkey(), &mint_kp.pubkey());
+    send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
+
+    let attacker = Keypair::new();
+    svm.airdrop(&attacker.pubkey(), 1_000_000_000).unwrap();
+
+    let ix = unpause_ix(&attacker.pubkey(), &mint_kp.pubkey());
+    let result = send_tx(&mut svm, &[ix], &attacker, &[&attacker]);
+    assert_anchor_error(result, ANCHOR_ERROR_CODE_OFFSET + StablecoinError::UnauthorizedAdmin as u32);
+}
+
+#[test]
 fn pause_rejects_already_paused() {
     let TestEnv { mut svm, admin, mint_kp, .. } = setup();
 

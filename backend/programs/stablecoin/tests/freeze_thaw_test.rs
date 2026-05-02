@@ -30,6 +30,21 @@ fn freeze_rejects_non_admin() {
 }
 
 #[test]
+fn thaw_rejects_non_admin() {
+    let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_token_account();
+
+    let ix = freeze_account_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey());
+    send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
+
+    let attacker = Keypair::new();
+    svm.airdrop(&attacker.pubkey(), 1_000_000_000).unwrap();
+
+    let ix = thaw_account_ix(&attacker.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey());
+    let result = send_tx(&mut svm, &[ix], &attacker, &[&attacker]);
+    assert_anchor_error(result, ANCHOR_ERROR_CODE_OFFSET + StablecoinError::UnauthorizedAdmin as u32);
+}
+
+#[test]
 fn freeze_rejected_when_paused() {
     let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_token_account();
 
