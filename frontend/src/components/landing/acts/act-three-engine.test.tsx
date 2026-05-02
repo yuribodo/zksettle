@@ -3,6 +3,7 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { COPY } from "@/content/copy";
 
 vi.mock("@gsap/react", () => ({
   useGSAP: vi.fn(),
@@ -61,6 +62,6 @@ describe("ActThreeEngine", () => {
 
     expect(screen.getByText("Verify once.")).toBeTruthy();
     expect(screen.getAllByText("Settlement").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("PII leaked").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(COPY.engine.chapters[0].benchmarks[1].label).length).toBeGreaterThan(0);
   });
 });
