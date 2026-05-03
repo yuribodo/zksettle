@@ -180,6 +180,11 @@ export function MobileNavDrawer() {
                               strokeWidth={1.5}
                             />
                             <span>{item.label}</span>
+                            {item.comingSoon ? (
+                              <span className="ml-auto font-mono text-[9px] uppercase tracking-wider text-muted">
+                                Soon
+                              </span>
+                            ) : null}
                           </Link>
                         </li>
                       );

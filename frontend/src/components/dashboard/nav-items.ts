@@ -18,6 +18,7 @@ export interface NavItem {
   icon: FC<SVGProps<SVGSVGElement>>;
   group: NavGroup;
   subtitle: string;
+  comingSoon?: boolean;
 }
 
 export interface NavGroupMeta {
@@ -63,6 +64,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: "controls",
     subtitle:
       "Per-mint compliance rules. Define jurisdictions, sanctions posture, and credential minimums.",
+    comingSoon: true,
   },
   {
     label: "API keys",
@@ -85,6 +87,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: Group,
     group: "account",
     subtitle: "Invite colleagues, assign roles, and review recent activity.",
+    comingSoon: true,
   },
   {
     label: "Billing",
