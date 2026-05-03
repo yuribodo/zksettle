@@ -1,11 +1,9 @@
 import {
   Activity,
-  BookmarkBook,
   CheckCircle,
   ClockRotateRight,
   Community,
   DollarCircle,
-  Group,
   Key,
 } from "iconoir-react";
 import type { FC, SVGProps } from "react";
@@ -18,7 +16,7 @@ export interface NavItem {
   icon: FC<SVGProps<SVGSVGElement>>;
   group: NavGroup;
   subtitle: string;
-  comingSoon?: boolean;
+
 }
 
 export interface NavGroupMeta {
@@ -58,15 +56,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
       "Live merkle roots, wallet count, and last on-chain publish for the issuer behind this workspace.",
   },
   {
-    label: "Policies",
-    href: "/dashboard/policies",
-    icon: BookmarkBook,
-    group: "controls",
-    subtitle:
-      "Per-mint compliance rules. Define jurisdictions, sanctions posture, and credential minimums.",
-    comingSoon: true,
-  },
-  {
     label: "API keys",
     href: "/dashboard/api-keys",
     icon: Key,
@@ -80,14 +69,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: ClockRotateRight,
     group: "controls",
     subtitle: "Every attestation, exportable on request.",
-  },
-  {
-    label: "Team",
-    href: "/dashboard/team",
-    icon: Group,
-    group: "account",
-    subtitle: "Invite colleagues, assign roles, and review recent activity.",
-    comingSoon: true,
   },
   {
     label: "Billing",

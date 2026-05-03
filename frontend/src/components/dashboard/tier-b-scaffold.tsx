@@ -3,9 +3,9 @@ import type { ComponentType, SVGProps } from "react";
 import { DisplayHeading } from "@/components/ui/display-heading";
 
 export interface TierBScaffoldProps {
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
-  title: string;
-  body: string;
+  readonly icon: ComponentType<SVGProps<SVGSVGElement>>;
+  readonly title: string;
+  readonly body: string;
 }
 
 export function TierBScaffold({ icon: Icon, title, body }: TierBScaffoldProps) {

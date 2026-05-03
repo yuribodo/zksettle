@@ -12,7 +12,7 @@ import { cn } from "@/lib/cn";
 export function MobileNavDrawer() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname() ?? "";
-  const drawerRef = useRef<HTMLDivElement | null>(null);
+  const drawerRef = useRef<HTMLDialogElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const mainRef = useRef<HTMLElement | null>(null);
 
@@ -69,16 +69,14 @@ export function MobileNavDrawer() {
             event.preventDefault();
             last.focus();
           }
-        } else {
-          if (document.activeElement === last) {
-            event.preventDefault();
-            first.focus();
-          }
+        } else if (document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
         }
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    globalThis.addEventListener("keydown", onKey);
+    return () => globalThis.removeEventListener("keydown", onKey);
   }, [open]);
 
   useEffect(() => {
@@ -109,12 +107,11 @@ export function MobileNavDrawer() {
       </button>
 
       {open ? (
-        <div
+        <dialog
           id="mobile-nav"
-          role="dialog"
-          aria-modal="true"
+          open
           aria-label="Dashboard navigation"
-          className="fixed inset-0 z-50 md:hidden"
+          className="fixed inset-0 z-50 m-0 h-full w-full max-w-none max-h-none border-none bg-transparent p-0 md:hidden"
         >
           <button
             type="button"
@@ -180,11 +177,6 @@ export function MobileNavDrawer() {
                               strokeWidth={1.5}
                             />
                             <span>{item.label}</span>
-                            {item.comingSoon ? (
-                              <span className="ml-auto font-mono text-[9px] uppercase tracking-wider text-muted">
-                                Soon
-                              </span>
-                            ) : null}
                           </Link>
                         </li>
                       );
@@ -194,7 +186,7 @@ export function MobileNavDrawer() {
               ))}
             </nav>
           </div>
-        </div>
+        </dialog>
       ) : null}
     </>
   );

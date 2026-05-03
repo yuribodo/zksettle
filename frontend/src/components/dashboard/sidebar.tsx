@@ -67,11 +67,6 @@ export function Sidebar() {
                         strokeWidth={1.5}
                       />
                       <span>{item.label}</span>
-                      {item.comingSoon ? (
-                        <span className="ml-auto font-mono text-[9px] uppercase tracking-wider text-muted">
-                          Soon
-                        </span>
-                      ) : null}
                     </Link>
                   </li>
                 );
@@ -84,7 +79,7 @@ export function Sidebar() {
       <div className="border-t border-border-subtle px-4 py-4">
         <div className="flex items-center justify-between text-[11px]">
           <span className="flex items-center gap-1 font-mono text-muted uppercase tracking-[0.08em]">
-            <span className="size-1.5 rounded-full bg-emerald" aria-hidden="true" />
+            <span className="size-1.5 rounded-full bg-emerald" aria-hidden="true" />{" "}
             Devnet
           </span>
           <span className="font-mono text-muted">v{version}</span>
