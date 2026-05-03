@@ -14,10 +14,10 @@ export class ApiError extends Error {
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...((init.headers as Record<string, string>) ?? {}),
+    ...(init.headers as Record<string, string>),
   };
 
-  const isBrowser = typeof window !== "undefined";
+  const isBrowser = typeof globalThis.window !== "undefined";
   if (API_KEY && !isBrowser && !headers.Authorization) {
     headers.Authorization = `Bearer ${API_KEY}`;
   }

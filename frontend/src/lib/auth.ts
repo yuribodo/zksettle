@@ -7,7 +7,7 @@ import { TenantSchema, type Tenant } from "@/lib/api/schemas";
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
+    binary += String.fromCodePoint(byte);
   }
   return btoa(binary);
 }
@@ -18,7 +18,7 @@ async function getChallenge(): Promise<string> {
 }
 
 export function generateSIWSMessage(wallet: PublicKey, nonce: string): string {
-  const domain = window.location.host;
+  const domain = globalThis.location.host;
   const address = wallet.toBase58();
   const issuedAt = new Date().toISOString();
 

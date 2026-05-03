@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/contexts/auth-context";
 
-export function RequireAuth({ children }: { children: ReactNode }) {
+export function RequireAuth({ children }: Readonly<{ children: ReactNode }>) {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
 

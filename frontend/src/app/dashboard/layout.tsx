@@ -4,7 +4,7 @@ import { RequireAuth } from "@/components/dashboard/require-auth";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { TopBar } from "@/components/dashboard/top-bar";
 
-export default function DashboardLayout({ children }: { children: ReactNode }) {
+export default function DashboardLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <div className="flex min-h-screen bg-canvas">
       <Sidebar />

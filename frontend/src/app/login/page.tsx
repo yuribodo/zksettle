@@ -42,12 +42,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {!connected ? (
-          <Button onClick={() => setVisible(true)} size="lg" className="w-full">
-            <Wallet className="size-5" strokeWidth={1.5} />
-            Connect Wallet
-          </Button>
-        ) : (
+        {connected ? (
           <div className="flex w-full flex-col gap-3">
             <div className="flex items-center justify-center gap-2 rounded-[var(--radius-3)] border border-border-subtle bg-surface px-4 py-3">
               <span className="size-2 rounded-full bg-emerald" />
@@ -59,6 +54,11 @@ export default function LoginPage() {
               {isSigningIn ? "Signing..." : "Sign in with Solana"}
             </Button>
           </div>
+        ) : (
+          <Button onClick={() => setVisible(true)} size="lg" className="w-full">
+            <Wallet className="size-5" strokeWidth={1.5} />
+            Connect Wallet
+          </Button>
         )}
 
         {signInError ? (
