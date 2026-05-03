@@ -42,21 +42,20 @@ pub async fn find_or_create(
         created_at: Set(now as i64),
     };
 
-    match tenant::Entity::insert(model).exec(db).await {
-        Ok(insert_result) => find_by_id(db, insert_result.last_insert_id)
-            .await?
-            .ok_or_else(|| GatewayError::Database("tenant insert succeeded but not found".into())),
-        Err(DbErr::Query(ref err))
-            if err.to_string().contains("duplicate")
-                || err.to_string().contains("unique")
-                || err.to_string().contains("23505") =>
-        {
-            find_by_wallet(db, wallet)
-                .await?
-                .ok_or_else(|| GatewayError::Database("concurrent tenant insert race".into()))
-        }
-        Err(e) => Err(e.into()),
-    }
+    tenant::Entity::insert(model)
+        .on_conflict(
+            sea_orm::sea_query::OnConflict::column(tenant::Column::Wallet)
+                .do_nothing()
+                .to_owned(),
+        )
+        .do_nothing()
+        .exec(db)
+        .await
+        .map_err(DbErr::from)?;
+
+    find_by_wallet(db, wallet)
+        .await?
+        .ok_or_else(|| GatewayError::Database("tenant upsert: wallet not found after insert".into()))
 }
 
 #[cfg(test)]
