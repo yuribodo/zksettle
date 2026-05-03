@@ -13,20 +13,18 @@ use stablecoin::instructions::{
 };
 use stablecoin::EVENT_VERSION;
 
-fn parse_event<T: Event + AnchorDeserialize + Discriminator>(logs: &[String]) -> Option<T> {
-    const PREFIX: &str = "Program data: ";
-    for log in logs {
-        if let Some(data_b64) = log.strip_prefix(PREFIX) {
-            if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(data_b64) {
-                if bytes.len() >= 8 && bytes[..8] == *T::DISCRIMINATOR {
-                    if let Ok(evt) = T::try_from_slice(&bytes[8..]) {
-                        return Some(evt);
-                    }
-                }
-            }
-        }
+fn try_decode_event<T: AnchorDeserialize + Discriminator>(data_b64: &str) -> Option<T> {
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data_b64).ok()?;
+    if bytes.len() < 8 || bytes[..8] != *T::DISCRIMINATOR {
+        return None;
     }
-    None
+    T::try_from_slice(&bytes[8..]).ok()
+}
+
+fn parse_event<T: Event + AnchorDeserialize + Discriminator>(logs: &[String]) -> Option<T> {
+    logs.iter()
+        .filter_map(|log| log.strip_prefix("Program data: "))
+        .find_map(try_decode_event)
 }
 
 #[test]
