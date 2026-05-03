@@ -7,13 +7,12 @@ const MOCK_TENANT = {
   tier: "developer",
 };
 
-// eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright fixture, not a React hook
 export const test = base.extend({
-  page: async ({ page }, use) => {
+  page: async ({ page }, apply) => {
     await page.route("**/auth/me", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MOCK_TENANT) }),
     );
-    await use(page);
+    await apply(page);
   },
 });
 
