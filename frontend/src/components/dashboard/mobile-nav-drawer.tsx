@@ -3,96 +3,20 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, Xmark } from "iconoir-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 
 import { Logo } from "@/components/icons/logo";
 import { NAV_GROUPS, NAV_ITEMS } from "@/components/dashboard/nav-items";
+import { useDrawer } from "@/hooks/use-drawer";
 import { cn } from "@/lib/cn";
 
 export function MobileNavDrawer() {
-  const [open, setOpen] = useState(false);
+  const { open, setOpen, close, drawerRef, triggerRef } = useDrawer();
   const pathname = usePathname() ?? "";
-  const drawerRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const mainRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const main = document.querySelector("main");
-    if (main) {
-      main.setAttribute("inert", "");
-      mainRef.current = main;
-    }
-
-    return () => {
-      if (mainRef.current) {
-        mainRef.current.removeAttribute("inert");
-        mainRef.current = null;
-      }
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-        triggerRef.current?.focus();
-        return;
-      }
-
-      if (event.key === "Tab") {
-        const drawer = drawerRef.current;
-        if (!drawer) return;
-        const focusable = drawer.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
-        );
-        if (focusable.length === 0) return;
-        const first = focusable[0]!;
-        const last = focusable[focusable.length - 1]!;
-        if (event.shiftKey) {
-          if (document.activeElement === first) {
-            event.preventDefault();
-            last.focus();
-          }
-        } else {
-          if (document.activeElement === last) {
-            event.preventDefault();
-            first.focus();
-          }
-        }
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const first = drawerRef.current?.querySelector<HTMLElement>(
-      'a[href], button:not([disabled])',
-    );
-    first?.focus();
-  }, [open]);
-
-  const close = useCallback(() => {
-    setOpen(false);
-    triggerRef.current?.focus();
-  }, []);
+  }, [pathname, setOpen]);
 
   return (
     <>
@@ -109,12 +33,12 @@ export function MobileNavDrawer() {
       </button>
 
       {open ? (
-        <div
+        <dialog
           id="mobile-nav"
-          role="dialog"
-          aria-modal="true"
+          ref={drawerRef}
+          open
           aria-label="Dashboard navigation"
-          className="fixed inset-0 z-50 md:hidden"
+          className="fixed inset-0 z-50 m-0 h-full w-full max-w-none max-h-none border-none bg-transparent p-0 md:hidden"
         >
           <button
             type="button"
@@ -123,7 +47,6 @@ export function MobileNavDrawer() {
             className="absolute inset-0 bg-ink/40 backdrop-blur-[1px]"
           />
           <div
-            ref={drawerRef}
             className="relative flex h-full w-[280px] flex-col border-r border-border-subtle bg-surface shadow-xl"
           >
             <div className="flex items-center justify-between px-5 pt-5 pb-4">
@@ -189,7 +112,7 @@ export function MobileNavDrawer() {
               ))}
             </nav>
           </div>
-        </div>
+        </dialog>
       ) : null}
     </>
   );

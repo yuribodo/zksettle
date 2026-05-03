@@ -48,20 +48,6 @@ vi.mock("@/components/dashboard/attestation-explorer-panel", () => ({
   AttestationExplorerPanel: () => <section data-testid="attestation-explorer">Attestation explorer</section>,
 }));
 
-vi.mock("@/components/dashboard/tier-b-scaffold", () => ({
-  TierBScaffold: ({
-    title,
-    body,
-  }: {
-    title: string;
-    body: string;
-  }) => (
-    <section data-testid="tier-b-scaffold" data-title={title} data-body={body}>
-      Tier B
-    </section>
-  ),
-}));
-
 vi.mock("@/components/dashboard/require-auth", () => ({
   RequireAuth: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -73,8 +59,6 @@ import AttestationsPage from "./attestations/page";
 import AuditLogPage from "./audit-log/page";
 import BillingPage from "./billing/page";
 import CounterpartiesPage from "./counterparties/page";
-import PoliciesPage from "./policies/page";
-import TeamPage from "./team/page";
 import TransactionsPage from "./transactions/page";
 
 describe("dashboard routes", () => {
@@ -139,15 +123,4 @@ describe("dashboard routes", () => {
     cleanup();
   });
 
-  it("renders the scaffolded dashboard pages with their copy", () => {
-    const { rerender } = render(<PoliciesPage />);
-    expect(screen.getByTestId("tier-b-scaffold").getAttribute("data-title")).toBe(
-      "Policy editor · coming soon",
-    );
-
-    rerender(<TeamPage />);
-    expect(screen.getByTestId("tier-b-scaffold").getAttribute("data-title")).toBe(
-      "Team workspace · coming soon",
-    );
-  });
 });

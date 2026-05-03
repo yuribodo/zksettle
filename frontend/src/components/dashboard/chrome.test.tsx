@@ -63,7 +63,7 @@ describe("dashboard chrome", () => {
 
   it("exposes grouped navigation metadata and path lookup", () => {
     expect(NAV_GROUPS.map((group) => group.id)).toEqual(["overview", "controls", "account"]);
-    expect(NAV_ITEMS).toHaveLength(8);
+    expect(NAV_ITEMS).toHaveLength(6);
     expect(findNavItem("/dashboard/api-keys")?.label).toBe("API keys");
     expect(findNavItem("/dashboard/api-keys/rotate")?.label).toBe("API keys");
     expect(findNavItem("/dashboard/unknown")).toBeUndefined();
@@ -78,9 +78,7 @@ describe("dashboard chrome", () => {
     expect(screen.getByLabelText("ZKSettle dashboard home").getAttribute("href")).toBe(
       "/dashboard",
     );
-    expect(screen.getByText("Acme Stablecoin")).toBeTruthy();
     expect(screen.getByText("API keys").closest("a")?.getAttribute("aria-current")).toBe("page");
-    expect(screen.getByText("v0.1.0")).toBeTruthy();
   });
 
   it("opens and closes the mobile drawer while trapping focus state", () => {
@@ -109,8 +107,6 @@ describe("dashboard chrome", () => {
     const { container } = render(<TopBar />);
 
     expect(screen.getByRole("banner", { name: "Dashboard top bar" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Search (not implemented)" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Notifications" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
     expect((container.firstChild as HTMLElement).className).toContain("border-transparent");
 

@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NavArrowDown } from "iconoir-react";
-
+import pkg from "@/../package.json";
 import { Logo } from "@/components/icons/logo";
 import { NAV_GROUPS, NAV_ITEMS } from "@/components/dashboard/nav-items";
 import { cn } from "@/lib/cn";
@@ -25,19 +24,6 @@ export function Sidebar() {
           <Logo size={22} variant="surface-forest" />
         </Link>
       </div>
-
-      <button
-        type="button"
-        className="mx-3 mb-3 flex items-center justify-between rounded-[var(--radius-3)] border border-border-subtle bg-canvas px-3 py-2 text-left text-sm text-quill transition-colors hover:border-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
-      >
-        <span className="flex flex-col">
-          <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
-            Workspace
-          </span>
-          <span className="text-sm text-ink">Acme Stablecoin</span>
-        </span>
-        <NavArrowDown className="size-4 text-muted" aria-hidden="true" />
-      </button>
 
       <nav className="flex-1 overflow-y-auto px-2 pb-6">
         {NAV_GROUPS.map((group) => (
@@ -92,15 +78,11 @@ export function Sidebar() {
 
       <div className="border-t border-border-subtle px-4 py-4">
         <div className="flex items-center justify-between text-[11px]">
-          <button
-            type="button"
-            className="flex items-center gap-1 rounded-[2px] font-mono text-muted uppercase tracking-[0.08em] transition-colors hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
-          >
-            <span className="size-1.5 rounded-full bg-emerald" aria-hidden="true" />
+          <span className="flex items-center gap-1 font-mono text-muted uppercase tracking-[0.08em]">
+            <span className="size-1.5 rounded-full bg-emerald" aria-hidden="true" />{" "}
             Devnet
-            <NavArrowDown className="size-3" aria-hidden="true" />
-          </button>
-          <span className="font-mono text-muted">v0.1.0</span>
+          </span>
+          <span className="font-mono text-muted">v{pkg.version}</span>
         </div>
       </div>
     </aside>

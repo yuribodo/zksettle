@@ -2,93 +2,18 @@
 
 import Link from "next/link";
 import { Menu, Xmark } from "iconoir-react";
-import { useCallback, useEffect, useRef, useState } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
+import { useDrawer } from "@/hooks/use-drawer";
 import { cn } from "@/lib/cn";
 
 const LINKS: ReadonlyArray<{ label: string; href: string }> = [
-  { label: "Demo", href: "#demo" },
-  { label: "SDK", href: "#developers" },
-  { label: "GitHub", href: "https://github.com/zksettle" },
+  { label: "Demo", href: "#act-three-engine" },
+  { label: "GitHub", href: "https://github.com/yuribodo/zksettle" },
 ];
 
-export function MobileNavDrawer({ scrolled }: { scrolled: boolean }) {
-  const [open, setOpen] = useState(false);
-  const drawerRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const mainRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const main = document.querySelector("main");
-    if (main) {
-      main.setAttribute("inert", "");
-      mainRef.current = main;
-    }
-    return () => {
-      if (mainRef.current) {
-        mainRef.current.removeAttribute("inert");
-        mainRef.current = null;
-      }
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-        triggerRef.current?.focus();
-        return;
-      }
-      if (event.key === "Tab") {
-        const drawer = drawerRef.current;
-        if (!drawer) return;
-        const focusable = drawer.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled])',
-        );
-        if (focusable.length === 0) return;
-        const first = focusable[0]!;
-        const last = focusable[focusable.length - 1]!;
-        if (event.shiftKey) {
-          if (document.activeElement === first) {
-            event.preventDefault();
-            last.focus();
-          }
-        } else {
-          if (document.activeElement === last) {
-            event.preventDefault();
-            first.focus();
-          }
-        }
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const first = drawerRef.current?.querySelector<HTMLElement>(
-      'a[href], button:not([disabled])',
-    );
-    first?.focus();
-  }, [open]);
-
-  const close = useCallback(() => {
-    setOpen(false);
-    triggerRef.current?.focus();
-  }, []);
+export function MobileNavDrawer({ scrolled }: Readonly<{ scrolled: boolean }>) {
+  const { open, setOpen, close, drawerRef, triggerRef } = useDrawer();
 
   return (
     <>
@@ -110,13 +35,12 @@ export function MobileNavDrawer({ scrolled }: { scrolled: boolean }) {
       </button>
 
       {open ? (
-        <div
+        <dialog
           id="landing-mobile-nav"
           ref={drawerRef}
-          role="dialog"
-          aria-modal="true"
+          open
           aria-label="Site navigation"
-          className="fixed inset-0 z-[60] flex flex-col bg-ink md:hidden"
+          className="fixed inset-0 z-[60] m-0 flex h-full w-full max-w-none max-h-none flex-col border-none bg-ink p-0 md:hidden"
         >
           <div className="flex items-center justify-end px-5 pt-4">
             <button
@@ -141,17 +65,17 @@ export function MobileNavDrawer({ scrolled }: { scrolled: boolean }) {
               </Link>
             ))}
             <Link
-              href="#demo"
+              href="/dashboard"
               onClick={close}
               className={cn(
                 buttonVariants({ variant: "primary", size: "lg" }),
                 "mt-4",
               )}
             >
-              Try demo
+              Dashboard →
             </Link>
           </nav>
-        </div>
+        </dialog>
       ) : null}
     </>
   );
