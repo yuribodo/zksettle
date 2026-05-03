@@ -20,10 +20,16 @@ pub enum StablecoinError {
     MintMismatch,
     #[msg("Counter arithmetic overflow")]
     CounterOverflow,
-    #[msg("Must provide at least one authority to transfer")]
-    NoAuthorityChange,
     #[msg("Program is paused")]
     Paused,
     #[msg("Program is already in the requested pause state")]
     AlreadyInState,
+    #[msg("Proposed admin is already the current admin")]
+    AdminAlreadyCurrent,
+    #[msg("Signer is not the pending admin")]
+    NotPendingAdmin,
+    #[msg("New operator is already the current operator")]
+    OperatorAlreadyCurrent,
+    #[msg("No pending admin to cancel")]
+    NoPendingAdmin,
 }
