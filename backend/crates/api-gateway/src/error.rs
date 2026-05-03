@@ -29,6 +29,18 @@ pub enum GatewayError {
     #[error("not found")]
     NotFound,
 
+    #[error("invalid signature")]
+    InvalidSignature,
+
+    #[error("invalid wallet address")]
+    InvalidWallet,
+
+    #[error("message expired")]
+    MessageExpired,
+
+    #[error("invalid message format")]
+    InvalidMessage,
+
     #[error("configuration error: {0}")]
     Config(String),
 
@@ -44,10 +56,13 @@ struct ErrorBody {
 impl IntoResponse for GatewayError {
     fn into_response(self) -> Response {
         let status = match &self {
-            Self::Unauthorized | Self::KeyNotFound => StatusCode::UNAUTHORIZED,
+            Self::Unauthorized | Self::KeyNotFound | Self::InvalidSignature | Self::MessageExpired => {
+                StatusCode::UNAUTHORIZED
+            }
             Self::RateLimited | Self::QuotaExhausted => StatusCode::TOO_MANY_REQUESTS,
             Self::Forbidden => StatusCode::FORBIDDEN,
             Self::NotFound => StatusCode::NOT_FOUND,
+            Self::InvalidWallet | Self::InvalidMessage => StatusCode::BAD_REQUEST,
             Self::Upstream(_) => StatusCode::BAD_GATEWAY,
             Self::Config(_) | Self::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };

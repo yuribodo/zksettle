@@ -16,7 +16,8 @@ pub struct TransferAuthority<'info> {
     pub treasury: Account<'info, Treasury>,
 }
 
-pub fn handler(
+// No pause guard — emergency key rotation must work while paused.
+pub fn transfer_authority_handler(
     ctx: Context<TransferAuthority>,
     new_admin: Option<Pubkey>,
     new_operator: Option<Pubkey>,

@@ -238,7 +238,7 @@ mod tests {
     use serial_test::serial;
 
     async fn seed_key(db: &DatabaseConnection, raw: &str) -> String {
-        key_store::insert(db, raw, "test-owner".into(), zksettle_types::gateway::Tier::Developer, 0)
+        key_store::insert(db, raw, "test-owner".into(), zksettle_types::gateway::Tier::Developer, 0, None)
             .await
             .unwrap();
         key_store::hash_key(raw)

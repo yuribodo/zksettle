@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_2022;
 use anchor_spl::token_interface::Token2022;
 
+use crate::error::StablecoinError;
 use crate::state::{Treasury, FREEZE_AUTHORITY_SEED, MINT_AUTHORITY_SEED, TREASURY_SEED};
 
 #[derive(Accounts)]
@@ -11,7 +12,10 @@ pub struct InitializeMint<'info> {
 
     /// CHECK: Validated by initialize_mint2 CPI — has extensions allocated but is not yet
     /// initialized as a mint, so Anchor cannot deserialize it.
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = *mint.owner == token_program.key() @ StablecoinError::MintMismatch,
+    )]
     pub mint: UncheckedAccount<'info>,
 
     #[account(
@@ -41,7 +45,7 @@ pub struct InitializeMint<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<InitializeMint>, decimals: u8) -> Result<()> {
+pub fn initialize_mint_handler(ctx: Context<InitializeMint>, decimals: u8) -> Result<()> {
     let cpi_accounts = token_2022::InitializeMint2 {
         mint: ctx.accounts.mint.to_account_info(),
     };
@@ -66,6 +70,7 @@ pub fn handler(ctx: Context<InitializeMint>, decimals: u8) -> Result<()> {
     treasury.total_minted = 0;
     treasury.total_burned = 0;
     treasury.decimals = decimals;
+    treasury.paused = false;
 
     msg!("Stablecoin mint initialized with {} decimals", decimals);
     Ok(())

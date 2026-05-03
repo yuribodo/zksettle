@@ -85,7 +85,7 @@ mod tests {
 
     async fn cleanup_and_seed(state: &Arc<crate::AppState>, raw_key: &str, owner: &str) {
         test_cleanup(&state.db).await;
-        key_store::insert(&state.db, raw_key, owner.into(), Tier::Developer, 1000)
+        key_store::insert(&state.db, raw_key, owner.into(), Tier::Developer, 1000, None)
             .await
             .unwrap();
     }

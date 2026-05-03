@@ -22,4 +22,8 @@ pub enum StablecoinError {
     CounterOverflow,
     #[msg("Must provide at least one authority to transfer")]
     NoAuthorityChange,
+    #[msg("Program is paused")]
+    Paused,
+    #[msg("Program is already in the requested pause state")]
+    AlreadyInState,
 }

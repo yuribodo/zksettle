@@ -131,7 +131,7 @@ mod tests {
     use axum::http::{Method, StatusCode};
     use zksettle_types::gateway::{ApiKeyRecord, Tier};
 
-    use crate::config::Config;
+    use crate::config::{Config, CookieSameSite};
     use crate::key_store;
     use crate::rate_limit::RateLimitStore;
     use crate::upstream::{MockHttpUpstream, UpstreamResponse};
@@ -149,7 +149,7 @@ mod tests {
     async fn state_with_mock(mock: Arc<MockHttpUpstream>) -> Arc<AppState> {
         let db = crate::test_db().await;
         crate::test_cleanup(&db).await;
-        key_store::insert(&db, "zks_test", "alice".into(), Tier::Developer, 0)
+        key_store::insert(&db, "zks_test", "alice".into(), Tier::Developer, 0, None)
             .await
             .unwrap();
         Arc::new(AppState {
@@ -162,10 +162,18 @@ mod tests {
                 cors_allowed_origins: vec![],
                 indexer_url: None,
                 database_url: String::new(),
+                jwt_secret: None,
+                jwt_ttl_secs: 86400,
+                siws_domain: None,
+                cookie_secure: false,
+                cookie_same_site: CookieSameSite::Lax,
+                login_rate_limit_per_minute: 5,
             },
             db,
             rate_limiter: RateLimitStore::new(),
+            login_rate_limiter: Arc::new(crate::rate_limit::LoginRateLimiter::new()),
             upstream: mock,
+            nonce_store: crate::nonce_store::NonceStore::new(),
         })
     }
 
@@ -327,6 +335,12 @@ mod tests {
             allow_open_keys: true,
             cors_allowed_origins: vec![],
             database_url: String::new(),
+            jwt_secret: None,
+            jwt_ttl_secs: 86400,
+            siws_domain: None,
+            cookie_secure: false,
+            cookie_same_site: CookieSameSite::Lax,
+            login_rate_limit_per_minute: 5,
         }
     }
 

@@ -42,6 +42,8 @@ fn signer_seeds<'a>(treasury_key: &'a [u8], bump: &'a [u8]) -> [&'a [u8]; 3] {
 }
 
 pub fn freeze_handler(ctx: Context<FreezeOrThaw>) -> Result<()> {
+    require!(!ctx.accounts.treasury.paused, StablecoinError::Paused);
+
     let treasury_key = ctx.accounts.treasury.key();
     let bump = [ctx.accounts.treasury.freeze_authority_bump];
     let seeds = signer_seeds(treasury_key.as_ref(), &bump);
@@ -58,10 +60,10 @@ pub fn freeze_handler(ctx: Context<FreezeOrThaw>) -> Result<()> {
         signer_seeds,
     ))?;
 
-    msg!("Account frozen: {}", ctx.accounts.target_account.key());
     Ok(())
 }
 
+// Thaw is exempt from pause guard — emergency unfreeze of wrongly-frozen accounts must work while paused.
 pub fn thaw_handler(ctx: Context<FreezeOrThaw>) -> Result<()> {
     let treasury_key = ctx.accounts.treasury.key();
     let bump = [ctx.accounts.treasury.freeze_authority_bump];
@@ -79,6 +81,5 @@ pub fn thaw_handler(ctx: Context<FreezeOrThaw>) -> Result<()> {
         signer_seeds,
     ))?;
 
-    msg!("Account thawed: {}", ctx.accounts.target_account.key());
     Ok(())
 }
