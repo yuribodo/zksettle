@@ -29,6 +29,18 @@ vi.mock("@/components/wallet/connect-wallet-button", () => ({
   ConnectWalletButton: () => <button type="button">Wallet CTA</button>,
 }));
 
+vi.mock("@/contexts/auth-context", () => ({
+  useAuth: () => ({
+    tenant: { tenant_id: "t1", wallet: "GgME…tvQk", name: null, tier: "developer" },
+    isAuthenticated: true,
+    isLoading: false,
+    signIn: vi.fn(),
+    signOut: vi.fn(),
+    isSigningIn: false,
+    signInError: null,
+  }),
+}));
+
 import { findNavItem, NAV_GROUPS, NAV_ITEMS } from "./nav-items";
 import { MobileNavDrawer } from "./mobile-nav-drawer";
 import { Sidebar } from "./sidebar";
@@ -99,7 +111,7 @@ describe("dashboard chrome", () => {
     expect(screen.getByRole("banner", { name: "Dashboard top bar" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Search (not implemented)" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Notifications" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Wallet CTA" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
     expect((container.firstChild as HTMLElement).className).toContain("border-transparent");
 
     Object.defineProperty(window, "scrollY", {

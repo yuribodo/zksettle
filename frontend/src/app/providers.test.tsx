@@ -79,9 +79,19 @@ vi.mock("@solana/wallet-adapter-react-ui", () => ({
   ),
 }));
 
-vi.mock("@tanstack/react-query", () => ({
-  QueryClientProvider: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="query-client-provider">{children}</div>
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-query")>();
+  return {
+    ...actual,
+    QueryClientProvider: ({ children }: { children: React.ReactNode }) => (
+      <div data-testid="query-client-provider">{children}</div>
+    ),
+  };
+});
+
+vi.mock("@/contexts/auth-context", () => ({
+  AuthProvider: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="auth-provider">{children}</div>
   ),
 }));
 

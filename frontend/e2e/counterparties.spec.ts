@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
 test.describe("Counterparties & Issuer Status", () => {
   test.beforeEach(async ({ page }) => {
@@ -54,7 +54,8 @@ test.describe("Counterparties & Issuer Status", () => {
 
   test("clicks publish roots and gets response", { tag: "@backend" }, async ({ page }) => {
     // Wait for page to be ready (roots loaded or error)
-    const status = page.getByText(/Live|Not published|Unavailable/);
+    const statusSection = page.locator("section").first();
+    const status = statusSection.getByText(/^(Live|Not published|Unavailable)$/);
     await expect(status).toBeVisible({ timeout: 10_000 });
 
     const publishButton = page.getByRole("button", { name: "Publish roots" });

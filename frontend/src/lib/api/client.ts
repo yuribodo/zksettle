@@ -14,14 +14,19 @@ export class ApiError extends Error {
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...((init.headers as Record<string, string>) ?? {}),
+    ...(init.headers as Record<string, string>),
   };
 
-  if (API_KEY && !headers.Authorization) {
+  const isBrowser = typeof globalThis.window !== "undefined";
+  if (API_KEY && !isBrowser && !headers.Authorization) {
     headers.Authorization = `Bearer ${API_KEY}`;
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers,
+    credentials: "include",
+  });
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

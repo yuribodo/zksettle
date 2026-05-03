@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
 test.describe("Dashboard health", () => {
   test("loads the dashboard and shows sidebar navigation", async ({ page }) => {

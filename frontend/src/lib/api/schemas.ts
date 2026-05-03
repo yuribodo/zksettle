@@ -118,6 +118,14 @@ export const DeleteKeyResponseSchema = z.object({
 });
 export type DeleteKeyResponse = z.infer<typeof DeleteKeyResponseSchema>;
 
+export const TenantSchema = z.object({
+  tenant_id: z.string(),
+  wallet: z.string(),
+  name: z.string().nullable(),
+  tier: TierSchema,
+});
+export type Tenant = z.infer<typeof TenantSchema>;
+
 export const HealthSchema = z.object({
   status: z.string(),
   version: z.string().optional(),
