@@ -13,10 +13,11 @@ pub struct Treasury {
     pub decimals: u8,
     pub paused: bool,
     pub pending_admin: Option<Pubkey>,
+    pub mint_cap: u64,
 }
 
 impl Treasury {
-    pub const LEN: usize = 32 + 32 + 32 + 1 + 1 + 1 + 8 + 8 + 1 + 1 + 33;
+    pub const LEN: usize = 32 + 32 + 32 + 1 + 1 + 1 + 8 + 8 + 1 + 1 + 33 + 8;
 }
 
 #[cfg(test)]
@@ -27,7 +28,7 @@ mod tests {
     fn treasury_len_matches_fields() {
         assert_eq!(
             Treasury::LEN,
-            3 * std::mem::size_of::<Pubkey>() + 3 + 2 * std::mem::size_of::<u64>() + 2 + 33,
+            3 * std::mem::size_of::<Pubkey>() + 3 + 2 * std::mem::size_of::<u64>() + 2 + 33 + std::mem::size_of::<u64>(),
         );
     }
 }
