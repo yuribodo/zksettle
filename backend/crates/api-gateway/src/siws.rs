@@ -195,7 +195,17 @@ fn parse_iso8601(s: &str) -> Option<u64> {
     let minute: u64 = time_iter.next()?.parse().ok()?;
     let second: u64 = time_iter.next()?.parse().ok()?;
 
-    if !(1..=12).contains(&month) || !(1..=31).contains(&day) || hour > 23 || minute > 59 || second > 59 {
+    if !(1..=12).contains(&month) || day == 0 || hour > 23 || minute > 59 || second > 59 {
+        return None;
+    }
+
+    let is_leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let max_day = match month {
+        2 => if is_leap { 29 } else { 28 },
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    };
+    if day > max_day {
         return None;
     }
 
@@ -333,6 +343,31 @@ Issued At: 2026-05-02T12:00:00Z";
     fn parse_iso8601_negative_offset() {
         // -04:00 → add 4h to local to get UTC
         assert_eq!(parse_iso8601("2026-05-02T08:00:00-04:00"), Some(1777723200));
+    }
+
+    #[test]
+    fn parse_iso8601_rejects_feb_31() {
+        assert_eq!(parse_iso8601("2026-02-31T12:00:00Z"), None);
+    }
+
+    #[test]
+    fn parse_iso8601_rejects_apr_31() {
+        assert_eq!(parse_iso8601("2026-04-31T12:00:00Z"), None);
+    }
+
+    #[test]
+    fn parse_iso8601_accepts_feb_28_non_leap() {
+        assert!(parse_iso8601("2026-02-28T12:00:00Z").is_some());
+    }
+
+    #[test]
+    fn parse_iso8601_rejects_feb_29_non_leap() {
+        assert_eq!(parse_iso8601("2026-02-29T12:00:00Z"), None);
+    }
+
+    #[test]
+    fn parse_iso8601_accepts_feb_29_leap_year() {
+        assert!(parse_iso8601("2024-02-29T12:00:00Z").is_some());
     }
 
     #[test]
