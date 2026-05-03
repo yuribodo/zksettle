@@ -42,6 +42,7 @@ bs58 = "0.5"
 uuid = { version = "1", features = ["v4", "serde"] }
 axum-extra = { version = "0.10", features = ["cookie"] }
 base64 = "0.22"
+time = "0.3"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

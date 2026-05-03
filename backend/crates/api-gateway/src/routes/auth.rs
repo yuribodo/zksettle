@@ -103,7 +103,8 @@ pub async fn login(
         .http_only(true)
         .secure(state.config.cookie_secure)
         .same_site(same_site)
-        .path("/");
+        .path("/")
+        .max_age(time::Duration::seconds(state.config.jwt_ttl_secs as i64));
 
     Ok((
         jar.add(cookie),
