@@ -4,6 +4,7 @@ use anchor_spl::token_interface::{Mint as MintAccount, Token2022, TokenAccount};
 
 use crate::error::StablecoinError;
 use crate::state::{Treasury, TREASURY_SEED};
+use crate::EVENT_VERSION;
 
 #[derive(Accounts)]
 pub struct BurnTokens<'info> {
@@ -32,6 +33,15 @@ pub struct BurnTokens<'info> {
     pub token_program: Program<'info, Token2022>,
 }
 
+#[event]
+pub struct TokensBurned {
+    pub version: u8,
+    pub mint: Pubkey,
+    pub source: Pubkey,
+    pub amount: u64,
+    pub holder: Pubkey,
+}
+
 // Any holder can burn their own tokens. total_burned includes user-initiated burns by design.
 pub fn burn_tokens_handler(ctx: Context<BurnTokens>, amount: u64) -> Result<()> {
     require!(!ctx.accounts.treasury.paused, StablecoinError::Paused);
@@ -55,5 +65,13 @@ pub fn burn_tokens_handler(ctx: Context<BurnTokens>, amount: u64) -> Result<()> 
         .ok_or(StablecoinError::CounterOverflow)?;
 
     msg!("Burned {} tokens", amount);
+
+    emit!(TokensBurned {
+        version: EVENT_VERSION,
+        mint: ctx.accounts.mint.key(),
+        source: ctx.accounts.token_account.key(),
+        amount,
+        holder: ctx.accounts.holder.key(),
+    });
     Ok(())
 }

@@ -4,6 +4,7 @@ use anchor_spl::token_interface::Token2022;
 
 use crate::error::StablecoinError;
 use crate::state::{Treasury, FREEZE_AUTHORITY_SEED, MINT_AUTHORITY_SEED, TREASURY_SEED};
+use crate::EVENT_VERSION;
 
 #[derive(Accounts)]
 pub struct InitializeMint<'info> {
@@ -45,6 +46,15 @@ pub struct InitializeMint<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[event]
+pub struct MintInitialized {
+    pub version: u8,
+    pub treasury: Pubkey,
+    pub mint: Pubkey,
+    pub admin: Pubkey,
+    pub operator: Pubkey,
+}
+
 pub fn initialize_mint_handler(ctx: Context<InitializeMint>, decimals: u8) -> Result<()> {
     let cpi_accounts = token_2022::InitializeMint2 {
         mint: ctx.accounts.mint.to_account_info(),
@@ -75,5 +85,13 @@ pub fn initialize_mint_handler(ctx: Context<InitializeMint>, decimals: u8) -> Re
     treasury.mint_cap = 0;
 
     msg!("Stablecoin mint initialized with {} decimals", decimals);
+
+    emit!(MintInitialized {
+        version: EVENT_VERSION,
+        treasury: ctx.accounts.treasury.key(),
+        mint: ctx.accounts.mint.key(),
+        admin: ctx.accounts.admin.key(),
+        operator: ctx.accounts.admin.key(),
+    });
     Ok(())
 }

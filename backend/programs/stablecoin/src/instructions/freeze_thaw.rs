@@ -4,6 +4,7 @@ use anchor_spl::token_interface::{Mint as MintAccount, Token2022, TokenAccount};
 
 use crate::error::StablecoinError;
 use crate::state::{Treasury, FREEZE_AUTHORITY_SEED, TREASURY_SEED};
+use crate::EVENT_VERSION;
 
 #[derive(Accounts)]
 pub struct FreezeOrThaw<'info> {
@@ -37,6 +38,22 @@ pub struct FreezeOrThaw<'info> {
     pub token_program: Program<'info, Token2022>,
 }
 
+#[event]
+pub struct AccountFrozen {
+    pub version: u8,
+    pub mint: Pubkey,
+    pub token_account: Pubkey,
+    pub admin: Pubkey,
+}
+
+#[event]
+pub struct AccountThawed {
+    pub version: u8,
+    pub mint: Pubkey,
+    pub token_account: Pubkey,
+    pub admin: Pubkey,
+}
+
 fn signer_seeds<'a>(treasury_key: &'a [u8], bump: &'a [u8]) -> [&'a [u8]; 3] {
     [FREEZE_AUTHORITY_SEED, treasury_key, bump]
 }
@@ -60,6 +77,12 @@ pub fn freeze_handler(ctx: Context<FreezeOrThaw>) -> Result<()> {
         signer_seeds,
     ))?;
 
+    emit!(AccountFrozen {
+        version: EVENT_VERSION,
+        mint: ctx.accounts.mint.key(),
+        token_account: ctx.accounts.target_account.key(),
+        admin: ctx.accounts.admin.key(),
+    });
     Ok(())
 }
 
@@ -81,5 +104,11 @@ pub fn thaw_handler(ctx: Context<FreezeOrThaw>) -> Result<()> {
         signer_seeds,
     ))?;
 
+    emit!(AccountThawed {
+        version: EVENT_VERSION,
+        mint: ctx.accounts.mint.key(),
+        token_account: ctx.accounts.target_account.key(),
+        admin: ctx.accounts.admin.key(),
+    });
     Ok(())
 }

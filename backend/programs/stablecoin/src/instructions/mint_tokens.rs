@@ -4,6 +4,7 @@ use anchor_spl::token_interface::{Mint as MintAccount, Token2022, TokenAccount};
 
 use crate::error::StablecoinError;
 use crate::state::{Treasury, MINT_AUTHORITY_SEED, TREASURY_SEED};
+use crate::EVENT_VERSION;
 
 #[derive(Accounts)]
 pub struct MintTokens<'info> {
@@ -37,6 +38,15 @@ pub struct MintTokens<'info> {
     pub destination: InterfaceAccount<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token2022>,
+}
+
+#[event]
+pub struct TokensMinted {
+    pub version: u8,
+    pub mint: Pubkey,
+    pub destination: Pubkey,
+    pub amount: u64,
+    pub operator: Pubkey,
 }
 
 pub fn mint_tokens_handler(ctx: Context<MintTokens>, amount: u64) -> Result<()> {
@@ -76,5 +86,13 @@ pub fn mint_tokens_handler(ctx: Context<MintTokens>, amount: u64) -> Result<()> 
         .ok_or(StablecoinError::CounterOverflow)?;
 
     msg!("Minted {} tokens", amount);
+
+    emit!(TokensMinted {
+        version: EVENT_VERSION,
+        mint: ctx.accounts.mint.key(),
+        destination: ctx.accounts.destination.key(),
+        amount,
+        operator: ctx.accounts.operator.key(),
+    });
     Ok(())
 }
