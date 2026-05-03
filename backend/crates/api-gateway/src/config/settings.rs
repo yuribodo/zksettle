@@ -81,21 +81,34 @@ impl Config {
                 .unwrap_or_default(),
             database_url: read_var("GATEWAY_DATABASE_URL")?,
             jwt_secret: read_var("GATEWAY_JWT_SECRET").ok(),
-            jwt_ttl_secs: read_var("GATEWAY_JWT_TTL_SECS")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(86400),
+            jwt_ttl_secs: match read_var("GATEWAY_JWT_TTL_SECS") {
+                Ok(v) => v.parse().map_err(|_| {
+                    GatewayError::Config("GATEWAY_JWT_TTL_SECS must be a valid u64".into())
+                })?,
+                Err(_) => 86400,
+            },
             siws_domain: read_var("GATEWAY_SIWS_DOMAIN").ok(),
-            cookie_secure: read_var("GATEWAY_COOKIE_SECURE")
-                .map(|v| v.eq_ignore_ascii_case("true"))
-                .unwrap_or(false),
+            cookie_secure: match read_var("GATEWAY_COOKIE_SECURE") {
+                Ok(v) if v.eq_ignore_ascii_case("true") => true,
+                Ok(v) if v.eq_ignore_ascii_case("false") => false,
+                Ok(_) => {
+                    return Err(GatewayError::Config(
+                        "GATEWAY_COOKIE_SECURE must be true or false".into(),
+                    ))
+                }
+                Err(_) => false,
+            },
             cookie_same_site: read_var("GATEWAY_COOKIE_SAME_SITE")
                 .map(|v| CookieSameSite::parse(&v))
                 .unwrap_or(Ok(CookieSameSite::Lax))?,
-            login_rate_limit_per_minute: read_var("GATEWAY_LOGIN_RATE_LIMIT_PER_MINUTE")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(5),
+            login_rate_limit_per_minute: match read_var("GATEWAY_LOGIN_RATE_LIMIT_PER_MINUTE") {
+                Ok(v) => v.parse().map_err(|_| {
+                    GatewayError::Config(
+                        "GATEWAY_LOGIN_RATE_LIMIT_PER_MINUTE must be a valid u32".into(),
+                    )
+                })?,
+                Err(_) => 5,
+            },
         })
     }
 }
