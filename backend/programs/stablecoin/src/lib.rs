@@ -8,6 +8,8 @@ use anchor_lang::prelude::*;
 
 pub use instructions::*;
 
+pub const EVENT_VERSION: u8 = 1;
+
 declare_id!("2CdXRSPo6QLfLBJTikmrqmBiWwa1HpuuYJ2Qu6Yy3Liv");
 
 #[program]

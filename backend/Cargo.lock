@@ -10283,6 +10283,7 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
+ "base64 0.22.1",
  "litesvm",
  "solana-instruction 2.3.3",
  "solana-keypair",
