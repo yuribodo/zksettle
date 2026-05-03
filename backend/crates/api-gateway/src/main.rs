@@ -6,6 +6,7 @@ use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
 use api_gateway::config::{db, Config};
+use api_gateway::nonce_store::NonceStore;
 use api_gateway::rate_limit::{LoginRateLimiter, RateLimitStore};
 use api_gateway::upstream::ReqwestUpstream;
 use api_gateway::{build_router, AppState};
@@ -33,12 +34,19 @@ async fn main() -> anyhow::Result<()> {
         .build()
         .context("building http client")?;
 
+    let login_rate_limiter = Arc::new(LoginRateLimiter::with_per_minute(config.login_rate_limit_per_minute));
+    login_rate_limiter.spawn_cleanup();
+
+    let nonce_store = NonceStore::new();
+    nonce_store.spawn_cleanup();
+
     let state = Arc::new(AppState {
         config: config.clone(),
         db,
         rate_limiter: RateLimitStore::new(),
-        login_rate_limiter: LoginRateLimiter::with_per_minute(config.login_rate_limit_per_minute),
+        login_rate_limiter,
         upstream: Arc::new(ReqwestUpstream::new(http)),
+        nonce_store,
     });
 
     if config.admin_key.is_none() {
@@ -53,7 +61,11 @@ async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind(&addr).await?;
     info!(%addr, "api-gateway starting");
 
-    axum::serve(listener, build_router(state)).await?;
+    axum::serve(
+        listener,
+        build_router(state).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }

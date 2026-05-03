@@ -26,6 +26,7 @@ pub mod error;
 pub mod jwt;
 pub mod key_store;
 pub mod metering;
+pub mod nonce_store;
 pub mod proxy;
 pub mod rate_limit;
 pub mod routes;
@@ -43,8 +44,9 @@ pub struct AppState {
     pub config: Config,
     pub db: DatabaseConnection,
     pub rate_limiter: RateLimitStore,
-    pub login_rate_limiter: LoginRateLimiter,
+    pub login_rate_limiter: Arc<LoginRateLimiter>,
     pub upstream: Arc<dyn HttpUpstream>,
+    pub nonce_store: nonce_store::NonceStore,
 }
 
 pub fn build_router(state: Arc<AppState>) -> Router {
@@ -59,6 +61,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api-keys/{key_hash}", delete(routes::keys::delete_key))
         .route("/usage", get(routes::usage::get_usage))
         .route("/usage/history", get(routes::usage::get_usage_history))
+        .route("/auth/challenge", get(routes::challenge::get_challenge))
         .route("/auth/login", post(routes::auth::login))
         .route("/auth/logout", post(routes::auth::logout))
         .route("/auth/me", get(routes::auth::me))
@@ -145,8 +148,9 @@ pub async fn test_state() -> Arc<AppState> {
         config,
         db,
         rate_limiter: RateLimitStore::new(),
-        login_rate_limiter: LoginRateLimiter::new(),
+        login_rate_limiter: Arc::new(LoginRateLimiter::new()),
         upstream: Arc::new(upstream::ReqwestUpstream::new(reqwest::Client::new())),
+        nonce_store: nonce_store::NonceStore::new(),
     })
 }
 
@@ -185,8 +189,9 @@ mod tests {
             config,
             db,
             rate_limiter: RateLimitStore::new(),
-            login_rate_limiter: LoginRateLimiter::new(),
+            login_rate_limiter: Arc::new(LoginRateLimiter::new()),
             upstream: Arc::new(upstream::ReqwestUpstream::new(reqwest::Client::new())),
+            nonce_store: nonce_store::NonceStore::new(),
         });
         build_router(state)
     }

@@ -1,7 +1,7 @@
+use std::net::SocketAddr;
 use std::sync::Arc;
 
-use axum::extract::State;
-use axum::http::HeaderMap;
+use axum::extract::{ConnectInfo, State};
 use axum::Json;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use axum_extra::extract::CookieJar;
@@ -40,22 +40,13 @@ pub struct MeResponse {
     pub name: Option<String>,
 }
 
-fn extract_client_ip(headers: &HeaderMap) -> String {
-    headers
-        .get("x-forwarded-for")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.split(',').next())
-        .map(|s| s.trim().to_owned())
-        .unwrap_or_else(|| "unknown".into())
-}
-
 pub async fn login(
     State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     jar: CookieJar,
     Json(body): Json<LoginRequest>,
 ) -> Result<(CookieJar, Json<LoginResponse>), GatewayError> {
-    let ip = extract_client_ip(&headers);
+    let ip = addr.ip().to_string();
     if !state.login_rate_limiter.check(&ip) {
         return Err(GatewayError::RateLimited);
     }
@@ -83,9 +74,15 @@ pub async fn login(
         return Err(GatewayError::InvalidMessage);
     }
 
+    if !state.nonce_store.consume(&parsed.nonce) {
+        return Err(GatewayError::InvalidMessage);
+    }
+
     let now = crate::now_secs();
 
-    siws::validate_message(&parsed, now, state.config.siws_domain.as_deref())?;
+    let domain = state.config.siws_domain.as_deref()
+        .ok_or_else(|| GatewayError::Config("siws_domain must be configured".into()))?;
+    siws::validate_message(&parsed, now, Some(domain))?;
     siws::verify_signature(&body.account, &message_bytes, &signature_bytes)?;
 
     let tenant = tenant_store::find_or_create(&state.db, &body.account, now).await?;

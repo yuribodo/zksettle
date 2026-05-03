@@ -80,8 +80,9 @@ mod tests {
             },
             db,
             rate_limiter: RateLimitStore::new(),
-            login_rate_limiter: crate::rate_limit::LoginRateLimiter::new(),
+            login_rate_limiter: Arc::new(crate::rate_limit::LoginRateLimiter::new()),
             upstream: Arc::new(MockHttpUpstream::new()),
+            nonce_store: crate::nonce_store::NonceStore::new(),
         })
     }
 
