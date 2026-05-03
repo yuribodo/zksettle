@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::extract::State;
 use axum::http::HeaderMap;
@@ -84,10 +83,7 @@ pub async fn login(
         return Err(GatewayError::InvalidMessage);
     }
 
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    let now = crate::now_secs();
 
     siws::validate_message(&parsed, now, state.config.siws_domain.as_deref())?;
     siws::verify_signature(&body.account, &message_bytes, &signature_bytes)?;
@@ -103,7 +99,7 @@ pub async fn login(
         crate::config::CookieSameSite::Lax => SameSite::Lax,
         crate::config::CookieSameSite::None => SameSite::None,
     };
-    let cookie = Cookie::build(("session", token))
+    let cookie = Cookie::build((crate::SESSION_COOKIE, token))
         .http_only(true)
         .secure(state.config.cookie_secure)
         .same_site(same_site)
@@ -120,7 +116,7 @@ pub async fn login(
 }
 
 pub async fn logout(jar: CookieJar) -> CookieJar {
-    jar.remove(Cookie::build("session").path("/"))
+    jar.remove(Cookie::build(crate::SESSION_COOKIE).path("/"))
 }
 
 pub async fn me(

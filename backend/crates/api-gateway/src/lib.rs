@@ -1,5 +1,14 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+pub const SESSION_COOKIE: &str = "session";
+
+pub fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock before Unix epoch")
+        .as_secs()
+}
 
 use axum::http::{HeaderValue, Method};
 use axum::routing::{any, delete, get, post};
@@ -130,6 +139,7 @@ pub async fn test_state() -> Arc<AppState> {
         siws_domain: None,
         cookie_secure: false,
         cookie_same_site: CookieSameSite::Lax,
+        login_rate_limit_per_minute: 5,
     };
     Arc::new(AppState {
         config,
@@ -169,6 +179,7 @@ mod tests {
             siws_domain: None,
             cookie_secure: false,
             cookie_same_site: CookieSameSite::Lax,
+            login_rate_limit_per_minute: 5,
         };
         let state = Arc::new(AppState {
             config,

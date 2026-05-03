@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::extract::{Path, State};
 use axum::http::HeaderMap;
@@ -81,10 +80,7 @@ pub async fn create_key(
     Json(body): Json<CreateKeyRequest>,
 ) -> Result<Json<CreateKeyResponse>, GatewayError> {
     let raw_key = key_store::generate_key();
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    let now = crate::now_secs();
 
     let owner = if let Some(tenant) = maybe_tenant {
         let owner = tenant.wallet.clone();
@@ -213,6 +209,7 @@ mod tests {
             siws_domain: None,
             cookie_secure: false,
             cookie_same_site: CookieSameSite::Lax,
+            login_rate_limit_per_minute: 5,
         };
         let state = Arc::new(AppState {
             config,
@@ -241,6 +238,7 @@ mod tests {
             siws_domain: None,
             cookie_secure: false,
             cookie_same_site: CookieSameSite::Lax,
+            login_rate_limit_per_minute: 5,
         };
         let state = Arc::new(AppState {
             config,

@@ -30,7 +30,7 @@ impl FromRequestParts<Arc<AppState>> for AuthenticatedTenant {
 
         let jar = CookieJar::from_headers(&parts.headers);
         let token = jar
-            .get("session")
+            .get(crate::SESSION_COOKIE)
             .map(|c| c.value())
             .ok_or(GatewayError::Unauthorized)?;
 

@@ -18,10 +18,7 @@ pub fn issue(
     secret: &str,
     ttl_secs: u64,
 ) -> Result<String, GatewayError> {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    let now = crate::now_secs();
 
     let claims = Claims {
         sub: tenant_id,
