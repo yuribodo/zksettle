@@ -64,6 +64,26 @@ impl std::fmt::Debug for Config {
 
 impl Config {
     pub fn from_env() -> Result<Self, GatewayError> {
+        let cookie_secure = match read_var("GATEWAY_COOKIE_SECURE") {
+            Ok(v) if v.eq_ignore_ascii_case("true") => true,
+            Ok(v) if v.eq_ignore_ascii_case("false") => false,
+            Ok(_) => {
+                return Err(GatewayError::Config(
+                    "GATEWAY_COOKIE_SECURE must be true or false".into(),
+                ))
+            }
+            Err(_) => false,
+        };
+        let cookie_same_site = read_var("GATEWAY_COOKIE_SAME_SITE")
+            .map(|v| CookieSameSite::parse(&v))
+            .unwrap_or(Ok(CookieSameSite::Lax))?;
+
+        if cookie_same_site == CookieSameSite::None && !cookie_secure {
+            return Err(GatewayError::Config(
+                "SameSite=None requires GATEWAY_COOKIE_SECURE=true".into(),
+            ));
+        }
+
         Ok(Self {
             port: read_var("GATEWAY_PORT")
                 .unwrap_or_else(|_| "4000".into())
@@ -88,19 +108,8 @@ impl Config {
                 Err(_) => 86400,
             },
             siws_domain: read_var("GATEWAY_SIWS_DOMAIN").ok(),
-            cookie_secure: match read_var("GATEWAY_COOKIE_SECURE") {
-                Ok(v) if v.eq_ignore_ascii_case("true") => true,
-                Ok(v) if v.eq_ignore_ascii_case("false") => false,
-                Ok(_) => {
-                    return Err(GatewayError::Config(
-                        "GATEWAY_COOKIE_SECURE must be true or false".into(),
-                    ))
-                }
-                Err(_) => false,
-            },
-            cookie_same_site: read_var("GATEWAY_COOKIE_SAME_SITE")
-                .map(|v| CookieSameSite::parse(&v))
-                .unwrap_or(Ok(CookieSameSite::Lax))?,
+            cookie_secure,
+            cookie_same_site,
             login_rate_limit_per_minute: match read_var("GATEWAY_LOGIN_RATE_LIMIT_PER_MINUTE") {
                 Ok(v) => v.parse().map_err(|_| {
                     GatewayError::Config(
@@ -176,5 +185,26 @@ mod tests {
         assert!(!dbg.contains("postgres://secret"));
         assert!(!dbg.contains("my_jwt_secret"));
         assert!(dbg.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn samesite_none_without_secure_is_rejected() {
+        std::env::set_var("GATEWAY_UPSTREAM_URL", "http://localhost:0");
+        std::env::set_var("GATEWAY_DATABASE_URL", "sqlite::memory:");
+        std::env::set_var("GATEWAY_COOKIE_SAME_SITE", "none");
+        std::env::set_var("GATEWAY_COOKIE_SECURE", "false");
+
+        let result = Config::from_env();
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(
+            msg.contains("SameSite=None requires"),
+            "expected SameSite=None rejection, got: {msg}"
+        );
+
+        std::env::remove_var("GATEWAY_COOKIE_SAME_SITE");
+        std::env::remove_var("GATEWAY_COOKIE_SECURE");
+        std::env::remove_var("GATEWAY_UPSTREAM_URL");
+        std::env::remove_var("GATEWAY_DATABASE_URL");
     }
 }
