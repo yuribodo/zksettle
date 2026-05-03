@@ -62,6 +62,10 @@ vi.mock("@/components/dashboard/tier-b-scaffold", () => ({
   ),
 }));
 
+vi.mock("@/components/dashboard/require-auth", () => ({
+  RequireAuth: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
 import DashboardLayout from "./layout";
 import DashboardIndex from "./page";
 import ApiKeysPage from "./api-keys/page";
