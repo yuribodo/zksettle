@@ -40,8 +40,7 @@ export function useSignOut() {
   return useMutation({
     mutationFn: authSignOut,
     onSuccess: () => {
-      queryClient.setQueryData(authMeQueryKey, null);
-      queryClient.invalidateQueries();
+      queryClient.removeQueries();
       disconnect();
     },
   });

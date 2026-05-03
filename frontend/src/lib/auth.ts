@@ -2,7 +2,6 @@ import type { PublicKey } from "@solana/web3.js";
 
 import { apiFetch } from "@/lib/api/client";
 import { TenantSchema, type Tenant } from "@/lib/api/schemas";
-import { API_BASE_URL } from "@/lib/config";
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
@@ -18,7 +17,7 @@ async function getChallenge(): Promise<string> {
 }
 
 export function generateSIWSMessage(wallet: PublicKey, nonce: string): string {
-  const domain = new URL(API_BASE_URL).host;
+  const domain = window.location.host;
   const address = wallet.toBase58();
   const issuedAt = new Date().toISOString();
 
