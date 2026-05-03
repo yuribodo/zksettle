@@ -162,12 +162,34 @@ pub fn create_token_account_ix(
     vec![create_ix, init_ix]
 }
 
-pub fn transfer_authority_ix(
-    admin: &Pubkey,
-    mint: &Pubkey,
-    new_admin: Option<Pubkey>,
-    new_operator: Option<Pubkey>,
-) -> Instruction {
+pub fn propose_admin_ix(admin: &Pubkey, mint: &Pubkey, new_admin: Pubkey) -> Instruction {
+    let (treasury, _) = treasury_pda(mint);
+
+    Instruction {
+        program_id: stablecoin::ID,
+        accounts: vec![
+            AccountMeta::new(*admin, true),
+            AccountMeta::new(treasury, false),
+            AccountMeta::new_readonly(anchor_lang::system_program::ID, false),
+        ],
+        data: stablecoin::instruction::ProposeAdmin { new_admin }.data(),
+    }
+}
+
+pub fn accept_admin_ix(new_admin: &Pubkey, mint: &Pubkey) -> Instruction {
+    let (treasury, _) = treasury_pda(mint);
+
+    Instruction {
+        program_id: stablecoin::ID,
+        accounts: vec![
+            AccountMeta::new_readonly(*new_admin, true),
+            AccountMeta::new(treasury, false),
+        ],
+        data: stablecoin::instruction::AcceptAdmin {}.data(),
+    }
+}
+
+pub fn cancel_pending_admin_ix(admin: &Pubkey, mint: &Pubkey) -> Instruction {
     let (treasury, _) = treasury_pda(mint);
 
     Instruction {
@@ -176,11 +198,20 @@ pub fn transfer_authority_ix(
             AccountMeta::new_readonly(*admin, true),
             AccountMeta::new(treasury, false),
         ],
-        data: stablecoin::instruction::TransferAuthority {
-            new_admin,
-            new_operator,
-        }
-        .data(),
+        data: stablecoin::instruction::CancelPendingAdmin {}.data(),
+    }
+}
+
+pub fn set_operator_ix(admin: &Pubkey, mint: &Pubkey, new_operator: Pubkey) -> Instruction {
+    let (treasury, _) = treasury_pda(mint);
+
+    Instruction {
+        program_id: stablecoin::ID,
+        accounts: vec![
+            AccountMeta::new_readonly(*admin, true),
+            AccountMeta::new(treasury, false),
+        ],
+        data: stablecoin::instruction::SetOperator { new_operator }.data(),
     }
 }
 
