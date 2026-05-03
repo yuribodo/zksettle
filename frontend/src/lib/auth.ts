@@ -1,24 +1,25 @@
-"use client";
-
 import type { PublicKey } from "@solana/web3.js";
-import bs58 from "bs58";
 
 import { apiFetch } from "@/lib/api/client";
 import { TenantSchema, type Tenant } from "@/lib/api/schemas";
 import { API_BASE_URL } from "@/lib/config";
 
-function generateNonce(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
 }
 
-export function generateSIWSMessage(wallet: PublicKey): string {
+async function getChallenge(): Promise<string> {
+  const res = await apiFetch<{ nonce: string }>("/auth/challenge");
+  return res.nonce;
+}
+
+export function generateSIWSMessage(wallet: PublicKey, nonce: string): string {
   const domain = new URL(API_BASE_URL).host;
   const address = wallet.toBase58();
-  const nonce = generateNonce();
   const issuedAt = new Date().toISOString();
 
   return [
@@ -36,17 +37,17 @@ export async function signIn(
   wallet: PublicKey,
   signMessage: (message: Uint8Array) => Promise<Uint8Array>,
 ): Promise<void> {
-  const message = generateSIWSMessage(wallet);
+  const nonce = await getChallenge();
+  const message = generateSIWSMessage(wallet, nonce);
   const encoded = new TextEncoder().encode(message);
   const signatureBytes = await signMessage(encoded);
-  const signature = bs58.encode(signatureBytes);
 
   await apiFetch("/auth/login", {
     method: "POST",
     body: JSON.stringify({
-      wallet: wallet.toBase58(),
-      message,
-      signature,
+      account: wallet.toBase58(),
+      signed_message: bytesToBase64(encoded),
+      signature: bytesToBase64(signatureBytes),
     }),
   });
 }
