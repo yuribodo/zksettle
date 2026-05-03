@@ -111,7 +111,7 @@ fn build_cors_layer(allowed_origins: &[String]) -> CorsLayer {
 #[cfg(test)]
 pub async fn test_db() -> DatabaseConnection {
     let url = std::env::var("TEST_DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://zksettle:zksettle_dev@localhost:5432/zksettle_gateway_test".into());
+        .expect("TEST_DATABASE_URL must be set for tests");
     config::db::connect_and_migrate(&url).await.expect("test DB connect")
 }
 
