@@ -1,6 +1,7 @@
 import type { PublicKey } from "@solana/web3.js";
 
 import { apiFetch } from "@/lib/api/client";
+import { API_BASE_URL } from "@/lib/config";
 import { TenantSchema, type Tenant } from "@/lib/api/schemas";
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -52,7 +53,13 @@ export async function signIn(
 }
 
 export async function signOut(): Promise<void> {
-  await apiFetch("/auth/logout", { method: "POST" });
+  const res = await fetch(`${API_BASE_URL}/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    throw new Error(`Logout failed: ${res.status}`);
+  }
 }
 
 export async function getMe(): Promise<Tenant> {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 
 import { useWallet } from "@/hooks/use-wallet-connection";
 import { getMe, signIn as authSignIn, signOut as authSignOut } from "@/lib/auth";
@@ -35,6 +36,7 @@ export function useSignIn() {
 
 export function useSignOut() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { disconnect } = useWallet();
 
   return useMutation({
@@ -42,6 +44,7 @@ export function useSignOut() {
     onSuccess: () => {
       queryClient.removeQueries();
       disconnect();
+      router.replace("/login");
     },
   });
 }
