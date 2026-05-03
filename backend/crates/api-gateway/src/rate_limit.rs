@@ -37,7 +37,11 @@ pub struct LoginRateLimiter {
 
 impl LoginRateLimiter {
     pub fn new() -> Self {
-        let quota = Quota::per_minute(NonZeroU32::new(5).unwrap());
+        Self::with_per_minute(5)
+    }
+
+    pub fn with_per_minute(n: u32) -> Self {
+        let quota = Quota::per_minute(NonZeroU32::new(n.max(1)).unwrap());
         Self {
             limiter: Arc::new(RateLimiter::dashmap(quota)),
         }

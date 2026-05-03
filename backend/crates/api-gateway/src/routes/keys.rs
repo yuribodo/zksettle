@@ -82,27 +82,31 @@ pub async fn create_key(
     let raw_key = key_store::generate_key();
     let now = crate::now_secs();
 
-    let owner = if let Some(tenant) = maybe_tenant {
+    let (owner, tier) = if let Some(tenant) = maybe_tenant {
+        let record = crate::tenant_store::find_by_id(&state.db, tenant.tenant_id)
+            .await?
+            .ok_or(GatewayError::Unauthorized)?;
+        let tier = record.tier.parse::<Tier>().unwrap_or(Tier::Developer);
         let owner = tenant.wallet.clone();
         key_store::insert(
             &state.db,
             &raw_key,
             owner.clone(),
-            Tier::Developer,
+            tier,
             now,
             Some(tenant.tenant_id),
         )
         .await?;
-        owner
+        (owner, tier)
     } else {
         verify_admin(&state.config, &headers)?;
         key_store::insert(&state.db, &raw_key, body.owner.clone(), Tier::Developer, now, None).await?;
-        body.owner.clone()
+        (body.owner.clone(), Tier::Developer)
     };
 
     Ok(Json(CreateKeyResponse {
         api_key: raw_key,
-        tier: Tier::Developer,
+        tier,
         owner,
     }))
 }

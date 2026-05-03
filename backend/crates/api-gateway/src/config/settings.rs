@@ -39,6 +39,7 @@ pub struct Config {
     pub siws_domain: Option<String>,
     pub cookie_secure: bool,
     pub cookie_same_site: CookieSameSite,
+    pub login_rate_limit_per_minute: u32,
 }
 
 impl std::fmt::Debug for Config {
@@ -91,6 +92,10 @@ impl Config {
             cookie_same_site: read_var("GATEWAY_COOKIE_SAME_SITE")
                 .map(|v| CookieSameSite::parse(&v))
                 .unwrap_or(Ok(CookieSameSite::Lax))?,
+            login_rate_limit_per_minute: read_var("GATEWAY_LOGIN_RATE_LIMIT_PER_MINUTE")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(5),
         })
     }
 }
@@ -151,6 +156,7 @@ mod tests {
             siws_domain: None,
             cookie_secure: false,
             cookie_same_site: CookieSameSite::Lax,
+            login_rate_limit_per_minute: 5,
         };
         let dbg = format!("{cfg:?}");
         assert!(!dbg.contains("my_admin_secret"));

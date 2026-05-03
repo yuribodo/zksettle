@@ -37,7 +37,7 @@ async fn main() -> anyhow::Result<()> {
         config: config.clone(),
         db,
         rate_limiter: RateLimitStore::new(),
-        login_rate_limiter: LoginRateLimiter::new(),
+        login_rate_limiter: LoginRateLimiter::with_per_minute(config.login_rate_limit_per_minute),
         upstream: Arc::new(ReqwestUpstream::new(http)),
     });
 

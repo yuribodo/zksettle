@@ -167,6 +167,7 @@ mod tests {
                 siws_domain: None,
                 cookie_secure: false,
                 cookie_same_site: CookieSameSite::Lax,
+                login_rate_limit_per_minute: 5,
             },
             db,
             rate_limiter: RateLimitStore::new(),
@@ -338,6 +339,7 @@ mod tests {
             siws_domain: None,
             cookie_secure: false,
             cookie_same_site: CookieSameSite::Lax,
+            login_rate_limit_per_minute: 5,
         }
     }
 
