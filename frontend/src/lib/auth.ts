@@ -1,8 +1,12 @@
 import type { PublicKey } from "@solana/web3.js";
 
+import { z } from "zod";
+
 import { apiFetch } from "@/lib/api/client";
 import { API_BASE_URL } from "@/lib/config";
 import { TenantSchema, type Tenant } from "@/lib/api/schemas";
+
+const ChallengeSchema = z.object({ nonce: z.string().min(1) });
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
@@ -13,7 +17,7 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 async function getChallenge(): Promise<string> {
-  const res = await apiFetch<{ nonce: string }>("/auth/challenge");
+  const res = ChallengeSchema.parse(await apiFetch("/auth/challenge"));
   return res.nonce;
 }
 
