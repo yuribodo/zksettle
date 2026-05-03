@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { version } from "@/../package.json";
+import pkg from "@/../package.json";
 import { Logo } from "@/components/icons/logo";
 import { NAV_GROUPS, NAV_ITEMS } from "@/components/dashboard/nav-items";
 import { cn } from "@/lib/cn";
@@ -82,7 +82,7 @@ export function Sidebar() {
             <span className="size-1.5 rounded-full bg-emerald" aria-hidden="true" />{" "}
             Devnet
           </span>
-          <span className="font-mono text-muted">v{version}</span>
+          <span className="font-mono text-muted">v{pkg.version}</span>
         </div>
       </div>
     </aside>
