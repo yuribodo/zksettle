@@ -34,12 +34,20 @@ pub mod stablecoin {
         instructions::thaw_handler(ctx)
     }
 
-    pub fn transfer_authority(
-        ctx: Context<TransferAuthority>,
-        new_admin: Option<Pubkey>,
-        new_operator: Option<Pubkey>,
-    ) -> Result<()> {
-        instructions::transfer_authority_handler(ctx, new_admin, new_operator)
+    pub fn propose_admin(ctx: Context<ProposeAdmin>, new_admin: Pubkey) -> Result<()> {
+        instructions::propose_admin_handler(ctx, new_admin)
+    }
+
+    pub fn accept_admin(ctx: Context<AcceptAdmin>) -> Result<()> {
+        instructions::accept_admin_handler(ctx)
+    }
+
+    pub fn cancel_pending_admin(ctx: Context<CancelPendingAdmin>) -> Result<()> {
+        instructions::cancel_pending_admin_handler(ctx)
+    }
+
+    pub fn set_operator(ctx: Context<SetOperator>, new_operator: Pubkey) -> Result<()> {
+        instructions::set_operator_handler(ctx, new_operator)
     }
 
     pub fn pause(ctx: Context<PauseOrUnpause>) -> Result<()> {
