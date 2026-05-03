@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
 test.describe("API Keys management", () => {
   test.beforeEach(async ({ page }) => {
