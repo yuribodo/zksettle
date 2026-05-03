@@ -164,24 +164,34 @@ pub fn validate_message(
     Ok(())
 }
 
-fn parse_iso8601(s: &str) -> Option<u64> {
-    let s = s.trim();
-
-    let (datetime_str, offset_secs) = if let Some(rest) = s.strip_suffix('Z') {
-        (rest, 0i64)
-    } else if let Some(idx) = s.rfind('+').or_else(|| {
+fn split_offset(s: &str) -> Option<(&str, i64)> {
+    if let Some(rest) = s.strip_suffix('Z') {
+        return Some((rest, 0));
+    }
+    let idx = s.rfind('+').or_else(|| {
         let t_pos = s.find('T')?;
         s[t_pos..].rfind('-').map(|i| i + t_pos)
-    }) {
-        let offset_str = &s[idx..];
-        let sign: i64 = if offset_str.starts_with('-') { -1 } else { 1 };
-        let hm = &offset_str[1..];
-        let (oh, om) = hm.split_once(':')?;
-        let offset = sign * (oh.parse::<i64>().ok()? * 3600 + om.parse::<i64>().ok()? * 60);
-        (&s[..idx], offset)
-    } else {
-        return None;
-    };
+    })?;
+    let offset_str = &s[idx..];
+    let sign: i64 = if offset_str.starts_with('-') { -1 } else { 1 };
+    let (oh, om) = offset_str[1..].split_once(':')?;
+    let offset = sign * (oh.parse::<i64>().ok()? * 3600 + om.parse::<i64>().ok()? * 60);
+    Some((&s[..idx], offset))
+}
+
+fn max_day_in_month(year: u64, month: u64) -> u64 {
+    match month {
+        2 => {
+            let is_leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+            if is_leap { 29 } else { 28 }
+        }
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    }
+}
+
+fn parse_iso8601(s: &str) -> Option<u64> {
+    let (datetime_str, offset_secs) = split_offset(s.trim())?;
 
     let (date_part, time_part) = datetime_str.split_once('T')?;
     let mut date_iter = date_part.split('-');
@@ -198,14 +208,7 @@ fn parse_iso8601(s: &str) -> Option<u64> {
     if !(1..=12).contains(&month) || day == 0 || hour > 23 || minute > 59 || second > 59 {
         return None;
     }
-
-    let is_leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
-    let max_day = match month {
-        2 => if is_leap { 29 } else { 28 },
-        4 | 6 | 9 | 11 => 30,
-        _ => 31,
-    };
-    if day > max_day {
+    if day > max_day_in_month(year, month) {
         return None;
     }
 
