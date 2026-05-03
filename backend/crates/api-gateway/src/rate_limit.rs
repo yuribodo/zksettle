@@ -1,9 +1,11 @@
 use std::num::NonZeroU32;
 use std::sync::Arc;
+use std::time::Duration;
 
 use dashmap::DashMap;
 use governor::clock::DefaultClock;
 use governor::state::{InMemoryState, NotKeyed};
+use governor::state::keyed::DashMapStateStore;
 use governor::{Quota, RateLimiter};
 use zksettle_types::gateway::Tier;
 
@@ -27,6 +29,44 @@ impl RateLimitStore {
             .or_insert_with(|| Arc::new(build_limiter(tier)))
             .clone();
         limiter.check().is_ok()
+    }
+}
+
+pub struct LoginRateLimiter {
+    limiter: Arc<RateLimiter<String, DashMapStateStore<String>, DefaultClock>>,
+}
+
+impl LoginRateLimiter {
+    pub fn new() -> Self {
+        Self::with_per_minute(5)
+    }
+
+    pub fn with_per_minute(n: u32) -> Self {
+        let quota = Quota::per_minute(NonZeroU32::new(n.max(1)).unwrap());
+        Self {
+            limiter: Arc::new(RateLimiter::dashmap(quota)),
+        }
+    }
+
+    pub fn check(&self, ip: &str) -> bool {
+        self.limiter.check_key(&ip.to_owned()).is_ok()
+    }
+
+    pub fn spawn_cleanup(self: &Arc<Self>) {
+        let limiter = Arc::clone(&self.limiter);
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(300));
+            loop {
+                interval.tick().await;
+                limiter.retain_recent();
+            }
+        });
+    }
+}
+
+impl Default for LoginRateLimiter {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

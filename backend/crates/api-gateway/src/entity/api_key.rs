@@ -8,6 +8,7 @@ pub struct Model {
     pub owner: String,
     pub tier: String,
     pub created_at: i64,
+    pub tenant_id: Option<Uuid>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -16,6 +17,12 @@ pub enum Relation {
     UsageRecord,
     #[sea_orm(has_many = "super::daily_usage::Entity")]
     DailyUsage,
+    #[sea_orm(
+        belongs_to = "super::tenant::Entity",
+        from = "Column::TenantId",
+        to = "super::tenant::Column::Id"
+    )]
+    Tenant,
 }
 
 impl Related<super::usage_record::Entity> for Entity {
@@ -27,6 +34,12 @@ impl Related<super::usage_record::Entity> for Entity {
 impl Related<super::daily_usage::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::DailyUsage.def()
+    }
+}
+
+impl Related<super::tenant::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Tenant.def()
     }
 }
 

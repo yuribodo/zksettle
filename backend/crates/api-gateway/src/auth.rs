@@ -49,7 +49,7 @@ mod tests {
     use zksettle_types::gateway::Tier;
 
     use super::*;
-    use crate::config::Config;
+    use crate::config::{Config, CookieSameSite};
     use crate::rate_limit::RateLimitStore;
     use crate::upstream::MockHttpUpstream;
     use crate::{test_cleanup, test_db};
@@ -58,7 +58,7 @@ mod tests {
     async fn state_with_key(raw_key: &str) -> Arc<AppState> {
         let db = test_db().await;
         test_cleanup(&db).await;
-        key_store::insert(&db, raw_key, "alice".into(), Tier::Developer, 0)
+        key_store::insert(&db, raw_key, "alice".into(), Tier::Developer, 0, None)
             .await
             .unwrap();
         Arc::new(AppState {
@@ -71,10 +71,18 @@ mod tests {
                 cors_allowed_origins: vec![],
                 indexer_url: None,
                 database_url: String::new(),
+                jwt_secret: None,
+                jwt_ttl_secs: 86400,
+                siws_domain: None,
+                cookie_secure: false,
+                cookie_same_site: CookieSameSite::Lax,
+                login_rate_limit_per_minute: 5,
             },
             db,
             rate_limiter: RateLimitStore::new(),
+            login_rate_limiter: Arc::new(crate::rate_limit::LoginRateLimiter::new()),
             upstream: Arc::new(MockHttpUpstream::new()),
+            nonce_store: crate::nonce_store::NonceStore::new(),
         })
     }
 

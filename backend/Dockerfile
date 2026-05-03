@@ -1,8 +1,10 @@
 FROM rust:1.82-slim AS builder
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends clang libclang-dev libssl-dev pkg-config && rm -rf /var/lib/apt/lists/*
-COPY . .
-RUN cargo build --release --locked
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY programs/ programs/
+COPY crates/ crates/
+RUN cargo build --release --locked -p api-gateway -p issuer-service -p indexer
 
 FROM debian:bookworm-slim AS api-gateway
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*

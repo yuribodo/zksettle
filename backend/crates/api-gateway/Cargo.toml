@@ -36,6 +36,13 @@ subtle = "2"
 mutants = "0.0.3"
 sea-orm = { version = "1", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
 api-gateway-migration = { path = "migration" }
+jsonwebtoken = "9"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+bs58 = "0.5"
+uuid = { version = "1", features = ["v4", "serde"] }
+axum-extra = { version = "0.10", features = ["cookie"] }
+base64 = "0.22"
+time = "0.3"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

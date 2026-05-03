@@ -1,8 +1,17 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+pub const SESSION_COOKIE: &str = "session";
+
+pub fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock before Unix epoch")
+        .as_secs()
+}
 
 use axum::http::{HeaderValue, Method};
-use axum::routing::{any, delete, get};
+use axum::routing::{any, delete, get, post};
 use axum::Router;
 use sea_orm::DatabaseConnection;
 use tower_http::cors::{AllowOrigin, CorsLayer};
@@ -10,25 +19,34 @@ use tower_http::trace::TraceLayer;
 use tracing::warn;
 
 pub mod auth;
+pub mod auth_jwt;
 pub mod config;
 pub mod entity;
 pub mod error;
+pub mod jwt;
 pub mod key_store;
 pub mod metering;
+pub mod nonce_store;
 pub mod proxy;
 pub mod rate_limit;
 pub mod routes;
+pub mod siws;
+pub mod tenant_store;
 pub mod upstream;
 
 use config::Config;
-use rate_limit::RateLimitStore;
+#[cfg(test)]
+use config::CookieSameSite;
+use rate_limit::{LoginRateLimiter, RateLimitStore};
 use upstream::HttpUpstream;
 
 pub struct AppState {
     pub config: Config,
     pub db: DatabaseConnection,
     pub rate_limiter: RateLimitStore,
+    pub login_rate_limiter: Arc<LoginRateLimiter>,
     pub upstream: Arc<dyn HttpUpstream>,
+    pub nonce_store: nonce_store::NonceStore,
 }
 
 pub fn build_router(state: Arc<AppState>) -> Router {
@@ -43,6 +61,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api-keys/{key_hash}", delete(routes::keys::delete_key))
         .route("/usage", get(routes::usage::get_usage))
         .route("/usage/history", get(routes::usage::get_usage_history))
+        .route("/auth/challenge", get(routes::challenge::get_challenge))
+        .route("/auth/login", post(routes::auth::login))
+        .route("/auth/logout", post(routes::auth::logout))
+        .route("/auth/me", get(routes::auth::me))
         .route("/v1/{*path}", any(proxy::proxy_to_upstream))
         .layer(TraceLayer::new_for_http())
         .layer(cors)
@@ -62,7 +84,9 @@ fn build_cors_layer(allowed_origins: &[String]) -> CorsLayer {
         .allow_headers([
             axum::http::header::AUTHORIZATION,
             axum::http::header::CONTENT_TYPE,
+            axum::http::header::COOKIE,
         ])
+        .allow_credentials(true)
         .max_age(Duration::from_secs(600));
 
     if allowed_origins.is_empty() {
@@ -90,7 +114,7 @@ fn build_cors_layer(allowed_origins: &[String]) -> CorsLayer {
 #[cfg(test)]
 pub async fn test_db() -> DatabaseConnection {
     let url = std::env::var("TEST_DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://zksettle:zksettle_dev@localhost:5432/zksettle_gateway_test".into());
+        .expect("TEST_DATABASE_URL must be set for tests");
     config::db::connect_and_migrate(&url).await.expect("test DB connect")
 }
 
@@ -98,6 +122,7 @@ pub async fn test_db() -> DatabaseConnection {
 pub async fn test_cleanup(db: &DatabaseConnection) {
     use sea_orm::EntityTrait;
     entity::api_key::Entity::delete_many().exec(db).await.unwrap();
+    entity::tenant::Entity::delete_many().exec(db).await.unwrap();
 }
 
 #[cfg(test)]
@@ -112,12 +137,20 @@ pub async fn test_state() -> Arc<AppState> {
         cors_allowed_origins: vec![],
         indexer_url: None,
         database_url: String::new(),
+        jwt_secret: None,
+        jwt_ttl_secs: 86400,
+        siws_domain: None,
+        cookie_secure: false,
+        cookie_same_site: CookieSameSite::Lax,
+        login_rate_limit_per_minute: 5,
     };
     Arc::new(AppState {
         config,
         db,
         rate_limiter: RateLimitStore::new(),
+        login_rate_limiter: Arc::new(LoginRateLimiter::new()),
         upstream: Arc::new(upstream::ReqwestUpstream::new(reqwest::Client::new())),
+        nonce_store: nonce_store::NonceStore::new(),
     })
 }
 
@@ -145,12 +178,20 @@ mod tests {
             cors_allowed_origins: origins.into_iter().map(String::from).collect(),
             indexer_url: None,
             database_url: String::new(),
+            jwt_secret: None,
+            jwt_ttl_secs: 86400,
+            siws_domain: None,
+            cookie_secure: false,
+            cookie_same_site: CookieSameSite::Lax,
+            login_rate_limit_per_minute: 5,
         };
         let state = Arc::new(AppState {
             config,
             db,
             rate_limiter: RateLimitStore::new(),
+            login_rate_limiter: Arc::new(LoginRateLimiter::new()),
             upstream: Arc::new(upstream::ReqwestUpstream::new(reqwest::Client::new())),
+            nonce_store: nonce_store::NonceStore::new(),
         });
         build_router(state)
     }

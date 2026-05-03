@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::extract::{Path, State};
 use axum::http::HeaderMap;
@@ -8,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use zksettle_types::gateway::Tier;
 
+use crate::auth_jwt::MaybeAuthenticatedTenant;
 use crate::config::Config;
 use crate::error::GatewayError;
 use crate::key_store;
@@ -75,34 +75,55 @@ fn verify_admin(config: &Config, headers: &HeaderMap) -> Result<(), GatewayError
 
 pub async fn create_key(
     State(state): State<Arc<AppState>>,
+    MaybeAuthenticatedTenant(maybe_tenant): MaybeAuthenticatedTenant,
     headers: HeaderMap,
     Json(body): Json<CreateKeyRequest>,
 ) -> Result<Json<CreateKeyResponse>, GatewayError> {
-    verify_admin(&state.config, &headers)?;
-
     let raw_key = key_store::generate_key();
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    let now = crate::now_secs();
 
-    key_store::insert(&state.db, &raw_key, body.owner.clone(), Tier::Developer, now).await?;
+    let (owner, tier) = if let Some(tenant) = maybe_tenant {
+        let record = crate::tenant_store::find_by_id(&state.db, tenant.tenant_id)
+            .await?
+            .ok_or(GatewayError::Unauthorized)?;
+        let tier = record.tier.parse::<Tier>().unwrap_or(Tier::Developer);
+        let owner = tenant.wallet.clone();
+        key_store::insert(
+            &state.db,
+            &raw_key,
+            owner.clone(),
+            tier,
+            now,
+            Some(tenant.tenant_id),
+        )
+        .await?;
+        (owner, tier)
+    } else {
+        verify_admin(&state.config, &headers)?;
+        key_store::insert(&state.db, &raw_key, body.owner.clone(), Tier::Developer, now, None).await?;
+        (body.owner.clone(), Tier::Developer)
+    };
 
     Ok(Json(CreateKeyResponse {
         api_key: raw_key,
-        tier: Tier::Developer,
-        owner: body.owner,
+        tier,
+        owner,
     }))
 }
 
 pub async fn list_keys(
     State(state): State<Arc<AppState>>,
+    MaybeAuthenticatedTenant(maybe_tenant): MaybeAuthenticatedTenant,
     headers: HeaderMap,
 ) -> Result<Json<ListKeysResponse>, GatewayError> {
-    verify_admin(&state.config, &headers)?;
+    let records = if let Some(tenant) = maybe_tenant {
+        key_store::list_by_tenant(&state.db, tenant.tenant_id).await?
+    } else {
+        verify_admin(&state.config, &headers)?;
+        key_store::list(&state.db).await?
+    };
 
-    let mut keys: Vec<ListedKey> = key_store::list(&state.db)
-        .await?
+    let mut keys: Vec<ListedKey> = records
         .into_iter()
         .map(|r| ListedKey {
             key_hash: r.key_hash,
@@ -118,16 +139,20 @@ pub async fn list_keys(
 
 pub async fn delete_key(
     State(state): State<Arc<AppState>>,
+    MaybeAuthenticatedTenant(maybe_tenant): MaybeAuthenticatedTenant,
     headers: HeaderMap,
     Path(key_hash): Path<String>,
 ) -> Result<Json<DeleteKeyResponse>, GatewayError> {
-    verify_admin(&state.config, &headers)?;
+    let removed = if let Some(tenant) = maybe_tenant {
+        key_store::remove_by_hash_and_tenant(&state.db, &key_hash, tenant.tenant_id).await?
+    } else {
+        verify_admin(&state.config, &headers)?;
+        key_store::remove_by_hash(&state.db, &key_hash).await?
+    };
 
-    let removed = key_store::remove_by_hash(&state.db, &key_hash).await?;
     if !removed {
         return Err(GatewayError::NotFound);
     }
-    // CASCADE handles usage_records + daily_usage cleanup
     Ok(Json(DeleteKeyResponse {
         key_hash,
         deleted: true,
@@ -142,9 +167,10 @@ mod tests {
     use http_body_util::BodyExt;
     use tower::ServiceExt;
 
-    use crate::config::Config;
+    use crate::config::{Config, CookieSameSite};
     use crate::rate_limit::RateLimitStore;
     use crate::{build_router, test_app, test_cleanup, test_db, AppState};
+    use crate::{jwt, tenant_store};
     use serial_test::serial;
 
     #[tokio::test]
@@ -183,12 +209,20 @@ mod tests {
             cors_allowed_origins: vec![],
             indexer_url: None,
             database_url: String::new(),
+            jwt_secret: None,
+            jwt_ttl_secs: 86400,
+            siws_domain: None,
+            cookie_secure: false,
+            cookie_same_site: CookieSameSite::Lax,
+            login_rate_limit_per_minute: 5,
         };
         let state = Arc::new(AppState {
             config,
             db,
             rate_limiter: RateLimitStore::new(),
+            login_rate_limiter: Arc::new(crate::rate_limit::LoginRateLimiter::new()),
             upstream: Arc::new(crate::upstream::ReqwestUpstream::new(reqwest::Client::new())),
+            nonce_store: crate::nonce_store::NonceStore::new(),
         });
         (build_router(state.clone()), state)
     }
@@ -205,12 +239,20 @@ mod tests {
             cors_allowed_origins: vec![],
             indexer_url: None,
             database_url: String::new(),
+            jwt_secret: None,
+            jwt_ttl_secs: 86400,
+            siws_domain: None,
+            cookie_secure: false,
+            cookie_same_site: CookieSameSite::Lax,
+            login_rate_limit_per_minute: 5,
         };
         let state = Arc::new(AppState {
             config,
             db,
             rate_limiter: RateLimitStore::new(),
+            login_rate_limiter: Arc::new(crate::rate_limit::LoginRateLimiter::new()),
             upstream: Arc::new(crate::upstream::ReqwestUpstream::new(reqwest::Client::new())),
+            nonce_store: crate::nonce_store::NonceStore::new(),
         });
         build_router(state)
     }
@@ -297,10 +339,10 @@ mod tests {
     #[serial]
     async fn list_keys_returns_provisioned_records() {
         let (app, state) = app_with_admin_key().await;
-        key_store::insert(&state.db, "zks_a", "alice".into(), Tier::Developer, 100)
+        key_store::insert(&state.db, "zks_a", "alice".into(), Tier::Developer, 100, None)
             .await
             .unwrap();
-        key_store::insert(&state.db, "zks_b", "bob".into(), Tier::Startup, 200)
+        key_store::insert(&state.db, "zks_b", "bob".into(), Tier::Startup, 200, None)
             .await
             .unwrap();
 
@@ -396,7 +438,7 @@ mod tests {
     async fn delete_key_evicts_and_invalidates_subsequent_auth() {
         let (app, state) = app_with_admin_key().await;
         let raw = "zks_to_delete";
-        key_store::insert(&state.db, raw, "carol".into(), Tier::Developer, 300)
+        key_store::insert(&state.db, raw, "carol".into(), Tier::Developer, 300, None)
             .await
             .unwrap();
         let hash = key_store::hash_key(raw);
@@ -443,5 +485,148 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status(), 401);
+    }
+
+    const JWT_SECRET: &str = "test-jwt-secret";
+
+    async fn app_with_jwt() -> (axum::Router, Arc<AppState>) {
+        let db = test_db().await;
+        test_cleanup(&db).await;
+        let config = Config {
+            port: 4000,
+            upstream_url: "http://localhost:0".into(),
+            log_level: "error".into(),
+            admin_key: Some("secret-admin".into()),
+            allow_open_keys: false,
+            cors_allowed_origins: vec![],
+            indexer_url: None,
+            database_url: String::new(),
+            jwt_secret: Some(JWT_SECRET.into()),
+            jwt_ttl_secs: 86400,
+            siws_domain: None,
+            cookie_secure: false,
+            cookie_same_site: CookieSameSite::Lax,
+            login_rate_limit_per_minute: 5,
+        };
+        let state = Arc::new(AppState {
+            config,
+            db,
+            rate_limiter: RateLimitStore::new(),
+            login_rate_limiter: Arc::new(crate::rate_limit::LoginRateLimiter::new()),
+            upstream: Arc::new(crate::upstream::ReqwestUpstream::new(reqwest::Client::new())),
+            nonce_store: crate::nonce_store::NonceStore::new(),
+        });
+        (build_router(state.clone()), state)
+    }
+
+    fn session_cookie(token: &str) -> String {
+        format!("session={token}")
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn tenant_create_key_uses_own_tier() {
+        let (app, state) = app_with_jwt().await;
+        let tenant = tenant_store::find_or_create(&state.db, "wallet_a", 1000)
+            .await
+            .unwrap();
+        let token = jwt::issue(tenant.id, "wallet_a", JWT_SECRET, 86400).unwrap();
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api-keys")
+                    .header("content-type", "application/json")
+                    .header("cookie", session_cookie(&token))
+                    .body(Body::from(r#"{"owner":"wallet_a"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), 200);
+        let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        let body: CreateKeyResponse = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body.tier, Tier::Developer);
+        assert_eq!(body.owner, "wallet_a");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn tenant_list_keys_only_sees_own_keys() {
+        let (app, state) = app_with_jwt().await;
+
+        let tenant_a = tenant_store::find_or_create(&state.db, "wallet_a", 1000)
+            .await
+            .unwrap();
+        let tenant_b = tenant_store::find_or_create(&state.db, "wallet_b", 1000)
+            .await
+            .unwrap();
+
+        key_store::insert(&state.db, "zks_a1", "wallet_a".into(), Tier::Developer, 100, Some(tenant_a.id))
+            .await
+            .unwrap();
+        key_store::insert(&state.db, "zks_b1", "wallet_b".into(), Tier::Developer, 200, Some(tenant_b.id))
+            .await
+            .unwrap();
+
+        let token_a = jwt::issue(tenant_a.id, "wallet_a", JWT_SECRET, 86400).unwrap();
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api-keys")
+                    .header("cookie", session_cookie(&token_a))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), 200);
+        let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        let body: ListKeysResponse = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(body.keys.len(), 1);
+        assert_eq!(body.keys[0].owner, "wallet_a");
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn tenant_cannot_delete_other_tenants_key() {
+        let (app, state) = app_with_jwt().await;
+
+        let tenant_a = tenant_store::find_or_create(&state.db, "wallet_a", 1000)
+            .await
+            .unwrap();
+        let tenant_b = tenant_store::find_or_create(&state.db, "wallet_b", 1000)
+            .await
+            .unwrap();
+
+        key_store::insert(&state.db, "zks_b_owned", "wallet_b".into(), Tier::Developer, 100, Some(tenant_b.id))
+            .await
+            .unwrap();
+        let hash_b = key_store::hash_key("zks_b_owned");
+
+        let token_a = jwt::issue(tenant_a.id, "wallet_a", JWT_SECRET, 86400).unwrap();
+
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri(format!("/api-keys/{hash_b}"))
+                    .header("cookie", session_cookie(&token_a))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status(), 404, "tenant A must not delete tenant B's key");
+
+        let still_exists = key_store::lookup_by_hash(&state.db, &hash_b)
+            .await
+            .unwrap();
+        assert!(still_exists.is_some(), "tenant B's key must still exist");
     }
 }
