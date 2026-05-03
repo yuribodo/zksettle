@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::error::StablecoinError;
 use crate::state::{Treasury, TREASURY_SEED};
+use crate::EVENT_VERSION;
 
 #[derive(Accounts)]
 pub struct ProposeAdmin<'info> {
@@ -37,12 +38,14 @@ pub struct AcceptAdmin<'info> {
 
 #[event]
 pub struct AdminProposed {
+    pub version: u8,
     pub current_admin: Pubkey,
     pub proposed_admin: Pubkey,
 }
 
 #[event]
 pub struct AdminAccepted {
+    pub version: u8,
     pub old_admin: Pubkey,
     pub new_admin: Pubkey,
 }
@@ -62,6 +65,7 @@ pub struct CancelPendingAdmin<'info> {
 
 #[event]
 pub struct PendingAdminCancelled {
+    pub version: u8,
     pub admin: Pubkey,
     pub cancelled_pending: Pubkey,
 }
@@ -71,6 +75,7 @@ pub fn cancel_pending_admin_handler(ctx: Context<CancelPendingAdmin>) -> Result<
     let pending = treasury.pending_admin.ok_or(error!(StablecoinError::NoPendingAdmin))?;
 
     emit!(PendingAdminCancelled {
+        version: EVENT_VERSION,
         admin: treasury.admin,
         cancelled_pending: pending,
     });
@@ -86,6 +91,7 @@ pub fn propose_admin_handler(ctx: Context<ProposeAdmin>, new_admin: Pubkey) -> R
     require!(new_admin != treasury.admin, StablecoinError::AdminAlreadyCurrent);
 
     emit!(AdminProposed {
+        version: EVENT_VERSION,
         current_admin: treasury.admin,
         proposed_admin: new_admin,
     });
@@ -102,6 +108,7 @@ pub fn accept_admin_handler(ctx: Context<AcceptAdmin>) -> Result<()> {
     treasury.pending_admin = None;
 
     emit!(AdminAccepted {
+        version: EVENT_VERSION,
         old_admin,
         new_admin: ctx.accounts.new_admin.key(),
     });

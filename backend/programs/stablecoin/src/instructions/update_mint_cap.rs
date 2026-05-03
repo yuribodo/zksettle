@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::error::StablecoinError;
 use crate::state::{Treasury, TREASURY_SEED};
+use crate::EVENT_VERSION;
 
 #[derive(Accounts)]
 pub struct UpdateMintCap<'info> {
@@ -18,6 +19,7 @@ pub struct UpdateMintCap<'info> {
 
 #[event]
 pub struct MintCapUpdated {
+    pub version: u8,
     pub admin: Pubkey,
     pub old_cap: u64,
     pub new_cap: u64,
@@ -30,6 +32,7 @@ pub fn update_mint_cap_handler(ctx: Context<UpdateMintCap>, new_cap: u64) -> Res
     treasury.mint_cap = new_cap;
 
     emit!(MintCapUpdated {
+        version: EVENT_VERSION,
         admin: ctx.accounts.admin.key(),
         old_cap,
         new_cap,
