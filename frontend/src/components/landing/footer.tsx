@@ -4,17 +4,14 @@ const FOOTER_LINKS = [
   {
     title: "Product",
     links: [
-      { label: "Demo", href: "#demo" },
-      { label: "Docs", href: "/docs" },
-      { label: "SDK", href: "#developers" },
+      { label: "Demo", href: "#act-three-engine" },
     ],
   },
   {
     title: "Company",
     links: [
-      { label: "GitHub", href: "https://github.com/zksettle" },
-      { label: "Twitter", href: "https://twitter.com/zksettle" },
-      { label: "Founders", href: "mailto:hello@zksettle.dev" },
+      { label: "GitHub", href: "https://github.com/yuribodo/zksettle" },
+      { label: "Contact", href: "mailto:hello@zksettle.dev" },
     ],
   },
 ] as const;

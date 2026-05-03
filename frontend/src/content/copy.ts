@@ -73,7 +73,7 @@ export const COPY: LandingCopy = {
     sub: "Stablecoins moved $9.3T last year. Compliance is still spreadsheets. zksettle lets every transfer carry its own audit — cryptographic, instant, private.",
     ctas: {
       primary: { label: "See a live proof →", href: "#act-three-engine" },
-      secondary: { label: "How it works", href: "#act-two-paradox" },
+      secondary: { label: "How it works", href: "#act-two-membrane" },
     },
   },
 
@@ -134,8 +134,8 @@ export const COPY: LandingCopy = {
       headline: "Compliance is no longer a six-month moat.",
       sub: "It's an SDK. Integrate in an afternoon.",
       ctas: {
-        primary: { label: "Read the docs →", href: "/docs" },
-        secondary: { label: "Talk to founders", href: "mailto:hello@zksettle.dev" },
+        primary: { label: "View on GitHub →", href: "https://github.com/yuribodo/zksettle" },
+        secondary: { label: "Contact us", href: "mailto:hello@zksettle.dev" },
       },
     },
   },

@@ -10,9 +10,8 @@ import { MobileNavDrawer } from "@/components/landing/mobile-nav-drawer";
 import { cn } from "@/lib/cn";
 
 const LINKS: ReadonlyArray<{ label: string; href: string }> = [
-  { label: "Demo", href: "#demo" },
-  { label: "SDK", href: "#developers" },
-  { label: "GitHub", href: "https://github.com/zksettle" },
+  { label: "Demo", href: "#act-three-engine" },
+  { label: "GitHub", href: "https://github.com/yuribodo/zksettle" },
 ];
 
 export function Nav() {
@@ -73,7 +72,7 @@ export function Nav() {
             )}
           />
           <Link
-            href="#demo"
+            href="#act-three-engine"
             className={cn(buttonVariants({ variant: "primary", size: "sm" }))}
           >
             Try demo

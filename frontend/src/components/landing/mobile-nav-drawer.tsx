@@ -8,9 +8,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 
 const LINKS: ReadonlyArray<{ label: string; href: string }> = [
-  { label: "Demo", href: "#demo" },
-  { label: "SDK", href: "#developers" },
-  { label: "GitHub", href: "https://github.com/zksettle" },
+  { label: "Demo", href: "#act-three-engine" },
+  { label: "GitHub", href: "https://github.com/yuribodo/zksettle" },
 ];
 
 export function MobileNavDrawer({ scrolled }: { scrolled: boolean }) {
@@ -141,7 +140,7 @@ export function MobileNavDrawer({ scrolled }: { scrolled: boolean }) {
               </Link>
             ))}
             <Link
-              href="#demo"
+              href="#act-three-engine"
               onClick={close}
               className={cn(
                 buttonVariants({ variant: "primary", size: "lg" }),
