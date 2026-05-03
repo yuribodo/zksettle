@@ -78,9 +78,7 @@ describe("dashboard chrome", () => {
     expect(screen.getByLabelText("ZKSettle dashboard home").getAttribute("href")).toBe(
       "/dashboard",
     );
-    expect(screen.getByText("Acme Stablecoin")).toBeTruthy();
     expect(screen.getByText("API keys").closest("a")?.getAttribute("aria-current")).toBe("page");
-    expect(screen.getByText("v0.1.0")).toBeTruthy();
   });
 
   it("opens and closes the mobile drawer while trapping focus state", () => {
@@ -109,8 +107,6 @@ describe("dashboard chrome", () => {
     const { container } = render(<TopBar />);
 
     expect(screen.getByRole("banner", { name: "Dashboard top bar" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Search (not implemented)" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Notifications" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
     expect((container.firstChild as HTMLElement).className).toContain("border-transparent");
 

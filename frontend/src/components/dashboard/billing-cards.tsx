@@ -85,9 +85,6 @@ export function BillingCards() {
               </p>
             ) : null}
           </div>
-          <Button variant="ghost" size="sm" disabled title="Upgrade not available yet">
-            Upgrade plan →
-          </Button>
         </div>
 
         <div className="mt-6 flex flex-col gap-3">

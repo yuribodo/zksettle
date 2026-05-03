@@ -1,7 +1,6 @@
 import type { ComponentType, SVGProps } from "react";
 
 import { DisplayHeading } from "@/components/ui/display-heading";
-import { Button } from "@/components/ui/button";
 
 export interface TierBScaffoldProps {
   icon: ComponentType<SVGProps<SVGSVGElement>>;
@@ -24,9 +23,6 @@ export function TierBScaffold({ icon: Icon, title, body }: TierBScaffoldProps) {
         <span id="tier-b-heading">{title}</span>
       </DisplayHeading>
       <p className="mt-3 max-w-md text-sm text-stone">{body}</p>
-      <Button variant="ghost" size="sm" className="mt-6">
-        Request access ↗
-      </Button>
     </section>
   );
 }

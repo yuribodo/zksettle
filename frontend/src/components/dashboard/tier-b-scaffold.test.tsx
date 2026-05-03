@@ -19,6 +19,5 @@ describe("TierBScaffold", () => {
 
     expect(screen.getByRole("heading", { name: "Policy editor" })).toBeTruthy();
     expect(screen.getByText("Private beta only.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Request access/i })).toBeTruthy();
   });
 });
