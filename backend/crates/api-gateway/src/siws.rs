@@ -31,64 +31,84 @@ pub fn parse_message(message: &str) -> Result<SiwsMessage, GatewayError> {
         return Err(GatewayError::InvalidMessage);
     }
 
-    let mut statement = None;
-    let mut field_start = 2;
+    let (statement, field_start) = parse_statement(&lines);
+    let fields = parse_fields(&lines[field_start..]);
 
-    if lines.len() > 2 && lines[2].is_empty() {
-        let mut stmt_lines = Vec::new();
-        let mut i = 3;
-        while i < lines.len() && !lines[i].is_empty() && !lines[i].contains(": ") {
-            stmt_lines.push(lines[i]);
-            i += 1;
-        }
-        if !stmt_lines.is_empty() {
-            statement = Some(stmt_lines.join("\n"));
-            field_start = i;
-            if field_start < lines.len() && lines[field_start].is_empty() {
-                field_start += 1;
-            }
-        } else {
-            field_start = 3;
-        }
-    }
-
-    let mut uri = None;
-    let mut version = None;
-    let mut chain_id = None;
-    let mut nonce = None;
-    let mut issued_at = None;
-    let mut expiration_time = None;
-
-    for line in &lines[field_start..] {
-        if let Some(val) = line.strip_prefix("URI: ") {
-            uri = Some(val.to_owned());
-        } else if let Some(val) = line.strip_prefix("Version: ") {
-            version = Some(val.to_owned());
-        } else if let Some(val) = line.strip_prefix("Chain ID: ") {
-            chain_id = Some(val.to_owned());
-        } else if let Some(val) = line.strip_prefix("Nonce: ") {
-            nonce = Some(val.to_owned());
-        } else if let Some(val) = line.strip_prefix("Issued At: ") {
-            issued_at = Some(val.to_owned());
-        } else if let Some(val) = line.strip_prefix("Expiration Time: ") {
-            expiration_time = Some(val.to_owned());
-        }
-    }
-
-    let nonce = nonce.ok_or(GatewayError::InvalidMessage)?;
-    let issued_at = issued_at.ok_or(GatewayError::InvalidMessage)?;
+    let nonce = fields.nonce.ok_or(GatewayError::InvalidMessage)?;
+    let issued_at = fields.issued_at.ok_or(GatewayError::InvalidMessage)?;
 
     Ok(SiwsMessage {
         domain,
         address,
         statement,
-        uri,
-        version,
-        chain_id,
+        uri: fields.uri,
+        version: fields.version,
+        chain_id: fields.chain_id,
         nonce,
         issued_at,
-        expiration_time,
+        expiration_time: fields.expiration_time,
     })
+}
+
+struct ParsedFields {
+    uri: Option<String>,
+    version: Option<String>,
+    chain_id: Option<String>,
+    nonce: Option<String>,
+    issued_at: Option<String>,
+    expiration_time: Option<String>,
+}
+
+fn parse_statement(lines: &[&str]) -> (Option<String>, usize) {
+    if lines.len() <= 2 || !lines[2].is_empty() {
+        return (None, 2);
+    }
+
+    let mut stmt_lines = Vec::new();
+    let mut i = 3;
+    while i < lines.len() && !lines[i].is_empty() && !lines[i].contains(": ") {
+        stmt_lines.push(lines[i]);
+        i += 1;
+    }
+
+    if stmt_lines.is_empty() {
+        return (None, 3);
+    }
+
+    let mut field_start = i;
+    if field_start < lines.len() && lines[field_start].is_empty() {
+        field_start += 1;
+    }
+    (Some(stmt_lines.join("\n")), field_start)
+}
+
+fn parse_fields(lines: &[&str]) -> ParsedFields {
+    let mut fields = ParsedFields {
+        uri: None,
+        version: None,
+        chain_id: None,
+        nonce: None,
+        issued_at: None,
+        expiration_time: None,
+    };
+
+    for line in lines {
+        let (key, val) = match line.split_once(": ") {
+            Some(pair) => pair,
+            None => continue,
+        };
+        match key {
+            "URI" => fields.uri = Some(val.to_owned()),
+            "Version" => fields.version = Some(val.to_owned()),
+            "Chain ID" => fields.chain_id = Some(val.to_owned()),
+            "Nonce" => fields.nonce = Some(val.to_owned()),
+            "Issued At" => fields.issued_at = Some(val.to_owned()),
+            "Expiration Time" => fields.expiration_time = Some(val.to_owned()),
+            _ => {}
+        }
+    }
+
+    fields
 }
 
 pub fn verify_signature(
