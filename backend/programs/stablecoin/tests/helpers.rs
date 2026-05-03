@@ -215,6 +215,19 @@ pub fn set_operator_ix(admin: &Pubkey, mint: &Pubkey, new_operator: Pubkey) -> I
     }
 }
 
+pub fn update_mint_cap_ix(admin: &Pubkey, mint: &Pubkey, new_cap: u64) -> Instruction {
+    let (treasury, _) = treasury_pda(mint);
+
+    Instruction {
+        program_id: stablecoin::ID,
+        accounts: vec![
+            AccountMeta::new_readonly(*admin, true),
+            AccountMeta::new(treasury, false),
+        ],
+        data: stablecoin::instruction::UpdateMintCap { new_cap }.data(),
+    }
+}
+
 fn freeze_or_thaw_ix(
     admin: &Pubkey,
     mint: &Pubkey,
