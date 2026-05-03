@@ -1,5 +1,6 @@
 use std::num::NonZeroU32;
 use std::sync::Arc;
+use std::time::Duration;
 
 use dashmap::DashMap;
 use governor::clock::DefaultClock;
@@ -49,6 +50,17 @@ impl LoginRateLimiter {
 
     pub fn check(&self, ip: &str) -> bool {
         self.limiter.check_key(&ip.to_owned()).is_ok()
+    }
+
+    pub fn spawn_cleanup(self: &Arc<Self>) {
+        let limiter = Arc::clone(&self.limiter);
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(300));
+            loop {
+                interval.tick().await;
+                limiter.retain_recent();
+            }
+        });
     }
 }
 
