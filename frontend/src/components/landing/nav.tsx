@@ -72,10 +72,10 @@ export function Nav() {
             )}
           />
           <Link
-            href="#act-three-engine"
+            href="/dashboard"
             className={cn(buttonVariants({ variant: "primary", size: "sm" }))}
           >
-            Try demo
+            Dashboard →
           </Link>
         </div>
       </div>

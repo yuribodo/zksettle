@@ -12,9 +12,9 @@ const LINKS: ReadonlyArray<{ label: string; href: string }> = [
   { label: "GitHub", href: "https://github.com/yuribodo/zksettle" },
 ];
 
-export function MobileNavDrawer({ scrolled }: { scrolled: boolean }) {
+export function MobileNavDrawer({ scrolled }: Readonly<{ scrolled: boolean }>) {
   const [open, setOpen] = useState(false);
-  const drawerRef = useRef<HTMLDivElement | null>(null);
+  const drawerRef = useRef<HTMLDialogElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const mainRef = useRef<HTMLElement | null>(null);
 
@@ -64,16 +64,14 @@ export function MobileNavDrawer({ scrolled }: { scrolled: boolean }) {
             event.preventDefault();
             last.focus();
           }
-        } else {
-          if (document.activeElement === last) {
-            event.preventDefault();
-            first.focus();
-          }
+        } else if (document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
         }
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    globalThis.addEventListener("keydown", onKey);
+    return () => globalThis.removeEventListener("keydown", onKey);
   }, [open]);
 
   useEffect(() => {
@@ -109,13 +107,12 @@ export function MobileNavDrawer({ scrolled }: { scrolled: boolean }) {
       </button>
 
       {open ? (
-        <div
+        <dialog
           id="landing-mobile-nav"
           ref={drawerRef}
-          role="dialog"
-          aria-modal="true"
+          open
           aria-label="Site navigation"
-          className="fixed inset-0 z-[60] flex flex-col bg-ink md:hidden"
+          className="fixed inset-0 z-[60] m-0 flex h-full w-full max-w-none max-h-none flex-col border-none bg-ink p-0 md:hidden"
         >
           <div className="flex items-center justify-end px-5 pt-4">
             <button
@@ -140,17 +137,17 @@ export function MobileNavDrawer({ scrolled }: { scrolled: boolean }) {
               </Link>
             ))}
             <Link
-              href="#act-three-engine"
+              href="/dashboard"
               onClick={close}
               className={cn(
                 buttonVariants({ variant: "primary", size: "lg" }),
                 "mt-4",
               )}
             >
-              Try demo
+              Dashboard →
             </Link>
           </nav>
-        </div>
+        </dialog>
       ) : null}
     </>
   );

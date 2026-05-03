@@ -72,7 +72,7 @@ export const COPY: LandingCopy = {
     headline: "Prove without showing.",
     sub: "Stablecoins moved $9.3T last year. Compliance is still spreadsheets. zksettle lets every transfer carry its own audit — cryptographic, instant, private.",
     ctas: {
-      primary: { label: "See a live proof →", href: "#act-three-engine" },
+      primary: { label: "See a live proof →", href: "/dashboard" },
       secondary: { label: "How it works", href: "#act-two-membrane" },
     },
   },
