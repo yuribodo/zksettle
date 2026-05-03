@@ -5,6 +5,7 @@ pub mod freeze_thaw;
 pub mod pause;
 pub mod propose_accept_admin;
 pub mod set_operator;
+pub mod update_mint_cap;
 
 pub use initialize_mint::*;
 pub use mint_tokens::*;
@@ -13,3 +14,4 @@ pub use freeze_thaw::*;
 pub use pause::*;
 pub use propose_accept_admin::*;
 pub use set_operator::*;
+pub use update_mint_cap::*;

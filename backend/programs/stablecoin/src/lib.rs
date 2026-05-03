@@ -50,6 +50,10 @@ pub mod stablecoin {
         instructions::set_operator_handler(ctx, new_operator)
     }
 
+    pub fn update_mint_cap(ctx: Context<UpdateMintCap>, new_cap: u64) -> Result<()> {
+        instructions::update_mint_cap_handler(ctx, new_cap)
+    }
+
     pub fn pause(ctx: Context<PauseOrUnpause>) -> Result<()> {
         instructions::pause_handler(ctx)
     }

@@ -43,6 +43,13 @@ pub fn mint_tokens_handler(ctx: Context<MintTokens>, amount: u64) -> Result<()> 
     require!(!ctx.accounts.treasury.paused, StablecoinError::Paused);
     require!(amount > 0, StablecoinError::ZeroMintAmount);
 
+    if ctx.accounts.treasury.mint_cap > 0 {
+        let projected = ctx.accounts.treasury.total_minted
+            .checked_add(amount)
+            .ok_or(StablecoinError::CounterOverflow)?;
+        require!(projected <= ctx.accounts.treasury.mint_cap, StablecoinError::MintCapExceeded);
+    }
+
     let treasury_key = ctx.accounts.treasury.key();
     let signer_seeds: &[&[&[u8]]] = &[&[
         MINT_AUTHORITY_SEED,

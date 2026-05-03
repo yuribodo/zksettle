@@ -72,6 +72,7 @@ pub fn initialize_mint_handler(ctx: Context<InitializeMint>, decimals: u8) -> Re
     treasury.decimals = decimals;
     treasury.paused = false;
     treasury.pending_admin = None;
+    treasury.mint_cap = 0;
 
     msg!("Stablecoin mint initialized with {} decimals", decimals);
     Ok(())

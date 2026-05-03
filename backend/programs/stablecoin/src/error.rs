@@ -32,4 +32,8 @@ pub enum StablecoinError {
     OperatorAlreadyCurrent,
     #[msg("No pending admin to cancel")]
     NoPendingAdmin,
+    #[msg("Minting would exceed the mint cap")]
+    MintCapExceeded,
+    #[msg("New mint cap is the same as the current cap")]
+    MintCapUnchanged,
 }
