@@ -146,15 +146,30 @@ pub fn validate_message(
 
 fn parse_iso8601(s: &str) -> Option<u64> {
     let s = s.trim();
-    let s = s.strip_suffix('Z').or_else(|| s.strip_suffix("+00:00"))?;
 
-    let (date_part, time_part) = s.split_once('T')?;
+    let (datetime_str, offset_secs) = if let Some(rest) = s.strip_suffix('Z') {
+        (rest, 0i64)
+    } else if let Some(idx) = s.rfind('+').or_else(|| {
+        let t_pos = s.find('T')?;
+        s[t_pos..].rfind('-').map(|i| i + t_pos)
+    }) {
+        let offset_str = &s[idx..];
+        let sign: i64 = if offset_str.starts_with('-') { -1 } else { 1 };
+        let hm = &offset_str[1..];
+        let (oh, om) = hm.split_once(':')?;
+        let offset = sign * (oh.parse::<i64>().ok()? * 3600 + om.parse::<i64>().ok()? * 60);
+        (&s[..idx], offset)
+    } else {
+        return None;
+    };
+
+    let (date_part, time_part) = datetime_str.split_once('T')?;
     let mut date_iter = date_part.split('-');
     let year: u64 = date_iter.next()?.parse().ok()?;
     let month: u64 = date_iter.next()?.parse().ok()?;
     let day: u64 = date_iter.next()?.parse().ok()?;
 
-    let time_part = time_part.split('.').next()?; // strip fractional seconds
+    let time_part = time_part.split('.').next()?;
     let mut time_iter = time_part.split(':');
     let hour: u64 = time_iter.next()?.parse().ok()?;
     let minute: u64 = time_iter.next()?.parse().ok()?;
@@ -164,12 +179,12 @@ fn parse_iso8601(s: &str) -> Option<u64> {
         return None;
     }
 
-    // Days from year 0 to the start of the given year (simplified)
     let y = if month <= 2 { year - 1 } else { year };
     let m = if month <= 2 { month + 9 } else { month - 3 };
-    let days = 365 * y + y / 4 - y / 100 + y / 400 + (m * 306 + 5) / 10 + day - 1 - 719469;
+    let days = 365 * y + y / 4 - y / 100 + y / 400 + (m * 306 + 5) / 10 + day - 719469;
 
-    Some(days * 86400 + hour * 3600 + minute * 60 + second)
+    let utc_secs = (days * 86400 + hour * 3600 + minute * 60 + second) as i64 - offset_secs;
+    u64::try_from(utc_secs).ok()
 }
 
 #[cfg(test)]
@@ -231,61 +246,73 @@ Issued At: 2026-05-02T12:00:00Z";
     fn validate_rejects_short_nonce() {
         let mut msg = parse_message(SAMPLE_MESSAGE).unwrap();
         msg.nonce = "abc".into();
-        assert!(validate_message(&msg, 1777752000, None).is_err());
+        assert!(validate_message(&msg, 1777723200, None).is_err());
     }
 
     #[test]
     fn validate_rejects_non_alphanumeric_nonce() {
         let mut msg = parse_message(SAMPLE_MESSAGE).unwrap();
         msg.nonce = "abcd!@#$efgh".into();
-        assert!(validate_message(&msg, 1777752000, None).is_err());
+        assert!(validate_message(&msg, 1777723200, None).is_err());
     }
 
     #[test]
     fn validate_rejects_wrong_domain() {
         let msg = parse_message(SAMPLE_MESSAGE).unwrap();
-        assert!(validate_message(&msg, 1777752000, Some("other.com")).is_err());
+        assert!(validate_message(&msg, 1777723200, Some("other.com")).is_err());
     }
 
     #[test]
     fn validate_accepts_correct_domain() {
         let msg = parse_message(SAMPLE_MESSAGE).unwrap();
-        assert!(validate_message(&msg, 1777752000, Some("localhost")).is_ok());
+        assert!(validate_message(&msg, 1777723200, Some("localhost")).is_ok());
     }
 
     #[test]
     fn validate_rejects_stale_issued_at() {
         let msg = parse_message(SAMPLE_MESSAGE).unwrap();
-        // 1777752000 is 2026-05-02T12:00:00Z, +600 exceeds ±5min
-        assert!(validate_message(&msg, 1777752000 + 600, None).is_err());
+        // 1777723200 is 2026-05-02T12:00:00Z, +600 exceeds ±5min
+        assert!(validate_message(&msg, 1777723200 + 600, None).is_err());
     }
 
     #[test]
     fn validate_accepts_within_drift() {
         let msg = parse_message(SAMPLE_MESSAGE).unwrap();
-        assert!(validate_message(&msg, 1777752000 + 200, None).is_ok());
+        assert!(validate_message(&msg, 1777723200 + 200, None).is_ok());
     }
 
     #[test]
     fn validate_rejects_expired() {
         let msg = parse_message(SAMPLE_MESSAGE).unwrap();
-        // Expiration is 2026-05-02T13:00:00Z = 1777755600
-        assert!(validate_message(&msg, 1777755601, None).is_err());
+        // Expiration is 2026-05-02T13:00:00Z = 1777726800
+        assert!(validate_message(&msg, 1777726801, None).is_err());
     }
 
     #[test]
     fn parse_iso8601_basic() {
-        assert_eq!(parse_iso8601("2026-05-02T12:00:00Z"), Some(1777752000));
+        assert_eq!(parse_iso8601("2026-05-02T12:00:00Z"), Some(1777723200));
     }
 
     #[test]
     fn parse_iso8601_with_fractional() {
-        assert_eq!(parse_iso8601("2026-05-02T12:00:00.000Z"), Some(1777752000));
+        assert_eq!(parse_iso8601("2026-05-02T12:00:00.000Z"), Some(1777723200));
     }
 
     #[test]
     fn parse_iso8601_with_offset() {
-        assert_eq!(parse_iso8601("2026-05-02T12:00:00+00:00"), Some(1777752000));
+        assert_eq!(parse_iso8601("2026-05-02T12:00:00+00:00"), Some(1777723200));
+    }
+
+    #[test]
+    fn parse_iso8601_positive_offset() {
+        // +05:30 → subtract 5h30m from local to get UTC
+        assert_eq!(parse_iso8601("2026-05-02T17:30:00+05:30"), Some(1777723200));
+    }
+
+    #[test]
+    fn parse_iso8601_negative_offset() {
+        // -04:00 → add 4h to local to get UTC
+        assert_eq!(parse_iso8601("2026-05-02T08:00:00-04:00"), Some(1777723200));
     }
 
     #[test]
