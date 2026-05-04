@@ -70,6 +70,7 @@ interface UseProofGenerationResult {
  */
 export function useProofGeneration(): UseProofGenerationResult {
   const proverRef = useRef<ProverHandles | null>(null);
+  const proverInitRef = useRef<Promise<ProverHandles> | null>(null);
 
   const [proof, setProof] = useState<ProofResult | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -81,29 +82,46 @@ export function useProofGeneration(): UseProofGenerationResult {
         // best-effort cleanup; swallow during unmount
       });
       proverRef.current = null;
+      proverInitRef.current = null;
     };
   }, []);
 
-  const ensureProver = useCallback(async (): Promise<ProverHandles> => {
+  const ensureProver = useCallback((): Promise<ProverHandles> => {
     if (proverRef.current) {
-      return proverRef.current;
+      return Promise.resolve(proverRef.current);
     }
-    const res = await fetch(ARTIFACT_URL);
-    if (!res.ok) {
-      throw new Error(
-        `Failed to fetch circuit artifact at ${ARTIFACT_URL}: ${res.status} ${res.statusText}`,
-      );
+    // Coalesce concurrent callers (e.g. a double-click during the ~20s cold
+    // start) onto the same in-flight init promise. Without this, both calls
+    // would each spawn a Barretenberg worker pool and the loser's `api`
+    // would leak — `destroy()` is never called on the orphaned instance.
+    if (!proverInitRef.current) {
+      proverInitRef.current = (async () => {
+        try {
+          const res = await fetch(ARTIFACT_URL);
+          if (!res.ok) {
+            throw new Error(
+              `Failed to fetch circuit artifact at ${ARTIFACT_URL}: ${res.status} ${res.statusText}`,
+            );
+          }
+          const circuit = (await res.json()) as CompiledCircuit;
+          const threads =
+            typeof navigator !== "undefined" && navigator.hardwareConcurrency
+              ? Math.min(navigator.hardwareConcurrency, 8)
+              : 4;
+          const api = await Barretenberg.new({ threads });
+          const noir = new Noir(circuit);
+          const backend = new UltraHonkBackend(circuit.bytecode, api);
+          const handles: ProverHandles = { noir, backend, api };
+          proverRef.current = handles;
+          return handles;
+        } catch (err) {
+          // Reset so a later retry can attempt init again.
+          proverInitRef.current = null;
+          throw err;
+        }
+      })();
     }
-    const circuit = (await res.json()) as CompiledCircuit;
-    const threads =
-      typeof navigator !== "undefined" && navigator.hardwareConcurrency
-        ? Math.min(navigator.hardwareConcurrency, 8)
-        : 4;
-    const api = await Barretenberg.new({ threads });
-    const noir = new Noir(circuit);
-    const backend = new UltraHonkBackend(circuit.bytecode, api);
-    proverRef.current = { noir, backend, api };
-    return proverRef.current;
+    return proverInitRef.current;
   }, []);
 
   const generate = useCallback(
