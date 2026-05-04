@@ -10285,6 +10285,7 @@ dependencies = [
  "anchor-spl",
  "base64 0.22.1",
  "litesvm",
+ "solana-clock",
  "solana-instruction 2.3.3",
  "solana-keypair",
  "solana-message",
