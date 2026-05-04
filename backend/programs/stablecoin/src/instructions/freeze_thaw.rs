@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_2022;
 use anchor_spl::token_interface::{Mint as MintAccount, Token2022, TokenAccount};
 
+use super::cpi_helpers::thaw_token_account;
 use crate::error::StablecoinError;
 use crate::state::{Treasury, FREEZE_AUTHORITY_SEED, TREASURY_SEED};
 use crate::EVENT_VERSION;
@@ -89,20 +90,14 @@ pub fn freeze_handler(ctx: Context<FreezeOrThaw>) -> Result<()> {
 // Thaw is exempt from pause guard — emergency unfreeze of wrongly-frozen accounts must work while paused.
 pub fn thaw_handler(ctx: Context<FreezeOrThaw>) -> Result<()> {
     let treasury_key = ctx.accounts.treasury.key();
-    let bump = [ctx.accounts.treasury.freeze_authority_bump];
-    let seeds = signer_seeds(treasury_key.as_ref(), &bump);
-    let signer_seeds: &[&[&[u8]]] = &[&seeds];
-
-    let cpi_accounts = token_2022::ThawAccount {
-        account: ctx.accounts.target_account.to_account_info(),
-        mint: ctx.accounts.mint.to_account_info(),
-        authority: ctx.accounts.freeze_authority.to_account_info(),
-    };
-    token_2022::thaw_account(CpiContext::new_with_signer(
-        ctx.accounts.token_program.to_account_info(),
-        cpi_accounts,
-        signer_seeds,
-    ))?;
+    thaw_token_account(
+        &ctx.accounts.target_account,
+        &ctx.accounts.mint,
+        &ctx.accounts.freeze_authority,
+        &ctx.accounts.token_program,
+        &treasury_key,
+        ctx.accounts.treasury.freeze_authority_bump,
+    )?;
 
     emit!(AccountThawed {
         version: EVENT_VERSION,

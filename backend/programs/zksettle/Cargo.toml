@@ -58,7 +58,7 @@ spl-discriminator = "0.5"
 [target.'cfg(unix)'.dev-dependencies]
 light-program-test = "=0.23.0"
 tokio = { version = "1", features = ["full"] }
-stablecoin = { path = "../stablecoin", features = ["cpi"] }
+stablecoin = { path = "../stablecoin", features = ["test-helpers"] }
 
 
 [lints.rust]

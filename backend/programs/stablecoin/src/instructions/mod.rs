@@ -1,17 +1,22 @@
+pub mod approve_redemption;
+pub mod cancel_redemption;
+mod cpi_helpers;
+pub mod freeze_thaw;
 pub mod initialize_mint;
 pub mod mint_tokens;
-pub mod burn_tokens;
-pub mod freeze_thaw;
 pub mod pause;
 pub mod propose_accept_admin;
+pub mod request_redemption;
 pub mod set_operator;
 pub mod update_mint_cap;
 
+pub use approve_redemption::*;
+pub use cancel_redemption::*;
+pub use freeze_thaw::*;
 pub use initialize_mint::*;
 pub use mint_tokens::*;
-pub use burn_tokens::*;
-pub use freeze_thaw::*;
 pub use pause::*;
 pub use propose_accept_admin::*;
+pub use request_redemption::*;
 pub use set_operator::*;
 pub use update_mint_cap::*;

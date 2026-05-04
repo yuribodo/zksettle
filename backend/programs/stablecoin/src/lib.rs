@@ -3,6 +3,8 @@
 pub mod error;
 pub mod instructions;
 pub mod state;
+#[cfg(feature = "test-helpers")]
+pub mod test_helpers;
 
 use anchor_lang::prelude::*;
 
@@ -24,8 +26,16 @@ pub mod stablecoin {
         instructions::mint_tokens_handler(ctx, amount)
     }
 
-    pub fn burn_tokens(ctx: Context<BurnTokens>, amount: u64) -> Result<()> {
-        instructions::burn_tokens_handler(ctx, amount)
+    pub fn request_redemption(ctx: Context<RequestRedemption>, amount: u64) -> Result<()> {
+        instructions::request_redemption_handler(ctx, amount)
+    }
+
+    pub fn approve_redemption(ctx: Context<ApproveRedemption>) -> Result<()> {
+        instructions::approve_redemption_handler(ctx)
+    }
+
+    pub fn cancel_redemption(ctx: Context<CancelRedemption>) -> Result<()> {
+        instructions::cancel_redemption_handler(ctx)
     }
 
     pub fn freeze_account(ctx: Context<FreezeOrThaw>) -> Result<()> {
