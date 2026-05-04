@@ -12,6 +12,19 @@ pub async fn boot_harness() -> LightProgramTest {
         .expect("boot light harness")
 }
 
+pub async fn boot_cross_program_harness() -> LightProgramTest {
+    let config = ProgramTestConfig::new_v2(
+        false,
+        Some(vec![
+            ("zksettle", zksettle::ID),
+            ("stablecoin", stablecoin::ID),
+        ]),
+    );
+    LightProgramTest::new(config)
+        .await
+        .expect("boot cross-program harness")
+}
+
 pub async fn funded_authority(rpc: &mut LightProgramTest, lamports: u64) -> Keypair {
     let kp = Keypair::new();
     rpc.airdrop_lamports(&kp.pubkey(), lamports)

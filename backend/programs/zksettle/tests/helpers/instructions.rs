@@ -139,38 +139,45 @@ pub fn init_extra_meta_ix(
     }
 }
 
-/// Build instructions to create a Token-2022 mint with TransferHook extension
-/// pointing to the zksettle program.
+pub fn create_token2022_alloc_ix(payer: &Pubkey, account: &Pubkey, space: usize) -> Instruction {
+    let rent = anchor_lang::solana_program::rent::Rent::default();
+    anchor_lang::solana_program::system_instruction::create_account(
+        payer,
+        account,
+        rent.minimum_balance(space),
+        space as u64,
+        &spl_token_2022::ID,
+    )
+}
+
+pub fn create_hook_mint_base_ixs(payer: &Pubkey, mint_key: &Pubkey) -> Vec<Instruction> {
+    use spl_token_2022::{
+        extension::{transfer_hook::instruction::initialize as init_hook, ExtensionType},
+        state::Mint as SplMint,
+    };
+
+    let space = ExtensionType::try_calculate_account_len::<SplMint>(
+        &[ExtensionType::TransferHook],
+    )
+    .unwrap();
+
+    let create_ix = create_token2022_alloc_ix(payer, mint_key, space);
+    let init_hook_ix =
+        init_hook(&spl_token_2022::ID, mint_key, Some(*payer), Some(zksettle::ID)).unwrap();
+
+    vec![create_ix, init_hook_ix]
+}
+
 pub fn create_token2022_mint_with_hook_ixs(
     payer: &Pubkey,
     mint_key: &Pubkey,
     decimals: u8,
 ) -> Vec<Instruction> {
-    use spl_token_2022::{
-        extension::{transfer_hook::instruction::initialize as init_hook, ExtensionType},
-        instruction::initialize_mint2,
-        state::Mint as SplMint,
-    };
+    use spl_token_2022::instruction::initialize_mint2;
 
-    let extensions = &[ExtensionType::TransferHook];
-    let space = ExtensionType::try_calculate_account_len::<SplMint>(extensions).unwrap();
-
-    let rent = anchor_lang::solana_program::rent::Rent::default();
-    let create_ix = anchor_lang::solana_program::system_instruction::create_account(
-        payer,
-        mint_key,
-        rent.minimum_balance(space),
-        space as u64,
-        &spl_token_2022::ID,
-    );
-
-    let init_hook_ix =
-        init_hook(&spl_token_2022::ID, mint_key, Some(*payer), Some(zksettle::ID)).unwrap();
-
-    let init_mint_ix =
-        initialize_mint2(&spl_token_2022::ID, mint_key, payer, None, decimals).unwrap();
-
-    vec![create_ix, init_hook_ix, init_mint_ix]
+    let mut ixs = create_hook_mint_base_ixs(payer, mint_key);
+    ixs.push(initialize_mint2(&spl_token_2022::ID, mint_key, payer, None, decimals).unwrap());
+    ixs
 }
 
 /// Build a raw `transfer_hook` (ExecuteHook) instruction.
