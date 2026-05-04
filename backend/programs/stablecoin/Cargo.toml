@@ -11,6 +11,7 @@ name = "stablecoin"
 [features]
 default = []
 cpi = ["no-entrypoint"]
+test-helpers = ["no-entrypoint", "solana-instruction"]
 no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
@@ -22,6 +23,7 @@ custom-panic = []
 [dependencies]
 anchor-lang = { version = "=0.31.1", features = ["interface-instructions"] }
 anchor-spl = { version = "=0.31.1", features = ["token_2022"] }
+solana-instruction = { version = "2.2", optional = true }
 
 [dev-dependencies]
 spl-token-2022 = "6.0"

@@ -3,6 +3,8 @@
 pub mod error;
 pub mod instructions;
 pub mod state;
+#[cfg(feature = "test-helpers")]
+pub mod test_helpers;
 
 use anchor_lang::prelude::*;
 
