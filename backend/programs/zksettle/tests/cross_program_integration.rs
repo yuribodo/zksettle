@@ -16,8 +16,9 @@ use helpers::{
     settle_hook_ix, settle_pda_keys, ANCHOR_ERROR_CODE_OFFSET,
 };
 use helpers::stablecoin_ixs::{
-    burn_tokens_ix, create_stablecoin_mint_with_hook_ixs, create_token2022_account_ixs,
-    freeze_account_ix, mint_tokens_ix, transfer_checked_no_hook_ix, treasury_pda,
+    approve_redemption_ix, create_stablecoin_mint_with_hook_ixs, create_token2022_account_ixs,
+    freeze_account_ix, mint_tokens_ix, request_redemption_ix, transfer_checked_no_hook_ix,
+    treasury_pda,
 };
 
 fn default_extra_meta(
@@ -238,7 +239,7 @@ async fn frozen_account_rejects_transfer() {
 }
 
 #[tokio::test]
-async fn burn_after_failed_settlement() {
+async fn redemption_after_failed_settlement() {
     let mut rpc = boot_cross_program_harness().await;
     let s = setup_settle_scenario(&mut rpc).await;
 
@@ -254,12 +255,20 @@ async fn burn_after_failed_settlement() {
     .expect("expected MalformedProof");
 
     rpc.create_and_send_transaction(
-        &[burn_tokens_ix(&s.admin.pubkey(), &s.mint, &s.token_kp.pubkey(), 2000)],
+        &[request_redemption_ix(&s.admin.pubkey(), &s.mint, &s.token_kp.pubkey(), 2000, 0)],
         &s.admin.pubkey(),
         &[&s.admin],
     )
     .await
-    .expect("burn_tokens should succeed after failed settlement");
+    .expect("request_redemption should succeed after failed settlement");
+
+    rpc.create_and_send_transaction(
+        &[approve_redemption_ix(&s.admin.pubkey(), &s.admin.pubkey(), &s.mint, &s.token_kp.pubkey(), 0)],
+        &s.admin.pubkey(),
+        &[&s.admin],
+    )
+    .await
+    .expect("approve_redemption should succeed");
 
     let (treasury_key, _) = treasury_pda(&s.mint);
     let treasury: stablecoin::state::Treasury = rpc
