@@ -21,31 +21,13 @@ pub fn create_stablecoin_mint_with_hook_ixs(
     mint_key: &Pubkey,
     decimals: u8,
 ) -> Vec<Instruction> {
-    use spl_token_2022::{
-        extension::{transfer_hook::instruction::initialize as init_hook, ExtensionType},
-        state::Mint as SplMint,
-    };
-
-    let extensions = &[ExtensionType::TransferHook];
-    let space = ExtensionType::try_calculate_account_len::<SplMint>(extensions).unwrap();
-
-    let rent = anchor_lang::solana_program::rent::Rent::default();
-    let create_ix = anchor_lang::solana_program::system_instruction::create_account(
-        payer,
-        mint_key,
-        rent.minimum_balance(space),
-        space as u64,
-        &spl_token_2022::ID,
-    );
-
-    let init_hook_ix =
-        init_hook(&spl_token_2022::ID, mint_key, Some(*payer), Some(zksettle::ID)).unwrap();
+    let mut ixs = super::instructions::create_hook_mint_base_ixs(payer, mint_key);
 
     let (treasury, _) = treasury_pda(mint_key);
     let (mint_authority, _) = mint_authority_pda(&treasury);
     let (freeze_authority, _) = freeze_authority_pda(&treasury);
 
-    let init_mint_ix = Instruction {
+    ixs.push(Instruction {
         program_id: stablecoin::ID,
         accounts: vec![
             AccountMeta::new(*payer, true),
@@ -57,9 +39,9 @@ pub fn create_stablecoin_mint_with_hook_ixs(
             AccountMeta::new_readonly(system_program::ID, false),
         ],
         data: stablecoin::instruction::InitializeMint { decimals }.data(),
-    };
+    });
 
-    vec![create_ix, init_hook_ix, init_mint_ix]
+    ixs
 }
 
 pub fn mint_tokens_ix(
