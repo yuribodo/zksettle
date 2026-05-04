@@ -139,24 +139,29 @@ pub fn init_extra_meta_ix(
     }
 }
 
+pub fn create_token2022_alloc_ix(payer: &Pubkey, account: &Pubkey, space: usize) -> Instruction {
+    let rent = anchor_lang::solana_program::rent::Rent::default();
+    anchor_lang::solana_program::system_instruction::create_account(
+        payer,
+        account,
+        rent.minimum_balance(space),
+        space as u64,
+        &spl_token_2022::ID,
+    )
+}
+
 pub fn create_hook_mint_base_ixs(payer: &Pubkey, mint_key: &Pubkey) -> Vec<Instruction> {
     use spl_token_2022::{
         extension::{transfer_hook::instruction::initialize as init_hook, ExtensionType},
         state::Mint as SplMint,
     };
 
-    let extensions = &[ExtensionType::TransferHook];
-    let space = ExtensionType::try_calculate_account_len::<SplMint>(extensions).unwrap();
+    let space = ExtensionType::try_calculate_account_len::<SplMint>(
+        &[ExtensionType::TransferHook],
+    )
+    .unwrap();
 
-    let rent = anchor_lang::solana_program::rent::Rent::default();
-    let create_ix = anchor_lang::solana_program::system_instruction::create_account(
-        payer,
-        mint_key,
-        rent.minimum_balance(space),
-        space as u64,
-        &spl_token_2022::ID,
-    );
-
+    let create_ix = create_token2022_alloc_ix(payer, mint_key, space);
     let init_hook_ix =
         init_hook(&spl_token_2022::ID, mint_key, Some(*payer), Some(zksettle::ID)).unwrap();
 

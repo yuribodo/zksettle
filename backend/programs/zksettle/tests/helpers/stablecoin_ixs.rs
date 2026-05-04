@@ -122,20 +122,13 @@ pub fn create_token2022_account_ixs(
         state::Account as SplAccount,
     };
 
-    let extensions = &[ExtensionType::TransferHookAccount];
-    let space = ExtensionType::try_calculate_account_len::<SplAccount>(extensions).unwrap();
+    let space = ExtensionType::try_calculate_account_len::<SplAccount>(
+        &[ExtensionType::TransferHookAccount],
+    )
+    .unwrap();
 
-    let rent = anchor_lang::solana_program::rent::Rent::default();
-    let create_ix = anchor_lang::solana_program::system_instruction::create_account(
-        payer,
-        account_key,
-        rent.minimum_balance(space),
-        space as u64,
-        &spl_token_2022::ID,
-    );
-
-    let init_ix =
-        initialize_account3(&spl_token_2022::ID, account_key, mint, owner).unwrap();
+    let create_ix = super::instructions::create_token2022_alloc_ix(payer, account_key, space);
+    let init_ix = initialize_account3(&spl_token_2022::ID, account_key, mint, owner).unwrap();
 
     vec![create_ix, init_ix]
 }
