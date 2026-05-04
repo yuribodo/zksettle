@@ -1,8 +1,10 @@
 # Compiled circuit artifacts
 
 This directory ships the **Noir ACIR JSON** that the browser-side prover loads
-at runtime to generate Groth16 proofs locally. Committing the artifact lets
-contributors run the frontend without having `nargo` installed.
+at runtime to generate proofs locally. The browser pipeline currently emits
+**UltraHonk** proofs via `@aztec/bb.js`; on-chain verification expects **Groth16**
+and is closed out by a separate Sunspot-WASM workstream. Committing the artifact
+lets contributors run the frontend without having `nargo` installed.
 
 ## Files
 
@@ -56,6 +58,8 @@ the browser prover. See `circuits/src/main.nr` for the source of truth.
   here will succeed in the browser, but the on-chain `verify_proof` instruction
   will not yet enforce indices 8–10 until the VK is regenerated through the
   Sunspot pipeline.
-- The artifact contains `debug_symbols` and a `file_map` which are useful for
-  in-browser error messages but inflate the payload (~76 KB → ~30 KB without
-  them). If bundle size becomes a concern we can strip them at copy time.
+- `compile-circuit.sh` strips `debug_symbols` and `file_map` from the published
+  artifact before copying it here. This keeps the payload small (~21 KB instead
+  of ~76 KB) and avoids leaking the developer's absolute source path through
+  `file_map`. The stripped fields are useful for in-browser stack traces only;
+  `noir_js` and `bb.js` need just `bytecode`, `abi`, `noir_version`, and `hash`.

@@ -48,8 +48,22 @@ if [ "$PUBLIC_INPUT_COUNT" -ne "$EXPECTED_PUBLIC_INPUTS" ]; then
   exit 1
 fi
 
-echo "Copying artifact to frontend/public/circuits/..."
+echo "Stripping debug_symbols and file_map, then copying to frontend/public/circuits/..."
 mkdir -p "$FRONTEND_DST_DIR"
-cp "$ARTIFACT_SRC" "$FRONTEND_DST"
+# debug_symbols is a large base64 blob and file_map embeds the local
+# absolute path of circuits/src/main.nr — both inflate the artifact and
+# leak the developer's working directory once it ships as a public asset.
+# noir_js + bb.js only need `bytecode`, `abi`, `noir_version`, and `hash`.
+python3 -c "
+import json, sys
+artifact = json.load(sys.stdin)
+artifact.pop('debug_symbols', None)
+artifact.pop('file_map', None)
+json.dump(artifact, sys.stdout, separators=(',', ':'))
+" < "$ARTIFACT_SRC" > "$FRONTEND_DST"
 
-echo "Done. Artifact at: ${FRONTEND_DST#$REPO_ROOT/}"
+ORIG_SIZE=$(wc -c < "$ARTIFACT_SRC")
+PUB_SIZE=$(wc -c < "$FRONTEND_DST")
+echo "Artifact size: ${ORIG_SIZE} → ${PUB_SIZE} bytes"
+
+echo "Done. Artifact at: ${FRONTEND_DST#"$REPO_ROOT"/}"
