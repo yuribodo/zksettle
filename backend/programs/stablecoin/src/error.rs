@@ -36,4 +36,14 @@ pub enum StablecoinError {
     MintCapExceeded,
     #[msg("New mint cap is the same as the current cap")]
     MintCapUnchanged,
+    #[msg("Redemption amount must be greater than zero")]
+    ZeroRedemptionAmount,
+    #[msg("Canceller is not the holder, admin, or request has not expired")]
+    UnauthorizedCanceller,
+    #[msg("Token account is already frozen")]
+    AccountAlreadyFrozen,
+    #[msg("Insufficient token balance for redemption")]
+    InsufficientBalance,
+    #[msg("Token account does not match redemption request")]
+    TokenAccountMismatch,
 }

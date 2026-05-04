@@ -14,10 +14,12 @@ pub struct Treasury {
     pub paused: bool,
     pub pending_admin: Option<Pubkey>,
     pub mint_cap: u64,
+    pub redemption_nonce: u64,
+    pub escrow_authority_bump: u8,
 }
 
 impl Treasury {
-    pub const LEN: usize = 32 + 32 + 32 + 1 + 1 + 1 + 8 + 8 + 1 + 1 + 33 + 8;
+    pub const LEN: usize = 32 + 32 + 32 + 1 + 1 + 1 + 8 + 8 + 1 + 1 + 33 + 8 + 8 + 1;
 }
 
 #[cfg(test)]
@@ -28,7 +30,14 @@ mod tests {
     fn treasury_len_matches_fields() {
         assert_eq!(
             Treasury::LEN,
-            3 * std::mem::size_of::<Pubkey>() + 3 + 2 * std::mem::size_of::<u64>() + 2 + 33 + std::mem::size_of::<u64>(),
+            3 * std::mem::size_of::<Pubkey>()  // admin + operator + mint
+                + 3                              // mint_authority_bump + freeze_authority_bump + bump
+                + 2 * std::mem::size_of::<u64>() // total_minted + total_burned
+                + 2                              // decimals + paused
+                + 33                             // pending_admin (Option<Pubkey>)
+                + std::mem::size_of::<u64>()     // mint_cap
+                + std::mem::size_of::<u64>()     // redemption_nonce
+                + 1,                             // escrow_authority_bump
         );
     }
 }
