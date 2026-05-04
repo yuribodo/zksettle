@@ -8,8 +8,8 @@ use solana_signer::Signer;
 use helpers::*;
 use stablecoin::instructions::{
     AccountFrozen, AccountThawed, AdminAccepted, AdminProposed, MintCapUpdated,
-    MintInitialized, OperatorUpdated, Paused, PendingAdminCancelled, TokensBurned,
-    TokensMinted, Unpaused,
+    MintInitialized, OperatorUpdated, Paused, PendingAdminCancelled, RedemptionApproved,
+    RedemptionCancelled, RedemptionRequested, TokensMinted, Unpaused,
 };
 use stablecoin::EVENT_VERSION;
 
@@ -67,17 +67,53 @@ fn tokens_minted_event() {
 }
 
 #[test]
-fn tokens_burned_event() {
+fn redemption_requested_event() {
     let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_funded_token(1000);
-    let ix = burn_tokens_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 300);
+    let ix = request_redemption_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 300, 0);
     let meta = send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
 
-    let evt: TokensBurned = parse_event(&meta.logs).expect("TokensBurned event not found");
+    let evt: RedemptionRequested = parse_event(&meta.logs).expect("RedemptionRequested event not found");
     assert_eq!(evt.version, EVENT_VERSION);
     assert_eq!(evt.mint, mint_kp.pubkey());
-    assert_eq!(evt.source, token_kp.pubkey());
-    assert_eq!(evt.amount, 300);
     assert_eq!(evt.holder, admin.pubkey());
+    assert_eq!(evt.amount, 300);
+    assert_eq!(evt.nonce, 0);
+}
+
+#[test]
+fn redemption_approved_event() {
+    let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_funded_token(1000);
+    let ix = request_redemption_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 300, 0);
+    send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
+
+    let ix = approve_redemption_ix(&admin.pubkey(), &admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 0);
+    let meta = send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
+
+    let evt: RedemptionApproved = parse_event(&meta.logs).expect("RedemptionApproved event not found");
+    assert_eq!(evt.version, EVENT_VERSION);
+    assert_eq!(evt.mint, mint_kp.pubkey());
+    assert_eq!(evt.holder, admin.pubkey());
+    assert_eq!(evt.amount, 300);
+    assert_eq!(evt.nonce, 0);
+    assert_eq!(evt.operator, admin.pubkey());
+}
+
+#[test]
+fn redemption_cancelled_event() {
+    let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_funded_token(1000);
+    let ix = request_redemption_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 300, 0);
+    send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
+
+    let ix = cancel_redemption_ix(&admin.pubkey(), &admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 0);
+    let meta = send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
+
+    let evt: RedemptionCancelled = parse_event(&meta.logs).expect("RedemptionCancelled event not found");
+    assert_eq!(evt.version, EVENT_VERSION);
+    assert_eq!(evt.mint, mint_kp.pubkey());
+    assert_eq!(evt.holder, admin.pubkey());
+    assert_eq!(evt.amount, 300);
+    assert_eq!(evt.nonce, 0);
+    assert_eq!(evt.canceller, admin.pubkey());
 }
 
 #[test]

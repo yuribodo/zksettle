@@ -85,13 +85,13 @@ fn mint_rejected_when_paused() {
 }
 
 #[test]
-fn burn_rejected_when_paused() {
+fn request_redemption_rejected_when_paused() {
     let TestEnvWithToken { mut svm, admin, mint_kp, token_kp } = setup_with_funded_token(1000);
 
     let ix = pause_ix(&admin.pubkey(), &mint_kp.pubkey());
     send_tx(&mut svm, &[ix], &admin, &[&admin]).unwrap();
 
-    let ix = burn_tokens_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 500);
+    let ix = request_redemption_ix(&admin.pubkey(), &mint_kp.pubkey(), &token_kp.pubkey(), 500, 0);
     let result = send_tx(&mut svm, &[ix], &admin, &[&admin]);
     assert_anchor_error(result, ANCHOR_ERROR_CODE_OFFSET + StablecoinError::Paused as u32);
 }
