@@ -7,7 +7,7 @@ use solana_message::Message;
 use solana_signer::Signer;
 use solana_transaction::Transaction;
 
-use stablecoin::state::{FREEZE_AUTHORITY_SEED, MINT_AUTHORITY_SEED, TREASURY_SEED};
+use stablecoin::state::{ESCROW_AUTHORITY_SEED, FREEZE_AUTHORITY_SEED, MINT_AUTHORITY_SEED, REDEMPTION_SEED, TREASURY_SEED};
 
 pub const ANCHOR_ERROR_CODE_OFFSET: u32 = 6000;
 
@@ -21,6 +21,17 @@ pub fn mint_authority_pda(treasury: &Pubkey) -> (Pubkey, u8) {
 
 pub fn freeze_authority_pda(treasury: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[FREEZE_AUTHORITY_SEED, treasury.as_ref()], &stablecoin::ID)
+}
+
+pub fn escrow_authority_pda(treasury: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[ESCROW_AUTHORITY_SEED, treasury.as_ref()], &stablecoin::ID)
+}
+
+pub fn redemption_pda(treasury: &Pubkey, holder: &Pubkey, nonce: u64) -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[REDEMPTION_SEED, treasury.as_ref(), holder.as_ref(), &nonce.to_le_bytes()],
+        &stablecoin::ID,
+    )
 }
 
 pub fn create_mint_account_ix(payer: &Pubkey, mint: &Pubkey) -> Vec<Instruction> {
@@ -45,6 +56,7 @@ pub fn initialize_mint_ix(admin: &Pubkey, mint: &Pubkey, decimals: u8) -> Instru
     let (treasury, _) = treasury_pda(mint);
     let (mint_authority, _) = mint_authority_pda(&treasury);
     let (freeze_authority, _) = freeze_authority_pda(&treasury);
+    let (escrow_authority, _) = escrow_authority_pda(&treasury);
 
     Instruction {
         program_id: stablecoin::ID,
@@ -54,6 +66,7 @@ pub fn initialize_mint_ix(admin: &Pubkey, mint: &Pubkey, decimals: u8) -> Instru
             AccountMeta::new(treasury, false),
             AccountMeta::new_readonly(mint_authority, false),
             AccountMeta::new_readonly(freeze_authority, false),
+            AccountMeta::new_readonly(escrow_authority, false),
             AccountMeta::new_readonly(spl_token_2022::ID, false),
             AccountMeta::new_readonly(anchor_lang::system_program::ID, false),
         ],
@@ -84,25 +97,99 @@ pub fn mint_tokens_ix(
     }
 }
 
-pub fn burn_tokens_ix(
+pub fn request_redemption_ix(
     holder: &Pubkey,
     mint: &Pubkey,
     token_account: &Pubkey,
     amount: u64,
+    nonce: u64,
 ) -> Instruction {
     let (treasury, _) = treasury_pda(mint);
+    let (escrow_authority, _) = escrow_authority_pda(&treasury);
+    let (freeze_authority, _) = freeze_authority_pda(&treasury);
+    let (redemption_request, _) = redemption_pda(&treasury, holder, nonce);
 
     Instruction {
         program_id: stablecoin::ID,
         accounts: vec![
-            AccountMeta::new_readonly(*holder, true),
+            AccountMeta::new(*holder, true),
+            AccountMeta::new(treasury, false),
+            AccountMeta::new_readonly(*mint, false),
+            AccountMeta::new(*token_account, false),
+            AccountMeta::new(redemption_request, false),
+            AccountMeta::new_readonly(escrow_authority, false),
+            AccountMeta::new_readonly(freeze_authority, false),
+            AccountMeta::new_readonly(spl_token_2022::ID, false),
+            AccountMeta::new_readonly(anchor_lang::system_program::ID, false),
+        ],
+        data: stablecoin::instruction::RequestRedemption { amount }.data(),
+    }
+}
+
+pub fn approve_redemption_ix(
+    operator: &Pubkey,
+    holder: &Pubkey,
+    mint: &Pubkey,
+    token_account: &Pubkey,
+    nonce: u64,
+) -> Instruction {
+    let (treasury, _) = treasury_pda(mint);
+    let (escrow_authority, _) = escrow_authority_pda(&treasury);
+    let (freeze_authority, _) = freeze_authority_pda(&treasury);
+    let (redemption_request, _) = redemption_pda(&treasury, holder, nonce);
+
+    Instruction {
+        program_id: stablecoin::ID,
+        accounts: vec![
+            AccountMeta::new_readonly(*operator, true),
+            AccountMeta::new(*holder, false),
             AccountMeta::new(treasury, false),
             AccountMeta::new(*mint, false),
+            AccountMeta::new(redemption_request, false),
             AccountMeta::new(*token_account, false),
+            AccountMeta::new_readonly(escrow_authority, false),
+            AccountMeta::new_readonly(freeze_authority, false),
             AccountMeta::new_readonly(spl_token_2022::ID, false),
         ],
-        data: stablecoin::instruction::BurnTokens { amount }.data(),
+        data: stablecoin::instruction::ApproveRedemption {}.data(),
     }
+}
+
+pub fn cancel_redemption_ix(
+    canceller: &Pubkey,
+    holder: &Pubkey,
+    mint: &Pubkey,
+    token_account: &Pubkey,
+    nonce: u64,
+) -> Instruction {
+    let (treasury, _) = treasury_pda(mint);
+    let (escrow_authority, _) = escrow_authority_pda(&treasury);
+    let (freeze_authority, _) = freeze_authority_pda(&treasury);
+    let (redemption_request, _) = redemption_pda(&treasury, holder, nonce);
+
+    Instruction {
+        program_id: stablecoin::ID,
+        accounts: vec![
+            AccountMeta::new_readonly(*canceller, true),
+            AccountMeta::new(*holder, false),
+            AccountMeta::new_readonly(treasury, false),
+            AccountMeta::new_readonly(*mint, false),
+            AccountMeta::new(redemption_request, false),
+            AccountMeta::new(*token_account, false),
+            AccountMeta::new_readonly(escrow_authority, false),
+            AccountMeta::new_readonly(freeze_authority, false),
+            AccountMeta::new_readonly(spl_token_2022::ID, false),
+        ],
+        data: stablecoin::instruction::CancelRedemption {}.data(),
+    }
+}
+
+pub fn read_redemption_request(svm: &LiteSVM, treasury: &Pubkey, holder: &Pubkey, nonce: u64) -> stablecoin::state::RedemptionRequest {
+    use anchor_lang::AccountDeserialize;
+    let (pda, _) = redemption_pda(treasury, holder, nonce);
+    let account = svm.get_account(&pda).expect("redemption request account not found");
+    let mut data: &[u8] = &account.data;
+    stablecoin::state::RedemptionRequest::try_deserialize(&mut data).expect("failed to deserialize redemption request")
 }
 
 pub fn pause_ix(admin: &Pubkey, mint: &Pubkey) -> Instruction {
