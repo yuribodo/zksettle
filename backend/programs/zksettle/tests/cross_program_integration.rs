@@ -43,6 +43,57 @@ impl SettleScenario {
     fn settle_pda_keys(&self) -> (Pubkey, Pubkey, Pubkey) {
         settle_pda_keys(&self.merkle_tree_kp.pubkey())
     }
+
+    async fn stage_payload(
+        &self,
+        rpc: &mut light_program_test::LightProgramTest,
+        recipient: Pubkey,
+        amount: u64,
+    ) {
+        rpc.create_and_send_transaction(
+            &[set_hook_payload_ix(
+                &self.admin.pubkey(),
+                &self.issuer_key,
+                vec![0xaa; 256],
+                nonzero_nullifier(),
+                self.mint,
+                10,
+                recipient,
+                amount,
+                default_light_args(),
+            )],
+            &self.admin.pubkey(),
+            &[&self.admin],
+        )
+        .await
+        .expect("set_hook_payload");
+    }
+
+    async fn attempt_settle(
+        &self,
+        rpc: &mut light_program_test::LightProgramTest,
+        recipient: &Pubkey,
+        amount: u64,
+    ) -> Result<solana_signature::Signature, Box<dyn std::error::Error>> {
+        let (registry_key, tree_creator_key, tree_config_key) = self.settle_pda_keys();
+
+        rpc.create_and_send_transaction(
+            &[settle_hook_ix(
+                &self.admin.pubkey(),
+                &self.mint,
+                recipient,
+                &self.issuer_key,
+                &registry_key,
+                &self.merkle_tree_kp.pubkey(),
+                &tree_config_key,
+                &tree_creator_key,
+                amount,
+            )],
+            &self.admin.pubkey(),
+            &[&self.admin],
+        )
+        .await
+    }
 }
 
 async fn setup_settle_scenario(
@@ -126,43 +177,8 @@ async fn stablecoin_mint_then_settle_hook_boundary() {
     let s = setup_settle_scenario(&mut rpc).await;
 
     let recipient = Pubkey::new_unique();
-    rpc.create_and_send_transaction(
-        &[set_hook_payload_ix(
-            &s.admin.pubkey(),
-            &s.issuer_key,
-            vec![0xaa; 256],
-            nonzero_nullifier(),
-            s.mint,
-            10,
-            recipient,
-            500,
-            default_light_args(),
-        )],
-        &s.admin.pubkey(),
-        &[&s.admin],
-    )
-    .await
-    .expect("set_hook_payload");
-
-    let (registry_key, tree_creator_key, tree_config_key) = s.settle_pda_keys();
-
-    let result = rpc
-        .create_and_send_transaction(
-            &[settle_hook_ix(
-                &s.admin.pubkey(),
-                &s.mint,
-                &recipient,
-                &s.issuer_key,
-                &registry_key,
-                &s.merkle_tree_kp.pubkey(),
-                &tree_config_key,
-                &tree_creator_key,
-                500,
-            )],
-            &s.admin.pubkey(),
-            &[&s.admin],
-        )
-        .await;
+    s.stage_payload(&mut rpc, recipient, 500).await;
+    let result = s.attempt_settle(&mut rpc, &recipient, 500).await;
 
     assert_rpc_error(
         result,
@@ -227,43 +243,8 @@ async fn burn_after_failed_settlement() {
     let s = setup_settle_scenario(&mut rpc).await;
 
     let recipient = Pubkey::new_unique();
-    rpc.create_and_send_transaction(
-        &[set_hook_payload_ix(
-            &s.admin.pubkey(),
-            &s.issuer_key,
-            vec![0xaa; 256],
-            nonzero_nullifier(),
-            s.mint,
-            10,
-            recipient,
-            500,
-            default_light_args(),
-        )],
-        &s.admin.pubkey(),
-        &[&s.admin],
-    )
-    .await
-    .expect("set_hook_payload");
-
-    let (registry_key, tree_creator_key, tree_config_key) = s.settle_pda_keys();
-
-    let result = rpc
-        .create_and_send_transaction(
-            &[settle_hook_ix(
-                &s.admin.pubkey(),
-                &s.mint,
-                &recipient,
-                &s.issuer_key,
-                &registry_key,
-                &s.merkle_tree_kp.pubkey(),
-                &tree_config_key,
-                &tree_creator_key,
-                500,
-            )],
-            &s.admin.pubkey(),
-            &[&s.admin],
-        )
-        .await;
+    s.stage_payload(&mut rpc, recipient, 500).await;
+    let result = s.attempt_settle(&mut rpc, &recipient, 500).await;
 
     assert_rpc_error(
         result,
@@ -295,45 +276,11 @@ async fn stale_root_rejects_settlement() {
     let s = setup_settle_scenario(&mut rpc).await;
 
     let recipient = Pubkey::new_unique();
-    rpc.create_and_send_transaction(
-        &[set_hook_payload_ix(
-            &s.admin.pubkey(),
-            &s.issuer_key,
-            vec![0xaa; 256],
-            nonzero_nullifier(),
-            s.mint,
-            10,
-            recipient,
-            500,
-            default_light_args(),
-        )],
-        &s.admin.pubkey(),
-        &[&s.admin],
-    )
-    .await
-    .expect("set_hook_payload");
+    s.stage_payload(&mut rpc, recipient, 500).await;
 
     rpc.warp_to_slot(MAX_ROOT_AGE_SLOTS + 100).expect("warp_to_slot");
 
-    let (registry_key, tree_creator_key, tree_config_key) = s.settle_pda_keys();
-
-    let result = rpc
-        .create_and_send_transaction(
-            &[settle_hook_ix(
-                &s.admin.pubkey(),
-                &s.mint,
-                &recipient,
-                &s.issuer_key,
-                &registry_key,
-                &s.merkle_tree_kp.pubkey(),
-                &tree_config_key,
-                &tree_creator_key,
-                500,
-            )],
-            &s.admin.pubkey(),
-            &[&s.admin],
-        )
-        .await;
+    let result = s.attempt_settle(&mut rpc, &recipient, 500).await;
 
     assert_rpc_error(
         result,
