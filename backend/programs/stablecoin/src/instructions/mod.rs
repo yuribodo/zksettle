@@ -1,5 +1,6 @@
 pub mod approve_redemption;
 pub mod cancel_redemption;
+mod cpi_helpers;
 pub mod freeze_thaw;
 pub mod initialize_mint;
 pub mod mint_tokens;

@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token_2022;
 use anchor_spl::token_interface::{Mint as MintAccount, Token2022, TokenAccount};
 
+use super::cpi_helpers::thaw_token_account;
 use crate::error::StablecoinError;
 use crate::state::{
     RedemptionRequest, Treasury, ESCROW_AUTHORITY_SEED, FREEZE_AUTHORITY_SEED, TREASURY_SEED,
@@ -81,18 +82,14 @@ pub fn approve_redemption_handler(ctx: Context<ApproveRedemption>) -> Result<()>
     let amount = ctx.accounts.redemption_request.amount;
     let nonce = ctx.accounts.redemption_request.nonce;
 
-    let freeze_bump = [ctx.accounts.treasury.freeze_authority_bump];
-    let freeze_seeds: &[&[u8]] = &[FREEZE_AUTHORITY_SEED, treasury_key.as_ref(), &freeze_bump];
-    let cpi_accounts = token_2022::ThawAccount {
-        account: ctx.accounts.holder_token_account.to_account_info(),
-        mint: ctx.accounts.mint.to_account_info(),
-        authority: ctx.accounts.freeze_authority.to_account_info(),
-    };
-    token_2022::thaw_account(CpiContext::new_with_signer(
-        ctx.accounts.token_program.to_account_info(),
-        cpi_accounts,
-        &[freeze_seeds],
-    ))?;
+    thaw_token_account(
+        &ctx.accounts.holder_token_account,
+        &ctx.accounts.mint,
+        &ctx.accounts.freeze_authority,
+        &ctx.accounts.token_program,
+        &treasury_key,
+        ctx.accounts.treasury.freeze_authority_bump,
+    )?;
 
     let escrow_bump = [ctx.accounts.treasury.escrow_authority_bump];
     let escrow_seeds: &[&[u8]] = &[ESCROW_AUTHORITY_SEED, treasury_key.as_ref(), &escrow_bump];
