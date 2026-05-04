@@ -3,7 +3,7 @@ use anchor_spl::token_2022;
 use anchor_spl::token_interface::Token2022;
 
 use crate::error::StablecoinError;
-use crate::state::{Treasury, FREEZE_AUTHORITY_SEED, MINT_AUTHORITY_SEED, TREASURY_SEED};
+use crate::state::{Treasury, ESCROW_AUTHORITY_SEED, FREEZE_AUTHORITY_SEED, MINT_AUTHORITY_SEED, TREASURY_SEED};
 use crate::EVENT_VERSION;
 
 #[derive(Accounts)]
@@ -41,6 +41,13 @@ pub struct InitializeMint<'info> {
         bump,
     )]
     pub freeze_authority: UncheckedAccount<'info>,
+
+    /// CHECK: PDA used as escrow delegation authority — not read or written, only its address matters.
+    #[account(
+        seeds = [ESCROW_AUTHORITY_SEED, treasury.key().as_ref()],
+        bump,
+    )]
+    pub escrow_authority: UncheckedAccount<'info>,
 
     pub token_program: Program<'info, Token2022>,
     pub system_program: Program<'info, System>,
@@ -83,6 +90,8 @@ pub fn initialize_mint_handler(ctx: Context<InitializeMint>, decimals: u8) -> Re
     treasury.paused = false;
     treasury.pending_admin = None;
     treasury.mint_cap = 0;
+    treasury.redemption_nonce = 0;
+    treasury.escrow_authority_bump = ctx.bumps.escrow_authority;
 
     msg!("Stablecoin mint initialized with {} decimals", decimals);
 
