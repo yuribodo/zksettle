@@ -140,7 +140,7 @@ pub fn create_token2022_account_ixs(
     vec![create_ix, init_ix]
 }
 
-pub fn transfer_checked_ix(
+pub fn transfer_checked_no_hook_ix(
     source: &Pubkey,
     mint: &Pubkey,
     destination: &Pubkey,

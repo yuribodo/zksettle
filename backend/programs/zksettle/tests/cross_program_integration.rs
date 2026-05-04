@@ -17,7 +17,7 @@ use helpers::{
 };
 use helpers::stablecoin_ixs::{
     burn_tokens_ix, create_stablecoin_mint_with_hook_ixs, create_token2022_account_ixs,
-    freeze_account_ix, mint_tokens_ix, transfer_checked_ix, treasury_pda,
+    freeze_account_ix, mint_tokens_ix, transfer_checked_no_hook_ix, treasury_pda,
 };
 
 fn default_extra_meta(
@@ -221,7 +221,7 @@ async fn frozen_account_rejects_transfer() {
     // Attempt transfer — should fail with AccountFrozen
     let result = rpc
         .create_and_send_transaction(
-            &[transfer_checked_ix(
+            &[transfer_checked_no_hook_ix(
                 &sender_kp.pubkey(),
                 &mint,
                 &recipient_kp.pubkey(),
@@ -234,7 +234,7 @@ async fn frozen_account_rejects_transfer() {
         )
         .await;
 
-    assert!(result.is_err(), "transfer from frozen account should fail");
+    assert_rpc_error(result, 0, 17).expect("expected AccountFrozen");
 }
 
 #[tokio::test]
