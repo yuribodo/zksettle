@@ -10,6 +10,9 @@ use crate::state::{
 
 use super::helpers::{expected_witness_len, pubkey_to_limbs, split_proof_and_witness, u64_to_field_bytes};
 
+#[cfg(all(feature = "placeholder-vk", not(debug_assertions)))]
+compile_error!("placeholder-vk must not be used in release builds");
+
 #[cfg(not(feature = "placeholder-vk"))]
 const _: () = assert!(
     VK.nr_pubinputs == 11,
