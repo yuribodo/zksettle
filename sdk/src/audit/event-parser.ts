@@ -10,8 +10,8 @@ export function parseProofSettled(logData: string): AuditTrail | null {
     if (buffer[i] !== PROOF_SETTLED_DISCRIMINATOR[i]) return null;
   }
 
-  // Layout: 8 (disc) + 1 (version) + 5*32 (pubkeys) + 4*32 (byte arrays) + 4*8 (u64s) = 329
-  if (buffer.length < 329) return null;
+  // Layout: 8 (disc) + 1 (version) + 8*32 (pubkeys/byte arrays) + 4*8 (u64s) = 297
+  if (buffer.length < 297) return null;
 
   let offset = 8;
 
