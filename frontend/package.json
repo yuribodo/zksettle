@@ -20,7 +20,9 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@aztec/bb.js": "3.0.0-nightly.20260102",
     "@gsap/react": "^2.1.2",
+    "@noir-lang/noir_js": "1.0.0-beta.18",
     "@solana/wallet-adapter-backpack": "^0.1.14",
     "@solana/wallet-adapter-base": "^0.9.27",
     "@solana/wallet-adapter-phantom": "^0.9.29",

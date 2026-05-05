@@ -113,6 +113,10 @@ copy-idl:
 circuit-build:
     cd circuits && nargo compile
 
+# Compile circuit and copy artifact to frontend/public/circuits/ for browser proving
+circuit-publish:
+    ./scripts/compile-circuit.sh
+
 # Run circuit tests
 circuit-test:
     cd circuits && nargo test
