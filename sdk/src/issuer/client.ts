@@ -5,7 +5,9 @@ export class IssuerClient {
   private readonly authToken?: string;
 
   constructor(baseUrl: string, authToken?: string) {
-    this.baseUrl = baseUrl.replace(/\/+$/, "");
+    let url = baseUrl;
+    while (url.endsWith("/")) url = url.slice(0, -1);
+    this.baseUrl = url;
     this.authToken = authToken;
   }
 
