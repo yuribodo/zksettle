@@ -1,17 +1,31 @@
 {
   "name": "@zksettle/sdk",
   "version": "0.1.0",
-  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aztec/bb.js": "3.0.0-nightly.20260102",
     "@coral-xyz/anchor": "^0.31.1",
+    "@noir-lang/noir_js": "1.0.0-beta.18",
+    "@solana/spl-token": "^0.4.0",
     "@solana/web3.js": "^1.95.0"
   },
   "devDependencies": {
-    "typescript": "^5.4.0"
+    "@types/node": "^25.6.0",
+    "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "@solana/web3.js": "^1.95.0"
   }
 }
