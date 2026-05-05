@@ -70,6 +70,8 @@ flowchart LR
     Program --> Light[Light Protocol<br/>nullifiers]
     Program --> cNFT[Bubblegum cNFT<br/>attestation]
     Program -->|events| Indexer
+    Stable[Stablecoin program] -->|mint/burn| Hook
+    Stable -->|escrow| Redemption[Operator-gated<br/>redemption]
     Indexer[Indexer<br/>Helius] --> Arweave[(Arweave via Irys)]
 
     classDef browser fill:#1e3a5f,stroke:#4a9eff,color:#fff
@@ -77,7 +79,7 @@ flowchart LR
     classDef rust fill:#5c3d2e,stroke:#f59e0b,color:#fff
     classDef storage fill:#2e5c3d,stroke:#10b981,color:#fff
     class Cred,Prover,Proof,SDK browser
-    class Program,Hook,Light,cNFT chain
+    class Program,Hook,Light,cNFT,Stable,Redemption chain
     class Issuer,Sanctions,Indexer,API rust
     class Arweave storage
 ```
@@ -123,6 +125,7 @@ sequenceDiagram
 > ℹ️ The circuit implements all five compliance checks (Merkle membership, sanctions exclusion, jurisdiction, credential expiry, nullifier) with 11 public inputs. The verifier key in `backend/programs/zksettle/src/generated_vk.rs` is regenerated from `default.vk` by `build.rs`; any circuit change requires refreshing the VK before on-chain proofs will verify. The deployed VK currently binds 8 public inputs (indices 0–7); indices 8–10 (sanctions_root, jurisdiction_root, timestamp) await VK regeneration.
 | **Anchor program** | On-chain verifier. Exposes `init_attestation_tree()`, `register_issuer()`, `update_issuer_root()`, `verify_proof()`, `check_attestation()`, plus the hook flow: `init_extra_account_meta_list()`, `set_hook_payload()`, `settle_hook()`, `transfer_hook()` | `backend/programs/zksettle/` (Rust) |
 | **Transfer Hook** | Atomic Token-2022 compliance gate. Client stages a proof payload with `set_hook_payload`; Token-2022's Execute entry (or a direct `settle_hook` call) rebinds it to the live transfer, runs `verify_bundle`, and mints a compressed nullifier + attestation via Light CPI. Standalone calls are rejected via the `TransferHookAccount.transferring` flag. | `backend/programs/zksettle/` |
+| **Stablecoin program** | Token-2022 mint management with operator-gated redemption. Admin initializes the mint with configurable decimals and mint cap; operator mints tokens. Holders request redemption (tokens escrowed); operator approves (burn from escrow) or cancels (return tokens). Supports freeze/thaw, pause/unpause, two-step admin transfer, and operator rotation. | `backend/programs/stablecoin/` (Rust) |
 | **Issuer service** | Credential issuance, Merkle tree maintenance, root publication | `backend/crates/issuer-service/` (Rust) |
 | **Indexer** | Consumes Helius webhooks, persists audit trail to Arweave | `backend/crates/indexer/` (Rust) |
 | **API gateway** | Billing, rate limiting, tier enforcement | `backend/crates/api-gateway/` (Rust) |
@@ -188,7 +191,8 @@ All Rust code lives inside `backend/` as a single Cargo workspace. The frontend,
 zksettle/
 ├── backend/                      # Rust workspace (on-chain + off-chain services)
 │   ├── programs/
-│   │   └── zksettle/             # Anchor program (verifier + transfer hook)
+│   │   ├── zksettle/             # Anchor program (verifier + transfer hook)
+│   │   └── stablecoin/           # Token-2022 mint with operator-gated redemption
 │   ├── crates/
 │   │   ├── zksettle-types/       # Shared types between on-chain and off-chain
 │   │   ├── zksettle-crypto/      # Poseidon2, Merkle, SMT wrappers
