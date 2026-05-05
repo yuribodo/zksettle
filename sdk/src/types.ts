@@ -1,4 +1,4 @@
-import type { PublicKey, Connection, Transaction } from "@solana/web3.js";
+import type { PublicKey, Connection } from "@solana/web3.js";
 import type { BN } from "@coral-xyz/anchor";
 import type { CompiledCircuit } from "@noir-lang/noir_js";
 

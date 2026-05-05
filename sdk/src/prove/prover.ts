@@ -16,8 +16,8 @@ export interface ProverHandles {
 export class Prover {
   private handles: ProverHandles | null = null;
   private initPromise: Promise<ProverHandles> | null = null;
-  private circuit: CompiledCircuit;
-  private threads: number;
+  private readonly circuit: CompiledCircuit;
+  private readonly threads: number;
 
   constructor(circuit: CompiledCircuit, threads?: number) {
     this.circuit = circuit;
@@ -34,9 +34,7 @@ export class Prover {
     }
 
     // Coalesce concurrent init calls to avoid spawning duplicate worker pools.
-    if (!this.initPromise) {
-      this.initPromise = this.doInit();
-    }
+    this.initPromise ??= this.doInit();
 
     return this.initPromise;
   }

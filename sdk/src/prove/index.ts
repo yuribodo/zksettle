@@ -79,7 +79,7 @@ export async function prove(
   }
 
   // Low-level path
-  const inputs = inputsOrWallet as ProofInputs;
+  const inputs = inputsOrWallet;
   const config = contextOrConfig as ZkSettleConfig | undefined;
   return proveLowLevel(inputs, config);
 }

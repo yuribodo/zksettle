@@ -1,8 +1,8 @@
 import type { Roots, MembershipProof, SanctionsProof, Credential } from "./types.js";
 
 export class IssuerClient {
-  private baseUrl: string;
-  private authToken?: string;
+  private readonly baseUrl: string;
+  private readonly authToken?: string;
 
   constructor(baseUrl: string, authToken?: string) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
@@ -18,12 +18,14 @@ export class IssuerClient {
       headers["Authorization"] = `Bearer ${this.authToken}`;
     }
 
-    const response = await fetch(`${this.baseUrl}${path}`, { headers });
+    const url = `${this.baseUrl}${path}`;
+    const response = await fetch(url, { headers });
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");
+      const detail = body ? ` — ${body}` : "";
       throw new Error(
-        `IssuerClient request failed: ${response.status} ${response.statusText} — GET ${path}${body ? ` — ${body}` : ""}`,
+        `IssuerClient request failed: ${response.status} ${response.statusText} — GET ${path}${detail}`,
       );
     }
 

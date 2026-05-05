@@ -1,4 +1,4 @@
-import { Connection, Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
+import { Keypair, SystemProgram, Transaction } from "@solana/web3.js";
 import { AnchorProvider, BN, Program, Wallet } from "@coral-xyz/anchor";
 import type { WrapOptions, ZkSettleConfig, StagedLightArgs } from "../types.js";
 import { ZKSETTLE_PROGRAM_ID } from "../constants.js";

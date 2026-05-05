@@ -1,6 +1,5 @@
-import { Connection, PublicKey } from "@solana/web3.js";
+import type { Connection } from "@solana/web3.js";
 import type { AuditTrail } from "../types.js";
-import { ZKSETTLE_PROGRAM_ID } from "../constants.js";
 import { parseProofSettled } from "./event-parser.js";
 
 export async function audit(
