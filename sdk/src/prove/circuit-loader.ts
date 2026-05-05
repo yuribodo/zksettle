@@ -31,7 +31,8 @@ export async function loadCircuit(
   // String source
   const isUrl =
     source.startsWith("http://") || source.startsWith("https://");
-  const isBrowser = globalThis.window !== undefined;
+  const isBrowser =
+    globalThis.window !== undefined && typeof process === "undefined";
 
   if (isUrl || isBrowser) {
     const res = await fetch(source);

@@ -98,6 +98,18 @@ Works in both Node.js (>=18) and modern browsers. The `circuitSource` config acc
 - A `Uint8Array` of the JSON artifact
 - A pre-parsed `CompiledCircuit` object
 
+## Toolchain Compatibility
+
+The proof system relies on three tightly-coupled packages that must be bumped together:
+
+| Package | Current Version |
+|---------|----------------|
+| `@noir-lang/noir_js` | `1.0.0-beta.18` |
+| `@aztec/bb.js` | `3.0.0-nightly.20260102` |
+| `nargo` (circuit compiler) | `1.0.0-beta.18` |
+
+When updating, always bump all three simultaneously and run the proof test suite — mismatched versions cause silent proof failures.
+
 ## Program ID
 
 ```text
