@@ -63,7 +63,7 @@ describe("dashboard chrome", () => {
 
   it("exposes grouped navigation metadata and path lookup", () => {
     expect(NAV_GROUPS.map((group) => group.id)).toEqual(["overview", "controls", "account"]);
-    expect(NAV_ITEMS).toHaveLength(6);
+    expect(NAV_ITEMS).toHaveLength(7);
     expect(findNavItem("/dashboard/api-keys")?.label).toBe("API keys");
     expect(findNavItem("/dashboard/api-keys/rotate")?.label).toBe("API keys");
     expect(findNavItem("/dashboard/unknown")).toBeUndefined();
