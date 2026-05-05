@@ -18,8 +18,7 @@
     "@aztec/bb.js": "3.0.0-nightly.20260102",
     "@coral-xyz/anchor": "^0.31.1",
     "@noir-lang/noir_js": "1.0.0-beta.18",
-    "@solana/spl-token": "^0.4.0",
-    "@solana/web3.js": "^1.95.0"
+    "@solana/spl-token": "^0.4.0"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

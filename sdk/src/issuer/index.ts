@@ -1,7 +1,6 @@
 import { type Connection, Keypair, SystemProgram } from "@solana/web3.js";
 import { AnchorProvider, Program, Wallet } from "@coral-xyz/anchor";
-import type { IssuerRoots, ZkSettleConfig } from "../types.js";
-import { ZKSETTLE_PROGRAM_ID } from "../constants.js";
+import type { IssuerRoots } from "../types.js";
 import { findIssuerPda } from "../wrap/pda.js";
 import idl from "../idl/zksettle.json" with { type: "json" };
 
@@ -9,16 +8,14 @@ export async function registerIssuer(
   connection: Connection,
   authority: Keypair,
   roots: IssuerRoots,
-  config?: ZkSettleConfig,
 ): Promise<string> {
-  const programId = config?.programId ?? ZKSETTLE_PROGRAM_ID;
   const wallet = new Wallet(authority);
   const provider = new AnchorProvider(connection, wallet, {
     commitment: "confirmed",
   });
   const program = new Program(idl as any, provider);
 
-  const [issuerPda] = findIssuerPda(authority.publicKey, programId);
+  const [issuerPda] = findIssuerPda(authority.publicKey);
 
   const txSig = await program.methods
     .registerIssuer(
@@ -41,16 +38,14 @@ export async function updateIssuerRoot(
   connection: Connection,
   authority: Keypair,
   roots: IssuerRoots,
-  config?: ZkSettleConfig,
 ): Promise<string> {
-  const programId = config?.programId ?? ZKSETTLE_PROGRAM_ID;
   const wallet = new Wallet(authority);
   const provider = new AnchorProvider(connection, wallet, {
     commitment: "confirmed",
   });
   const program = new Program(idl as any, provider);
 
-  const [issuerPda] = findIssuerPda(authority.publicKey, programId);
+  const [issuerPda] = findIssuerPda(authority.publicKey);
 
   const txSig = await program.methods
     .updateIssuerRoot(

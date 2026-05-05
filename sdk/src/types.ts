@@ -38,6 +38,14 @@ export interface TransferContext {
   recipient: PublicKey;
   amount: BN;
   epoch?: number;
+  /** Caller's private key for ZK ownership proof. Never logged or serialized by the SDK. */
+  privateKey: string;
+  /** Credential expiry timestamp (unix seconds). */
+  credentialExpiry: string;
+  /** Jurisdiction Merkle path (required by the circuit). */
+  jurisdictionPath: string[];
+  /** Jurisdiction path indices (0 or 1 per level). */
+  jurisdictionPathIndices: number[];
 }
 
 export interface StagedLightArgs {

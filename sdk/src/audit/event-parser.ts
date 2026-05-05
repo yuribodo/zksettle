@@ -5,16 +5,18 @@ import { PROOF_SETTLED_DISCRIMINATOR } from "../constants.js";
 export function parseProofSettled(logData: string): AuditTrail | null {
   const buffer = Buffer.from(logData, "base64");
 
-  // Check discriminator (first 8 bytes)
   if (buffer.length < 8) return null;
   for (let i = 0; i < 8; i++) {
     if (buffer[i] !== PROOF_SETTLED_DISCRIMINATOR[i]) return null;
   }
 
-  // Total expected: 8 (disc) + 5*32 (pubkeys) + 4*32 (byte arrays) + 4*8 (u64s) = 8 + 320 = 328
-  if (buffer.length < 328) return null;
+  // Layout: 8 (disc) + 1 (version) + 5*32 (pubkeys) + 4*32 (byte arrays) + 4*8 (u64s) = 329
+  if (buffer.length < 329) return null;
 
   let offset = 8;
+
+  // version: u8 (skip — not exposed in AuditTrail)
+  offset += 1;
 
   const issuer = new PublicKey(buffer.subarray(offset, offset + 32));
   offset += 32;

@@ -155,11 +155,13 @@ async function proveHighLevel(
   const epoch = (context.epoch ?? 0).toString();
   const timestamp = Math.floor(Date.now() / 1000).toString();
 
+  const nullifier = "0x" + Array.from(crypto.getRandomValues(new Uint8Array(32)))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
   const inputs: ProofInputs = {
     merkleRoot: roots.membership_root,
-    nullifier: "0x" + Array.from(crypto.getRandomValues(new Uint8Array(32)))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join(""),
+    nullifier,
     mintLo,
     mintHi,
     epoch,
@@ -172,14 +174,14 @@ async function proveHighLevel(
     wallet,
     path: membership.path,
     pathIndices: membership.path_indices,
-    privateKey: "", // must be supplied by caller's secure context
+    privateKey: context.privateKey,
     sanctionsPath: sanctions.path,
     sanctionsPathIndices: sanctions.path_indices,
     sanctionsLeafValue: sanctions.leaf_value,
     jurisdiction: credential.jurisdiction,
-    jurisdictionPath: [], // populated by issuer when available
-    jurisdictionPathIndices: [],
-    credentialExpiry: credential.issued_at.toString(),
+    jurisdictionPath: context.jurisdictionPath,
+    jurisdictionPathIndices: context.jurisdictionPathIndices,
+    credentialExpiry: context.credentialExpiry,
   };
 
   return proveLowLevel(inputs, config);

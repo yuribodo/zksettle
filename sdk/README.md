@@ -100,6 +100,6 @@ Works in both Node.js (>=18) and modern browsers. The `circuitSource` config acc
 
 ## Program ID
 
-```
+```text
 AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo
 ```
