@@ -40,6 +40,7 @@ pub fn handler<'info>(
     output_state_tree_index: u8,
 ) -> Result<()> {
     require!(nullifier_hash != [0u8; 32], ZkSettleError::ZeroNullifier);
+    require!(amount > 0, ZkSettleError::InvalidTransferAmount);
     require_keys_eq!(
         ctx.accounts.leaf_owner.key(),
         recipient,
