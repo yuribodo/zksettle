@@ -151,16 +151,16 @@ function StepContent({
   }
 
   if (index === 4 && step.status === "success") {
-    if (state.mode === "demo") {
+    const d = step.data as { signature?: string; skipped?: boolean; reason?: string } | undefined;
+    if (state.mode === "demo" || d?.skipped) {
       return (
         <Badge variant="default">
           <Sparks className="size-3" strokeWidth={1.5} aria-hidden="true" />
-          Skipped in demo
+          {d?.reason ?? "Skipped in demo"}
         </Badge>
       );
     }
-    if (step.data) {
-      const d = step.data as { signature: string };
+    if (d?.signature) {
       return (
         <div className="flex items-center gap-2">
           <code className="font-mono text-[11px] text-stone">

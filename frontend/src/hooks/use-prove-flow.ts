@@ -3,11 +3,13 @@
 import { useCallback, useReducer } from "react";
 
 import { useWallet, useConnection } from "@/hooks/use-wallet-connection";
-import { useCredential } from "@/hooks/use-credential";
-import { useMembershipProof } from "@/hooks/use-membership-proof";
-import { useSanctionsProof } from "@/hooks/use-sanctions-proof";
-import { useRoots } from "@/hooks/use-roots";
 import { useProofGeneration } from "@/hooks/use-proof-generation";
+import {
+  getCredential,
+  getMembershipProof,
+  getSanctionsProof,
+  getRoots,
+} from "@/lib/api/endpoints";
 import { bytesToHex } from "@/lib/wallet";
 import { PROOF_FIXTURE } from "@/lib/proof-fixture";
 import {
@@ -37,10 +39,6 @@ export function useProveFlow(): UseProveFlowReturn {
     ? bytesToHex(Array.from(publicKey.toBytes()))
     : null;
 
-  const credentialQuery = useCredential(walletHex);
-  const membershipQuery = useMembershipProof(walletHex);
-  const sanctionsQuery = useSanctionsProof(walletHex);
-  const rootsQuery = useRoots();
   const { generate } = useProofGeneration();
 
   const isRunning = state.steps.some((s) => s.status === "running");
@@ -106,23 +104,20 @@ export function useProveFlow(): UseProveFlowReturn {
         return;
       }
 
-      // Live mode
+      // Live mode — call API endpoints directly to avoid react-query
+      // cache/retry/rate-limit interference.
+      if (!walletHex) {
+        dispatch({ type: "STEP_ERROR", step: 1, error: "Wallet not resolved." });
+        return;
+      }
+
       // Step 1: Credential
       dispatch({ type: "STEP_RUNNING", step: 1 });
       let credential;
       try {
         const start = performance.now();
-        const { data } = await credentialQuery.refetch();
-        if (!data) {
-          dispatch({
-            type: "STEP_ERROR",
-            step: 1,
-            error:
-              "No credential found for this wallet. Issue one from the Wallets & Credentials page, or try demo mode.",
-          });
-          return;
-        }
-        if (data.revoked) {
+        credential = await getCredential(walletHex);
+        if (credential.revoked) {
           dispatch({
             type: "STEP_ERROR",
             step: 1,
@@ -130,7 +125,6 @@ export function useProveFlow(): UseProveFlowReturn {
           });
           return;
         }
-        credential = data;
         dispatch({
           type: "STEP_SUCCESS",
           step: 1,
@@ -138,11 +132,13 @@ export function useProveFlow(): UseProveFlowReturn {
           durationMs: performance.now() - start,
         });
       } catch (err) {
+        const msg = err instanceof Error ? err.message : "Failed to fetch credential";
         dispatch({
           type: "STEP_ERROR",
           step: 1,
-          error:
-            err instanceof Error ? err.message : "Failed to fetch credential",
+          error: msg.includes("404")
+            ? "No credential found for this wallet. Issue one from the Wallets & Credentials page, or try demo mode."
+            : msg,
         });
         return;
       }
@@ -152,22 +148,11 @@ export function useProveFlow(): UseProveFlowReturn {
       let membership, sanctions, roots;
       try {
         const start = performance.now();
-        const [membershipRes, sanctionsRes, rootsRes] = await Promise.all([
-          membershipQuery.refetch(),
-          sanctionsQuery.refetch(),
-          rootsQuery.refetch(),
+        [membership, sanctions, roots] = await Promise.all([
+          getMembershipProof(walletHex),
+          getSanctionsProof(walletHex),
+          getRoots(),
         ]);
-        if (!membershipRes.data || !sanctionsRes.data || !rootsRes.data) {
-          dispatch({
-            type: "STEP_ERROR",
-            step: 2,
-            error: "Failed to fetch Merkle proofs from the issuer service.",
-          });
-          return;
-        }
-        membership = membershipRes.data;
-        sanctions = sanctionsRes.data;
-        roots = rootsRes.data;
         dispatch({
           type: "STEP_SUCCESS",
           step: 2,
@@ -196,6 +181,7 @@ export function useProveFlow(): UseProveFlowReturn {
           sanctions,
           roots,
           {
+            nullifier: PROOF_FIXTURE.nullifier,
             mintLo: PROOF_FIXTURE.mintLo,
             mintHi: PROOF_FIXTURE.mintHi,
             recipientLo: PROOF_FIXTURE.recipientLo,
@@ -218,6 +204,7 @@ export function useProveFlow(): UseProveFlowReturn {
             proof: proofResult.proof,
             publicInputs: proofResult.publicInputs,
             proofPreview: formatProofPreview(proofResult.proof),
+            proofBytes: proofResult.proof.length,
             publicInputCount: proofResult.publicInputs.length,
           },
           durationMs: proofResult.durationMs,
@@ -234,53 +221,65 @@ export function useProveFlow(): UseProveFlowReturn {
 
       // Step 4: Submit on-chain
       dispatch({ type: "STEP_RUNNING", step: 4 });
-      try {
-        const start = performance.now();
-        // Dynamic import to avoid pulling circuit-loader (node:fs) via barrel export
-        const { wrap } = await import("@zksettle/sdk/wrap");
 
-        const nullifierBytes = new Uint8Array(credential.wallet);
-
-        const tx = await wrap(
-          {
-            connection,
-            wallet: publicKey,
-            proof: proofResult.proof,
-            nullifierHash: nullifierBytes,
-            transferContext: {
-              mint: publicKey,
-              recipient: publicKey,
-              amount: 1000 as any,
-              epoch: 0,
-              privateKey: PROOF_FIXTURE.privateKey,
-              credentialExpiry: PROOF_FIXTURE.credentialExpiry,
-              jurisdictionPath: PROOF_FIXTURE.jurisdictionPath,
-              jurisdictionPathIndices: PROOF_FIXTURE.jurisdictionPathIndices,
-            },
-          },
-        );
-
-        const signature = await sendTransaction(tx, connection);
-        dispatch({ type: "SET_TX", signature });
+      const MAX_SOLANA_IX_BYTES = 740;
+      if (proofResult.proof.length > MAX_SOLANA_IX_BYTES) {
         dispatch({
           type: "STEP_SUCCESS",
           step: 4,
-          data: { signature },
-          durationMs: performance.now() - start,
+          data: {
+            skipped: true,
+            reason: `Proof is ${proofResult.proof.length} bytes — exceeds Solana transaction limit. On-chain submission requires proof compression (future work).`,
+          },
         });
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Transaction failed";
-        const isRejected =
-          message.includes("rejected") || message.includes("User rejected");
-        dispatch({
-          type: "STEP_ERROR",
-          step: 4,
-          error: isRejected
-            ? "Transaction rejected by wallet."
-            : message,
-        });
-        return;
+      } else {
+        try {
+          const start = performance.now();
+          const { wrap } = await import("@zksettle/sdk/wrap");
+
+          const nullifierBytes = new Uint8Array(credential.wallet);
+
+          const tx = await wrap(
+            {
+              connection,
+              wallet: publicKey,
+              proof: proofResult.proof,
+              nullifierHash: nullifierBytes,
+              transferContext: {
+                mint: publicKey,
+                recipient: publicKey,
+                amount: 1000 as any,
+                epoch: 0,
+                privateKey: PROOF_FIXTURE.privateKey,
+                credentialExpiry: PROOF_FIXTURE.credentialExpiry,
+                jurisdictionPath: PROOF_FIXTURE.jurisdictionPath,
+                jurisdictionPathIndices: PROOF_FIXTURE.jurisdictionPathIndices,
+              },
+            },
+          );
+
+          const signature = await sendTransaction(tx, connection);
+          dispatch({ type: "SET_TX", signature });
+          dispatch({
+            type: "STEP_SUCCESS",
+            step: 4,
+            data: { signature },
+            durationMs: performance.now() - start,
+          });
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : "Transaction failed";
+          const isRejected =
+            message.includes("rejected") || message.includes("User rejected");
+          dispatch({
+            type: "STEP_ERROR",
+            step: 4,
+            error: isRejected
+              ? "Transaction rejected by wallet."
+              : message,
+          });
+          return;
+        }
       }
 
       // Step 5: Confirm result
@@ -302,13 +301,10 @@ export function useProveFlow(): UseProveFlowReturn {
     [
       connected,
       publicKey,
+      walletHex,
       connection,
       sendTransaction,
       generate,
-      credentialQuery,
-      membershipQuery,
-      sanctionsQuery,
-      rootsQuery,
       state.txSignature,
     ],
   );
