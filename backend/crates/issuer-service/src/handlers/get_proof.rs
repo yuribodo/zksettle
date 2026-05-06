@@ -57,13 +57,13 @@ mod tests {
 
     use super::*;
     use crate::auth::WalletAuth;
-    use crate::convert::{bytes_be_to_fr, wallet_to_fr};
+    use crate::convert::{bytes_be_to_fr, wallet_leaf, wallet_to_fr};
     use crate::state::{CredentialRecord, IssuerState};
 
     fn state_with_wallet(wallet: [u8; 32], revoked: bool) -> SharedState {
         let mut st = IssuerState::new();
         let hex = format!("0x{}", hex::encode(wallet));
-        st.membership_tree.insert(wallet_to_fr(&hex).unwrap());
+        st.membership_tree.insert(wallet_leaf(wallet_to_fr(&hex).unwrap()));
         st.credentials.insert(
             wallet,
             CredentialRecord {
@@ -103,7 +103,7 @@ mod tests {
 
         let resp = handler(State(state), auth(wallet)).await.unwrap().0;
 
-        let leaf = wallet_to_fr(&hex).unwrap();
+        let leaf = wallet_leaf(wallet_to_fr(&hex).unwrap());
         let path: [Fr; MERKLE_DEPTH] = parse_path(&resp.path);
         let mut path_indices = [0u8; MERKLE_DEPTH];
         for (i, &b) in resp.path_indices.iter().enumerate() {
