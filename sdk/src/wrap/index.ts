@@ -65,7 +65,11 @@ export async function wrap(
   return new Transaction().add(instruction);
 }
 
-export const CHUNK_SIZE = 900;
+// Solana txn limit ~1232 bytes. Per writeHookProof IX: 8 (discriminator) +
+// 4 (offset) + 4 (vec prefix) + CHUNK_SIZE + ~228 (accounts/header). Two
+// batched IXs at 450 bytes ≈ 1172 bytes, fitting within the limit.
+export const CHUNK_SIZE = 450;
+export const WRITES_PER_TX = 2;
 
 function makeProgram(connection: Connection): Program {
   const dummyWallet = new Wallet(Keypair.generate());
@@ -159,7 +163,8 @@ export async function uploadProofChunked(
   signAndSend: (tx: Transaction) => Promise<string>,
 ): Promise<ChunkedUploadResult> {
   const programId = ZKSETTLE_PROGRAM_ID;
-  const chunkSize = opts.chunkSize ?? CHUNK_SIZE;
+  const raw = opts.chunkSize ?? CHUNK_SIZE;
+  const chunkSize = Math.max(1, Math.floor(raw));
   const proofBytes = opts.proof;
   const program = makeProgram(opts.connection);
 
@@ -188,7 +193,6 @@ export async function uploadProofChunked(
     );
   }
 
-  const WRITES_PER_TX = 2;
   const chunkSignatures: string[] = [];
   for (let i = 0; i < writeIxs.length; i += WRITES_PER_TX) {
     const tx = new Transaction();
