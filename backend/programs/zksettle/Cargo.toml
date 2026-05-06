@@ -54,6 +54,7 @@ solana-keypair = "2.2"
 spl-token-2022 = "6.0"
 solana-instruction = "2.3"
 spl-discriminator = "0.5"
+hex-literal = "0.4"
 
 [target.'cfg(unix)'.dev-dependencies]
 light-program-test = "=0.23.0"
