@@ -88,6 +88,22 @@ export interface IssuerRoots {
   jurisdictionRoot: Uint8Array;
 }
 
+export interface ChunkedUploadResult {
+  initSignature: string;
+  chunkSignatures: string[];
+  finalizeSignature: string;
+}
+
+export interface ChunkedUploadOptions {
+  connection: import("@solana/web3.js").Connection;
+  wallet: import("@solana/web3.js").PublicKey;
+  proof: Uint8Array;
+  nullifierHash: Uint8Array;
+  transferContext: TransferContext;
+  lightArgs?: StagedLightArgs;
+  chunkSize?: number;
+}
+
 export interface ZkSettleConfig {
   programId?: PublicKey;
   issuerServiceUrl?: string;

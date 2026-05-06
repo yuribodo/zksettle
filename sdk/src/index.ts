@@ -1,5 +1,12 @@
 export { prove, loadCircuit, Prover, computeNullifier, type NullifierInputs } from "./prove/index.js";
-export { wrap } from "./wrap/index.js";
+export {
+  wrap,
+  buildInitHookPayloadIx,
+  buildWriteChunkIx,
+  buildFinalizeHookPayloadIx,
+  uploadProofChunked,
+  CHUNK_SIZE,
+} from "./wrap/index.js";
 export { findIssuerPda, findHookPayloadPda, findRegistryPda, findTreeCreatorPda, findTreeConfigPda } from "./wrap/pda.js";
 export { audit } from "./audit/index.js";
 export { registerIssuer, updateIssuerRoot } from "./issuer/index.js";
@@ -22,6 +29,8 @@ export type {
   IssuerRoots,
   ZkSettleConfig,
   StagedLightArgs,
+  ChunkedUploadResult,
+  ChunkedUploadOptions,
 } from "./types.js";
 export type { Roots, MembershipProof, SanctionsProof, Credential } from "./issuer/types.js";
 
