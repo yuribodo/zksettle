@@ -7,7 +7,7 @@ use crate::constants::MAX_ROOT_AGE_SLOTS;
 use crate::error::ZkSettleError;
 use crate::instructions::verify_proof::{EPOCH_LEN_SECS, MAX_EPOCH_LAG};
 
-use super::handlers::validate_set_hook_inputs;
+use super::handlers::{validate_finalize_inputs, validate_set_hook_inputs};
 use super::settlement::validate_settlement_guards;
 use super::types::{ExtraAccountMetaInput, HookPayload, StagedLightArgs, MAX_HOOK_PROOF_BYTES};
 
@@ -152,6 +152,106 @@ fn hook_payload_init_space_fits_max_proof() {
         + 4 /* expected_proof_len */ + 4 /* high_water_mark */ + 1 /* finalized */
         + 4 /* Vec prefix */ + MAX_HOOK_PROOF_BYTES + 1;
     assert_eq!(HookPayload::INIT_SPACE, fixed);
+}
+
+#[test]
+fn finalize_rejects_zero_nullifier() {
+    assert_eq!(
+        err_code(validate_finalize_inputs(&[0u8; 32], 10)),
+        ERROR_CODE_OFFSET + ZkSettleError::ZeroNullifier as u32,
+    );
+}
+
+#[test]
+fn finalize_rejects_zero_amount() {
+    assert_eq!(
+        err_code(validate_finalize_inputs(&nonzero_nullifier(), 0)),
+        ERROR_CODE_OFFSET + ZkSettleError::InvalidTransferAmount as u32,
+    );
+}
+
+#[test]
+fn finalize_accepts_valid_inputs() {
+    assert!(validate_finalize_inputs(&nonzero_nullifier(), 100).is_ok());
+}
+
+mod high_water_mark {
+    use super::*;
+
+    fn make_payload(expected_len: u32) -> HookPayload {
+        HookPayload {
+            issuer: Pubkey::default(),
+            nullifier_hash: [0u8; 32],
+            mint: Pubkey::default(),
+            recipient: Pubkey::default(),
+            amount: 0,
+            epoch: 0,
+            light_args: StagedLightArgs {
+                bubblegum_tail: 0,
+                proof_present: false,
+                proof_bytes: [0u8; 128],
+                address_mt_index: 0,
+                address_queue_index: 0,
+                address_root_index: 0,
+                output_state_tree_index: 0,
+            },
+            expected_proof_len: expected_len,
+            high_water_mark: 0,
+            finalized: false,
+            proof_and_witness: vec![0u8; expected_len as usize],
+            bump: 0,
+        }
+    }
+
+    fn simulate_write(payload: &mut HookPayload, offset: u32, len: u32) {
+        let end = offset + len;
+        assert!(end as usize <= payload.expected_proof_len as usize);
+        if end > payload.high_water_mark {
+            payload.high_water_mark = end;
+        }
+    }
+
+    #[test]
+    fn sequential_writes_reach_expected() {
+        let mut p = make_payload(1800);
+        simulate_write(&mut p, 0, 900);
+        assert_eq!(p.high_water_mark, 900);
+        simulate_write(&mut p, 900, 900);
+        assert_eq!(p.high_water_mark, 1800);
+        assert_eq!(p.high_water_mark, p.expected_proof_len);
+    }
+
+    #[test]
+    fn overwrite_does_not_inflate() {
+        let mut p = make_payload(900);
+        simulate_write(&mut p, 0, 900);
+        assert_eq!(p.high_water_mark, 900);
+        simulate_write(&mut p, 0, 900);
+        assert_eq!(p.high_water_mark, 900);
+    }
+
+    #[test]
+    fn gap_write_inflates_water_mark() {
+        let mut p = make_payload(1800);
+        simulate_write(&mut p, 900, 900);
+        assert_eq!(p.high_water_mark, 1800);
+        assert_eq!(p.high_water_mark, p.expected_proof_len);
+    }
+
+    #[test]
+    fn partial_write_blocks_finalize() {
+        let mut p = make_payload(1800);
+        simulate_write(&mut p, 0, 900);
+        assert_ne!(p.high_water_mark, p.expected_proof_len);
+    }
+
+    #[test]
+    fn zero_len_proof_not_allowed() {
+        assert_eq!(
+            err_code(validate_set_hook_inputs(0, &nonzero_nullifier(), 10)),
+            ERROR_CODE_OFFSET + ZkSettleError::HookPayloadInvalid as u32,
+        );
+    }
 }
 
 mod settlement_guards {
