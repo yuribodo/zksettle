@@ -67,7 +67,8 @@ export function isWalletScopedPath(path: string): boolean {
   return (
     path.includes("/credentials/") ||
     path.includes("/proofs/membership/") ||
-    path.includes("/proofs/sanctions/")
+    path.includes("/proofs/sanctions/") ||
+    path.includes("/proofs/jurisdiction/")
   );
 }
 

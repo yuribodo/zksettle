@@ -92,7 +92,7 @@ impl Config {
             upstream_url: read_var("GATEWAY_UPSTREAM_URL")?,
             indexer_url: read_var("GATEWAY_INDEXER_URL").ok(),
             log_level: read_var("GATEWAY_LOG_LEVEL").unwrap_or_else(|_| "info".into()),
-            admin_key: read_var("GATEWAY_ADMIN_KEY").ok(),
+            admin_key: read_var("GATEWAY_ADMIN_KEY").ok().filter(|s| !s.is_empty()),
             allow_open_keys: read_var("GATEWAY_ALLOW_OPEN_KEYS")
                 .map(|v| v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false),

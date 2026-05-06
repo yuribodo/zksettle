@@ -4,8 +4,6 @@ import { clusterApiUrl } from "@solana/web3.js";
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 
-export const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
-
 function resolveSolanaNetwork(value: string | undefined): WalletAdapterNetwork {
   switch (value) {
     case WalletAdapterNetwork.Mainnet:

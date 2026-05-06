@@ -4,13 +4,16 @@ import { useCallback, useReducer } from "react";
 
 import { useWallet, useConnection } from "@/hooks/use-wallet-connection";
 import { useProofGeneration } from "@/hooks/use-proof-generation";
+import { useZkPrivateKey } from "@/hooks/use-zk-private-key";
 import {
   getCredential,
+  getJurisdictionProof,
   getMembershipProof,
   getSanctionsProof,
   getRoots,
 } from "@/lib/api/endpoints";
 import { bytesToHex } from "@/lib/wallet";
+import { computeNullifier } from "@/lib/nullifier";
 import { PROOF_FIXTURE } from "@/lib/proof-fixture";
 import {
   flowReducer,
@@ -30,6 +33,8 @@ export interface UseProveFlowReturn {
   txUrl: string | null;
 }
 
+const CREDENTIAL_VALIDITY_SECS = 365 * 24 * 3600;
+
 export function useProveFlow(): UseProveFlowReturn {
   const [state, dispatch] = useReducer(flowReducer, INITIAL_STATE);
   const { connected, publicKey, sendTransaction } = useWallet();
@@ -39,7 +44,8 @@ export function useProveFlow(): UseProveFlowReturn {
     ? bytesToHex(Array.from(publicKey.toBytes()))
     : null;
 
-  const { generate } = useProofGeneration();
+  const { generate, ensureApi } = useProofGeneration();
+  const { derivePrivateKey } = useZkPrivateKey();
 
   const isRunning = state.steps.some((s) => s.status === "running");
   const isDone =
@@ -143,16 +149,19 @@ export function useProveFlow(): UseProveFlowReturn {
         return;
       }
 
-      // Step 2: Merkle paths
+      // Step 2: Merkle paths + jurisdiction proof + ZK private key
       dispatch({ type: "STEP_RUNNING", step: 2 });
-      let membership, sanctions, roots;
+      let membership, sanctions, roots, jurisdictionProof, zkPrivateKey: string;
       try {
         const start = performance.now();
-        [membership, sanctions, roots] = await Promise.all([
-          getMembershipProof(walletHex),
-          getSanctionsProof(walletHex),
-          getRoots(),
-        ]);
+        [membership, sanctions, roots, jurisdictionProof, zkPrivateKey] =
+          await Promise.all([
+            getMembershipProof(walletHex),
+            getSanctionsProof(walletHex),
+            getRoots(),
+            getJurisdictionProof(walletHex),
+            derivePrivateKey(),
+          ]);
         dispatch({
           type: "STEP_SUCCESS",
           step: 2,
@@ -174,25 +183,54 @@ export function useProveFlow(): UseProveFlowReturn {
       // Step 3: Proof generation
       dispatch({ type: "STEP_RUNNING", step: 3 });
       let proofResult;
+      const toHex = (bytes: Uint8Array) =>
+        "0x" +
+        Array.from(bytes)
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("");
+      const mintBytes = publicKey.toBytes();
+      const recipientBytes = publicKey.toBytes();
+      const mintLo = toHex(mintBytes.slice(0, 16));
+      const mintHi = toHex(mintBytes.slice(16, 32));
+      const recipientLo = toHex(recipientBytes.slice(0, 16));
+      const recipientHi = toHex(recipientBytes.slice(16, 32));
+      const epoch = String(Math.floor(Date.now() / 1000 / 86400));
+      const amount = "1000";
+      const timestamp = String(Math.floor(Date.now() / 1000));
+      const credentialExpiry = String(
+        credential.issued_at + CREDENTIAL_VALIDITY_SECS,
+      );
       try {
+        const api = await ensureApi();
+        const nullifier = await computeNullifier(
+          api,
+          zkPrivateKey,
+          mintLo,
+          mintHi,
+          epoch,
+          recipientLo,
+          recipientHi,
+          amount,
+        );
+
         const inputs = assembleProofInputs(
           credential,
           membership,
           sanctions,
           roots,
           {
-            nullifier: PROOF_FIXTURE.nullifier,
-            mintLo: PROOF_FIXTURE.mintLo,
-            mintHi: PROOF_FIXTURE.mintHi,
-            recipientLo: PROOF_FIXTURE.recipientLo,
-            recipientHi: PROOF_FIXTURE.recipientHi,
-            amount: PROOF_FIXTURE.amount,
-            epoch: PROOF_FIXTURE.epoch,
-            privateKey: PROOF_FIXTURE.privateKey,
-            credentialExpiry: PROOF_FIXTURE.credentialExpiry,
-            jurisdictionPath: PROOF_FIXTURE.jurisdictionPath,
-            jurisdictionPathIndices: PROOF_FIXTURE.jurisdictionPathIndices,
-            timestamp: PROOF_FIXTURE.timestamp,
+            nullifier,
+            mintLo,
+            mintHi,
+            recipientLo,
+            recipientHi,
+            amount,
+            epoch,
+            privateKey: zkPrivateKey,
+            credentialExpiry,
+            jurisdictionPath: jurisdictionProof.path,
+            jurisdictionPathIndices: jurisdictionProof.path_indices,
+            timestamp,
           },
         );
 
@@ -237,26 +275,32 @@ export function useProveFlow(): UseProveFlowReturn {
           const start = performance.now();
           const { wrap } = await import("@zksettle/sdk/wrap");
 
-          const nullifierBytes = new Uint8Array(credential.wallet);
-
-          const tx = await wrap(
-            {
-              connection,
-              wallet: publicKey,
-              proof: proofResult.proof,
-              nullifierHash: nullifierBytes,
-              transferContext: {
-                mint: publicKey,
-                recipient: publicKey,
-                amount: 1000 as any,
-                epoch: 0,
-                privateKey: PROOF_FIXTURE.privateKey,
-                credentialExpiry: PROOF_FIXTURE.credentialExpiry,
-                jurisdictionPath: PROOF_FIXTURE.jurisdictionPath,
-                jurisdictionPathIndices: PROOF_FIXTURE.jurisdictionPathIndices,
-              },
-            },
+          const nullifierHex = proofResult.publicInputs[1] ?? "";
+          const cleanHex = nullifierHex.startsWith("0x")
+            ? nullifierHex.slice(2)
+            : nullifierHex;
+          const nullifierBytes = new Uint8Array(
+            cleanHex.match(/.{1,2}/g)?.map((b) => parseInt(b, 16)) ?? [],
           );
+
+          const tx = await wrap({
+            connection,
+            wallet: publicKey,
+            proof: proofResult.proof,
+            nullifierHash: nullifierBytes,
+            transferContext: {
+              mint: publicKey,
+              recipient: publicKey,
+              amount: 1000 as any,
+              epoch: Math.floor(Date.now() / 1000 / 86400),
+              privateKey: zkPrivateKey,
+              credentialExpiry,
+              jurisdictionPath: jurisdictionProof.path.map((h) =>
+                h.startsWith("0x") ? h : `0x${h}`,
+              ),
+              jurisdictionPathIndices: jurisdictionProof.path_indices,
+            },
+          });
 
           const signature = await sendTransaction(tx, connection);
           dispatch({ type: "SET_TX", signature });
@@ -305,6 +349,8 @@ export function useProveFlow(): UseProveFlowReturn {
       connection,
       sendTransaction,
       generate,
+      ensureApi,
+      derivePrivateKey,
       state.txSignature,
     ],
   );

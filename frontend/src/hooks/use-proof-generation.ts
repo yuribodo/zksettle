@@ -53,6 +53,8 @@ interface ProverHandles {
 
 interface UseProofGenerationResult {
   generate: (inputs: ProofInputs) => Promise<ProofResult>;
+  /** Get the Barretenberg API instance (initializes prover if needed). */
+  ensureApi: () => Promise<Barretenberg>;
   proof: ProofResult | null;
   isGenerating: boolean;
   error: Error | null;
@@ -124,6 +126,11 @@ export function useProofGeneration(): UseProofGenerationResult {
     return proverInitRef.current;
   }, []);
 
+  const ensureApi = useCallback(async (): Promise<Barretenberg> => {
+    const { api } = await ensureProver();
+    return api;
+  }, [ensureProver]);
+
   const generate = useCallback(
     async (inputs: ProofInputs): Promise<ProofResult> => {
       if (typeof window === "undefined") {
@@ -157,6 +164,7 @@ export function useProofGeneration(): UseProofGenerationResult {
 
   return {
     generate,
+    ensureApi,
     proof,
     isGenerating,
     error,
