@@ -69,6 +69,9 @@ pub struct HookPayload {
     pub amount: u64,
     pub epoch: u64,
     pub light_args: StagedLightArgs,
+    pub expected_proof_len: u32,
+    pub high_water_mark: u32,
+    pub finalized: bool,
     #[max_len(MAX_HOOK_PROOF_BYTES)]
     pub proof_and_witness: Vec<u8>,
     pub bump: u8,

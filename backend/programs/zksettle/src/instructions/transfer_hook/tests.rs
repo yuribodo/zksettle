@@ -149,6 +149,7 @@ fn hook_payload_init_space_fits_max_proof() {
     // runtime with AccountDidNotSerialize.
     let fixed = 32 + 32 + 32 + 32 + 8 + 8
         + StagedLightArgs::INIT_SPACE
+        + 4 /* expected_proof_len */ + 4 /* high_water_mark */ + 1 /* finalized */
         + 4 /* Vec prefix */ + MAX_HOOK_PROOF_BYTES + 1;
     assert_eq!(HookPayload::INIT_SPACE, fixed);
 }
