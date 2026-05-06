@@ -29,6 +29,7 @@ impl ApiToken {
     }
 }
 
+#[mutants::skip]
 impl std::fmt::Debug for ApiToken {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("ApiToken(***)")
@@ -373,6 +374,48 @@ mod wallet_auth_tests {
                     .uri(&format!("/credentials/{wallet_hex}"))
                     .header("x-wallet-signature", "not-a-sig")
                     .header("x-wallet-timestamp", ts.to_string())
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 401);
+    }
+
+    #[tokio::test]
+    async fn timestamp_at_exact_boundary_passes() {
+        let kp = Keypair::new();
+        let wallet_hex = format!("0x{}", hex::encode(kp.pubkey().to_bytes()));
+        let ts = now_secs() - REPLAY_WINDOW_SECS;
+        let (sig, ts_str) = sign_request(&kp, &wallet_hex, ts);
+
+        let resp = wallet_app()
+            .oneshot(
+                Request::builder()
+                    .uri(&format!("/credentials/{wallet_hex}"))
+                    .header("x-wallet-signature", &sig)
+                    .header("x-wallet-timestamp", &ts_str)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), 200);
+    }
+
+    #[tokio::test]
+    async fn timestamp_one_past_boundary_fails() {
+        let kp = Keypair::new();
+        let wallet_hex = format!("0x{}", hex::encode(kp.pubkey().to_bytes()));
+        let ts = now_secs() - REPLAY_WINDOW_SECS - 1;
+        let (sig, ts_str) = sign_request(&kp, &wallet_hex, ts);
+
+        let resp = wallet_app()
+            .oneshot(
+                Request::builder()
+                    .uri(&format!("/credentials/{wallet_hex}"))
+                    .header("x-wallet-signature", &sig)
+                    .header("x-wallet-timestamp", &ts_str)
                     .body(Body::empty())
                     .unwrap(),
             )

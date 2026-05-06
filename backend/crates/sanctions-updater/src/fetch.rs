@@ -17,8 +17,29 @@ impl HttpOfacFetcher {
     }
 }
 
+fn parse_wallets_from_csv(body: &str) -> Result<Vec<String>, UpdaterError> {
+    let mut wallets = Vec::new();
+    let mut rdr = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .flexible(true)
+        .from_reader(body.as_bytes());
+
+    for result in rdr.records() {
+        let record = result.map_err(|e| UpdaterError::Parse(e.to_string()))?;
+        for field in record.iter() {
+            let trimmed = field.trim();
+            if trimmed.starts_with("0x") && trimmed.len() == 66 {
+                wallets.push(trimmed.to_string());
+            }
+        }
+    }
+
+    Ok(wallets)
+}
+
 #[async_trait]
 impl OfacFetcher for HttpOfacFetcher {
+    #[mutants::skip]
     async fn fetch_wallets(&self) -> Result<Vec<String>, UpdaterError> {
         let body = reqwest::get(&self.url)
             .await
@@ -27,22 +48,7 @@ impl OfacFetcher for HttpOfacFetcher {
             .await
             .map_err(|e| UpdaterError::Fetch(e.to_string()))?;
 
-        let mut wallets = Vec::new();
-        let mut rdr = csv::ReaderBuilder::new()
-            .has_headers(false)
-            .flexible(true)
-            .from_reader(body.as_bytes());
-
-        for result in rdr.records() {
-            let record = result.map_err(|e| UpdaterError::Parse(e.to_string()))?;
-            for field in record.iter() {
-                let trimmed = field.trim();
-                if trimmed.starts_with("0x") && trimmed.len() == 66 {
-                    wallets.push(trimmed.to_string());
-                }
-            }
-        }
-
+        let wallets = parse_wallets_from_csv(&body)?;
         tracing::info!(count = wallets.len(), "fetched OFAC wallet addresses");
         Ok(wallets)
     }
@@ -95,5 +101,43 @@ mod tests {
     async fn mock_returns_provided_list() {
         let fetcher = MockOfacFetcher::new(vec!["0xabc".into(), "0xdef".into()]);
         assert_eq!(fetcher.fetch_wallets().await.unwrap(), vec!["0xabc", "0xdef"]);
+    }
+
+    #[test]
+    fn parse_extracts_valid_wallets() {
+        let csv = "id,name,address\n1,Alice,0x000000000000000000000000000000000000000000000000000000000000dead\n2,Bob,not-a-wallet\n";
+        let wallets = parse_wallets_from_csv(csv).unwrap();
+        assert_eq!(wallets, vec!["0x000000000000000000000000000000000000000000000000000000000000dead"]);
+    }
+
+    #[test]
+    fn parse_empty_csv_returns_empty() {
+        let wallets = parse_wallets_from_csv("").unwrap();
+        assert!(wallets.is_empty());
+    }
+
+    #[test]
+    fn parse_rejects_short_hex() {
+        let csv = "0xdead\n";
+        let wallets = parse_wallets_from_csv(csv).unwrap();
+        assert!(wallets.is_empty());
+    }
+
+    #[test]
+    fn parse_rejects_non_0x_prefix() {
+        let addr = "1x000000000000000000000000000000000000000000000000000000000000dead";
+        assert_eq!(addr.len(), 66);
+        let csv = format!("{addr}\n");
+        let wallets = parse_wallets_from_csv(&csv).unwrap();
+        assert!(wallets.is_empty());
+    }
+
+    #[test]
+    fn parse_multiple_fields_per_row() {
+        let a = "0x000000000000000000000000000000000000000000000000000000000000aaaa";
+        let b = "0x000000000000000000000000000000000000000000000000000000000000bbbb";
+        let csv = format!("{a},{b}\n");
+        let wallets = parse_wallets_from_csv(&csv).unwrap();
+        assert_eq!(wallets.len(), 2);
     }
 }
