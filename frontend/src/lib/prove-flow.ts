@@ -154,6 +154,7 @@ export function assembleProofInputs(
   sanctions: SanctionsProof,
   roots: Roots,
   transferContext: {
+    nullifier: string;
     mintLo: string;
     mintHi: string;
     recipientLo: string;
@@ -162,6 +163,7 @@ export function assembleProofInputs(
     epoch: string;
     privateKey: string;
     credentialExpiry: string;
+    jurisdiction?: string;
     jurisdictionPath: string[];
     jurisdictionPathIndices: number[];
     timestamp: string;
@@ -171,26 +173,40 @@ export function assembleProofInputs(
     .map((b) => (b & 0xff).toString(16).padStart(2, "0"))
     .join("");
 
+  const hex = (v: string) => (v.startsWith("0x") ? v : `0x${v}`);
+
+  // The issuer reduces wallet bytes mod the BN254 scalar field order
+  // (Fr::from_le_bytes_mod_order). Replicate that here so the wallet
+  // value matches the leaf in the membership tree.
+  const BN254_MODULUS = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+  const walletBeBytes = credential.wallet.map((b) => b & 0xff);
+  const walletLeBytes = [...walletBeBytes].reverse();
+  const walletBigInt = walletLeBytes.reduce(
+    (acc, b, i) => acc + (BigInt(b) << BigInt(i * 8)),
+    0n,
+  );
+  const walletField = (walletBigInt % BN254_MODULUS).toString();
+
   return {
-    merkleRoot: roots.membership_root,
-    nullifier: `0x${walletHex}`,
+    merkleRoot: hex(roots.membership_root),
+    nullifier: transferContext.nullifier,
     mintLo: transferContext.mintLo,
     mintHi: transferContext.mintHi,
     epoch: transferContext.epoch,
     recipientLo: transferContext.recipientLo,
     recipientHi: transferContext.recipientHi,
     amount: transferContext.amount,
-    sanctionsRoot: roots.sanctions_root,
-    jurisdictionRoot: roots.jurisdiction_root,
+    sanctionsRoot: hex(roots.sanctions_root),
+    jurisdictionRoot: hex(roots.jurisdiction_root),
     timestamp: transferContext.timestamp,
-    wallet: walletHex,
-    path: membership.path,
+    wallet: walletField,
+    path: membership.path.map(hex),
     pathIndices: membership.path_indices,
     privateKey: transferContext.privateKey,
-    sanctionsPath: sanctions.path,
+    sanctionsPath: sanctions.path.map(hex),
     sanctionsPathIndices: sanctions.path_indices,
-    sanctionsLeafValue: sanctions.leaf_value,
-    jurisdiction: credential.jurisdiction,
+    sanctionsLeafValue: hex(sanctions.leaf_value),
+    jurisdiction: transferContext.jurisdiction ?? "1",
     jurisdictionPath: transferContext.jurisdictionPath,
     jurisdictionPathIndices: transferContext.jurisdictionPathIndices,
     credentialExpiry: transferContext.credentialExpiry,
