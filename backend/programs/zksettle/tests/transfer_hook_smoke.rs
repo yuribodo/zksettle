@@ -420,11 +420,9 @@ async fn transfer_hook_full_e2e_with_gnark_proof() {
 
     let mut rpc = boot_harness().await;
 
-    // Roots must match the circuit's Prover.toml values.
-    // TODO: parse from circuits/Prover.toml when fixture generation is automated.
-    let merkle_root = [1u8; 32];
-    let sanctions_root = [10u8; 32];
-    let jurisdiction_root = [11u8; 32];
+    let merkle_root = hex_literal::hex!("0408f1aa9155d9f7405d652b9c5dd4cd69602fff5fba80e1d6bd0a36c3add6d1");
+    let sanctions_root = hex_literal::hex!("03f5d399d3a5403fafb12fdab7483b3170812ee4e66e812bc8587e6921da2b4a");
+    let jurisdiction_root = hex_literal::hex!("0408f1aa9155d9f7405d652b9c5dd4cd69602fff5fba80e1d6bd0a36c3add6d1");
 
     let authority = helpers::funded_authority(&mut rpc, 10_000_000_000).await;
 
@@ -458,12 +456,10 @@ async fn transfer_hook_full_e2e_with_gnark_proof() {
 
     let mint_kp = mint_with_extra_meta(&mut rpc, &authority).await;
 
-    // Fixture inputs — must match circuits/Prover.toml
-    let nullifier = nonzero_nullifier();
+    let nullifier = hex_literal::hex!("1d6ac8cee9f7b2d8f092a9169a9f49d81bb1ef665e21732414dcbe559ea0d560");
     let recipient = Pubkey::new_unique();
-    let amount: u64 = 500;
-    // TODO: derive from fixture's Prover.toml once automated
-    let epoch: u64 = 10;
+    let amount: u64 = 1000;
+    let epoch: u64 = 0;
 
     // set_hook_payload with real proof
     rpc.create_and_send_transaction(

@@ -8,9 +8,11 @@ import type {
 import { IssuerClient } from "../issuer/client.js";
 import { loadCircuit } from "./circuit-loader.js";
 import { Prover } from "./prover.js";
+import { computeNullifier } from "./nullifier.js";
 
 export { loadCircuit } from "./circuit-loader.js";
 export { Prover } from "./prover.js";
+export { computeNullifier, type NullifierInputs } from "./nullifier.js";
 
 /**
  * Translate camelCase TypeScript `ProofInputs` to the snake_case parameter
@@ -155,9 +157,15 @@ async function proveHighLevel(
   const epoch = (context.epoch ?? 0).toString();
   const timestamp = Math.floor(Date.now() / 1000).toString();
 
-  const nullifier = "0x" + Array.from(crypto.getRandomValues(new Uint8Array(32)))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  const nullifier = await computeNullifier({
+    privateKey: context.privateKey,
+    mintLo,
+    mintHi,
+    epoch,
+    recipientLo,
+    recipientHi,
+    amount: context.amount.toString(),
+  });
 
   const inputs: ProofInputs = {
     merkleRoot: roots.membership_root,

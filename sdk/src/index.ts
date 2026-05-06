@@ -1,4 +1,4 @@
-export { prove, loadCircuit, Prover } from "./prove/index.js";
+export { prove, loadCircuit, Prover, computeNullifier, type NullifierInputs } from "./prove/index.js";
 export { wrap } from "./wrap/index.js";
 export { findIssuerPda, findHookPayloadPda, findRegistryPda, findTreeCreatorPda, findTreeConfigPda } from "./wrap/pda.js";
 export { audit } from "./audit/index.js";
