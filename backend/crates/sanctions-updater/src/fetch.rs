@@ -102,4 +102,42 @@ mod tests {
         let fetcher = MockOfacFetcher::new(vec!["0xabc".into(), "0xdef".into()]);
         assert_eq!(fetcher.fetch_wallets().await.unwrap(), vec!["0xabc", "0xdef"]);
     }
+
+    #[test]
+    fn parse_extracts_valid_wallets() {
+        let csv = "id,name,address\n1,Alice,0x000000000000000000000000000000000000000000000000000000000000dead\n2,Bob,not-a-wallet\n";
+        let wallets = parse_wallets_from_csv(csv).unwrap();
+        assert_eq!(wallets, vec!["0x000000000000000000000000000000000000000000000000000000000000dead"]);
+    }
+
+    #[test]
+    fn parse_empty_csv_returns_empty() {
+        let wallets = parse_wallets_from_csv("").unwrap();
+        assert!(wallets.is_empty());
+    }
+
+    #[test]
+    fn parse_rejects_short_hex() {
+        let csv = "0xdead\n";
+        let wallets = parse_wallets_from_csv(csv).unwrap();
+        assert!(wallets.is_empty());
+    }
+
+    #[test]
+    fn parse_rejects_non_0x_prefix() {
+        let addr = "1x000000000000000000000000000000000000000000000000000000000000dead";
+        assert_eq!(addr.len(), 66);
+        let csv = format!("{addr}\n");
+        let wallets = parse_wallets_from_csv(&csv).unwrap();
+        assert!(wallets.is_empty());
+    }
+
+    #[test]
+    fn parse_multiple_fields_per_row() {
+        let a = "0x000000000000000000000000000000000000000000000000000000000000aaaa";
+        let b = "0x000000000000000000000000000000000000000000000000000000000000bbbb";
+        let csv = format!("{a},{b}\n");
+        let wallets = parse_wallets_from_csv(&csv).unwrap();
+        assert_eq!(wallets.len(), 2);
+    }
 }
