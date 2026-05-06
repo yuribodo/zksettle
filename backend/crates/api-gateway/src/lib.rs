@@ -85,6 +85,8 @@ fn build_cors_layer(allowed_origins: &[String]) -> CorsLayer {
             axum::http::header::AUTHORIZATION,
             axum::http::header::CONTENT_TYPE,
             axum::http::header::COOKIE,
+            axum::http::HeaderName::from_static("x-wallet-signature"),
+            axum::http::HeaderName::from_static("x-wallet-timestamp"),
         ])
         .allow_credentials(true)
         .max_age(Duration::from_secs(600));
