@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 
 import { useWallet } from "@/hooks/use-wallet-connection";
+import { clearActiveApiKey } from "@/lib/api/active-key";
 import { getMe, signIn as authSignIn, signOut as authSignOut } from "@/lib/auth";
 
 export const authMeQueryKey = ["auth", "me"] as const;
@@ -42,6 +43,7 @@ export function useSignOut() {
   return useMutation({
     mutationFn: authSignOut,
     onSuccess: () => {
+      clearActiveApiKey();
       queryClient.removeQueries();
       disconnect();
       router.replace("/login");

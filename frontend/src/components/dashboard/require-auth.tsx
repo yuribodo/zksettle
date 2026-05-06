@@ -4,10 +4,12 @@ import { useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 import { useAuth } from "@/contexts/auth-context";
+import { useWalletAuthSync } from "@/hooks/use-wallet-auth-sync";
 
 export function RequireAuth({ children }: Readonly<{ children: ReactNode }>) {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
+  useWalletAuthSync();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {

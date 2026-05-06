@@ -35,6 +35,10 @@ pub fn wallet_to_fr(hex_str: &str) -> Result<Fr, ServiceError> {
     Ok(bytes_be_to_fr(&arr))
 }
 
+pub fn wallet_leaf(wallet_fr: Fr) -> Fr {
+    zksettle_crypto::poseidon2_hash(&[wallet_fr])
+}
+
 pub fn wallet_hex_to_bytes(hex_str: &str) -> Result<[u8; 32], ServiceError> {
     let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
     let bytes = hex::decode(hex_str).map_err(|e| ServiceError::InvalidHex(e.to_string()))?;

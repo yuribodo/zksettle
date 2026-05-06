@@ -1,9 +1,23 @@
 import { Keypair, SystemProgram, Transaction } from "@solana/web3.js";
-import { AnchorProvider, BN, Program, Wallet } from "@coral-xyz/anchor";
+import type { PublicKey as PublicKeyType } from "@solana/web3.js";
+import { AnchorProvider, BN, Program } from "@coral-xyz/anchor";
 import type { WrapOptions, ZkSettleConfig, StagedLightArgs } from "../types.js";
 import { ZKSETTLE_PROGRAM_ID } from "../constants.js";
 import { findIssuerPda, findHookPayloadPda } from "./pda.js";
 import idl from "../idl/zksettle.json" with { type: "json" };
+
+// Minimal wallet shim that satisfies AnchorProvider without importing
+// the Node-only `nodewallet.js` from @coral-xyz/anchor.
+class DummyWallet {
+  readonly payer: Keypair;
+  readonly publicKey: PublicKeyType;
+  constructor() {
+    this.payer = Keypair.generate();
+    this.publicKey = this.payer.publicKey;
+  }
+  async signTransaction<T extends Transaction>(tx: T): Promise<T> { return tx; }
+  async signAllTransactions<T extends Transaction>(txs: T[]): Promise<T[]> { return txs; }
+}
 
 const DEFAULT_LIGHT_ARGS: StagedLightArgs = {
   bubblegumTail: 0,
@@ -24,8 +38,8 @@ export async function wrap(
   const [issuerPda] = findIssuerPda(options.wallet, programId);
   const [hookPayloadPda] = findHookPayloadPda(options.wallet, programId);
 
-  const dummyWallet = new Wallet(Keypair.generate());
-  const provider = new AnchorProvider(options.connection, dummyWallet, {});
+  const dummyWallet = new DummyWallet();
+  const provider = new AnchorProvider(options.connection, dummyWallet as any, {});
   const program = new Program(idl as any, provider);
 
   const lightArgs = options.lightArgs ?? DEFAULT_LIGHT_ARGS;

@@ -8,9 +8,9 @@ use crate::error::ServiceError;
 use crate::state::SharedState;
 
 #[derive(Debug, Serialize)]
-pub struct MembershipProofResponse {
+pub struct JurisdictionProofResponse {
     pub wallet: String,
-    pub leaf_index: usize,
+    pub jurisdiction_id: u64,
     pub path: Vec<String>,
     pub path_indices: Vec<u8>,
     pub root: String,
@@ -19,7 +19,7 @@ pub struct MembershipProofResponse {
 pub async fn handler(
     State(state): State<SharedState>,
     wallet_auth: WalletAuth,
-) -> Result<Json<MembershipProofResponse>, ServiceError> {
+) -> Result<Json<JurisdictionProofResponse>, ServiceError> {
     let st = state.read().await;
 
     let cred = st
@@ -31,12 +31,13 @@ pub async fn handler(
         return Err(ServiceError::WalletRevoked);
     }
 
-    let proof = st.membership_tree.proof(cred.leaf_index)?;
-    let root = st.membership_tree.root();
+    // The jurisdiction tree currently has a single leaf (index 0) = poseidon2_hash([1])
+    let proof = st.jurisdiction_tree.proof(0)?;
+    let root = st.jurisdiction_tree.root();
 
-    Ok(Json(MembershipProofResponse {
+    Ok(Json(JurisdictionProofResponse {
         wallet: wallet_auth.wallet_hex,
-        leaf_index: cred.leaf_index,
+        jurisdiction_id: 1,
         path: proof
             .path
             .iter()
@@ -53,7 +54,7 @@ mod tests {
 
     use ark_bn254::Fr;
     use tokio::sync::RwLock;
-    use zksettle_crypto::{verify_merkle_proof, MerkleProof, MERKLE_DEPTH};
+    use zksettle_crypto::{verify_merkle_proof, poseidon2_hash, MerkleProof, MERKLE_DEPTH};
 
     use super::*;
     use crate::auth::WalletAuth;
@@ -96,14 +97,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn returns_verifiable_proof_for_known_wallet() {
+    async fn returns_verifiable_jurisdiction_proof() {
         let wallet = [3u8; 32];
         let state = state_with_wallet(wallet, false);
-        let hex = format!("0x{}", hex::encode(wallet));
 
         let resp = handler(State(state), auth(wallet)).await.unwrap().0;
 
-        let leaf = wallet_leaf(wallet_to_fr(&hex).unwrap());
+        assert_eq!(resp.jurisdiction_id, 1);
+
+        let leaf = poseidon2_hash(&[Fr::from(1u64)]);
         let path: [Fr; MERKLE_DEPTH] = parse_path(&resp.path);
         let mut path_indices = [0u8; MERKLE_DEPTH];
         for (i, &b) in resp.path_indices.iter().enumerate() {
@@ -129,7 +131,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn revoked_wallet_returns_wallet_revoked() {
+    async fn revoked_wallet_returns_error() {
         let wallet = [4u8; 32];
         let state = state_with_wallet(wallet, true);
         let err = handler(State(state), auth(wallet)).await.unwrap_err();

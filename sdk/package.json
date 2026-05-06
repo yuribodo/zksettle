@@ -6,6 +6,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./wrap": {
+      "types": "./dist/wrap/index.d.ts",
+      "default": "./dist/wrap/index.js"
     }
   },
   "main": "dist/index.js",

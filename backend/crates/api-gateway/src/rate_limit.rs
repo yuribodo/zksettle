@@ -72,7 +72,7 @@ impl Default for LoginRateLimiter {
 
 fn build_limiter(tier: Tier) -> Limiter {
     let per_second = match tier {
-        Tier::Developer => 1,
+        Tier::Developer => 10,
         Tier::Startup => 10,
         Tier::Growth => 50,
         Tier::Enterprise => 200,
@@ -94,12 +94,11 @@ mod tests {
     #[test]
     fn blocks_after_burst() {
         let store = RateLimitStore::new();
-        // Developer tier: 1/sec, burst of 1
-        let first = store.check("k1", Tier::Developer);
-        assert!(first);
-        // Rapid second call should be blocked
-        let second = store.check("k1", Tier::Developer);
-        assert!(!second);
+        // Developer tier: 10/sec — exhaust the burst then verify block
+        for _ in 0..10 {
+            assert!(store.check("k1", Tier::Developer));
+        }
+        assert!(!store.check("k1", Tier::Developer));
     }
 
     #[test]
