@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 
-use zksettle_crypto::{MerkleTree, SparseMerkleTree};
+use ark_bn254::Fr;
+use zksettle_crypto::{MerkleTree, SparseMerkleTree, poseidon2_hash};
 
 use crate::convert::fr_to_bytes_be;
 
@@ -31,10 +32,13 @@ pub struct IssuerState {
 
 impl IssuerState {
     pub fn new() -> Self {
+        let mut jurisdiction_tree = MerkleTree::new();
+        jurisdiction_tree.insert(poseidon2_hash(&[Fr::from(1u64)]));
+
         Self {
             membership_tree: MerkleTree::new(),
             sanctions_tree: SparseMerkleTree::new(),
-            jurisdiction_tree: MerkleTree::new(),
+            jurisdiction_tree,
             credentials: HashMap::new(),
             last_publish_slot: 0,
             registered: false,
@@ -80,9 +84,9 @@ mod tests {
         assert_ne!(m, [1u8; 32]);
         assert_ne!(san, [0u8; 32], "empty sanctions root must not be all zeros");
         assert_ne!(san, [1u8; 32]);
-        assert_ne!(j, [0u8; 32], "empty jurisdiction root must not be all zeros");
+        assert_ne!(j, [0u8; 32], "jurisdiction root must not be all zeros");
         assert_ne!(j, [1u8; 32]);
-        assert_eq!(m, j, "both empty merkle trees should have same root");
+        assert_ne!(m, j, "seeded jurisdiction tree should differ from empty membership tree");
     }
 
     #[test]
