@@ -29,3 +29,29 @@ impl Config {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn empty_api_token_is_none() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        std::env::set_var("API_TOKEN", "");
+        let cfg = Config::from_env();
+        assert!(cfg.api_token.is_none());
+        std::env::remove_var("API_TOKEN");
+    }
+
+    #[test]
+    fn nonempty_api_token_is_some() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        std::env::set_var("API_TOKEN", "secret");
+        let cfg = Config::from_env();
+        assert_eq!(cfg.api_token.as_deref(), Some("secret"));
+        std::env::remove_var("API_TOKEN");
+    }
+}
