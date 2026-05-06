@@ -84,6 +84,10 @@ pub fn write_hook_proof_handler(
     chunk: Vec<u8>,
 ) -> Result<()> {
     let payload = &mut ctx.accounts.hook_payload;
+    require!(
+        offset == payload.high_water_mark,
+        ZkSettleError::ChunkNotSequential
+    );
     let end = (offset as usize)
         .checked_add(chunk.len())
         .ok_or_else(|| error!(ZkSettleError::ChunkOutOfBounds))?;
@@ -93,10 +97,7 @@ pub fn write_hook_proof_handler(
     );
 
     payload.proof_and_witness[offset as usize..end].copy_from_slice(&chunk);
-    let end_u32 = end as u32;
-    if end_u32 > payload.high_water_mark {
-        payload.high_water_mark = end_u32;
-    }
+    payload.high_water_mark = end as u32;
     Ok(())
 }
 

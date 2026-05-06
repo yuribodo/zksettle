@@ -203,45 +203,44 @@ mod high_water_mark {
         }
     }
 
-    fn simulate_write(payload: &mut HookPayload, offset: u32, len: u32) {
+    fn simulate_write(payload: &mut HookPayload, offset: u32, len: u32) -> bool {
+        if offset != payload.high_water_mark {
+            return false;
+        }
         let end = offset + len;
         assert!(end as usize <= payload.expected_proof_len as usize);
-        if end > payload.high_water_mark {
-            payload.high_water_mark = end;
-        }
+        payload.high_water_mark = end;
+        true
     }
 
     #[test]
     fn sequential_writes_reach_expected() {
         let mut p = make_payload(1800);
-        simulate_write(&mut p, 0, 900);
+        assert!(simulate_write(&mut p, 0, 900));
         assert_eq!(p.high_water_mark, 900);
-        simulate_write(&mut p, 900, 900);
+        assert!(simulate_write(&mut p, 900, 900));
         assert_eq!(p.high_water_mark, 1800);
         assert_eq!(p.high_water_mark, p.expected_proof_len);
     }
 
     #[test]
-    fn overwrite_does_not_inflate() {
+    fn overwrite_at_same_offset_rejected() {
         let mut p = make_payload(900);
-        simulate_write(&mut p, 0, 900);
-        assert_eq!(p.high_water_mark, 900);
-        simulate_write(&mut p, 0, 900);
-        assert_eq!(p.high_water_mark, 900);
+        assert!(simulate_write(&mut p, 0, 900));
+        assert!(!simulate_write(&mut p, 0, 900));
     }
 
     #[test]
-    fn gap_write_inflates_water_mark() {
+    fn gap_write_rejected() {
         let mut p = make_payload(1800);
-        simulate_write(&mut p, 900, 900);
-        assert_eq!(p.high_water_mark, 1800);
-        assert_eq!(p.high_water_mark, p.expected_proof_len);
+        assert!(!simulate_write(&mut p, 900, 900));
+        assert_eq!(p.high_water_mark, 0);
     }
 
     #[test]
     fn partial_write_blocks_finalize() {
         let mut p = make_payload(1800);
-        simulate_write(&mut p, 0, 900);
+        assert!(simulate_write(&mut p, 0, 900));
         assert_ne!(p.high_water_mark, p.expected_proof_len);
     }
 

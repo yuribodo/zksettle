@@ -81,6 +81,8 @@ pub enum ZkSettleError {
     MintHookMismatch,
     #[msg("Chunk write exceeds expected_proof_len")]
     ChunkOutOfBounds,
+    #[msg("Chunk offset does not match high_water_mark (sequential writes required)")]
+    ChunkNotSequential,
     #[msg("Cannot write to a finalized payload")]
     PayloadAlreadyFinalized,
     #[msg("Payload must be finalized before settlement")]
@@ -165,6 +167,7 @@ mod tests {
             ZkSettleError::BubblegumLeafOwnerMismatch as u32,
             ZkSettleError::MintHookMismatch as u32,
             ZkSettleError::ChunkOutOfBounds as u32,
+            ZkSettleError::ChunkNotSequential as u32,
             ZkSettleError::PayloadAlreadyFinalized as u32,
             ZkSettleError::PayloadNotReady as u32,
             ZkSettleError::ProofIncomplete as u32,
