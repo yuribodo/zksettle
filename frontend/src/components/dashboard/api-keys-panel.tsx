@@ -51,7 +51,7 @@ function describeError(err: unknown): string {
 }
 
 function displayPrefix(keyHash: string): string {
-  const cached = typeof window === "undefined" ? null : lookupKeyPrefix(keyHash);
+  const cached = typeof globalThis.window === "undefined" ? null : lookupKeyPrefix(keyHash);
   if (cached) return cached;
   return `hash ${keyHash.slice(0, 8)}…${keyHash.slice(-4)}`;
 }
@@ -234,6 +234,29 @@ export function ApiKeysPanel() {
               {keys.map((key) => {
                 const fullKey = lookupFullKey(key.key_hash);
                 const isActive = !!fullKey && activeKey === fullKey;
+                let statusCell: React.ReactNode;
+                if (isActive) {
+                  statusCell = (
+                    <span className="inline-flex items-center gap-1 font-mono text-[11px] text-forest">
+                      <span className="size-1.5 rounded-full bg-forest" aria-hidden="true" />
+                      {"Active"}
+                    </span>
+                  );
+                } else if (fullKey) {
+                  statusCell = (
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={() => setActiveKey.mutate(fullKey)}
+                    >
+                      Activate
+                    </Button>
+                  );
+                } else {
+                  statusCell = (
+                    <span className="font-mono text-[11px] text-muted italic">Not stored</span>
+                  );
+                }
                 return (
                   <tr
                     key={key.key_hash}
@@ -248,22 +271,7 @@ export function ApiKeysPanel() {
                       {formatDate(key.created_at)}
                     </td>
                     <td className="py-3 pr-3">
-                      {isActive ? (
-                        <span className="inline-flex items-center gap-1 font-mono text-[11px] text-forest">
-                          <span className="size-1.5 rounded-full bg-forest" aria-hidden="true" />
-                          Active
-                        </span>
-                      ) : fullKey ? (
-                        <Button
-                          variant="link"
-                          size="sm"
-                          onClick={() => setActiveKey.mutate(fullKey)}
-                        >
-                          Activate
-                        </Button>
-                      ) : (
-                        <span className="font-mono text-[11px] text-muted italic">Not stored</span>
-                      )}
+                      {statusCell}
                     </td>
                     <td className="py-3 text-right">
                       <Button
@@ -312,10 +320,10 @@ export function ApiKeysPanel() {
 }
 
 interface RevealKeyDialogProps {
-  created: CreatedKey;
-  copied: boolean;
-  onCopy: () => void;
-  onDismiss: () => void;
+  readonly created: CreatedKey;
+  readonly copied: boolean;
+  readonly onCopy: () => void;
+  readonly onDismiss: () => void;
 }
 
 function RevealKeyDialog({ created, copied, onCopy, onDismiss }: RevealKeyDialogProps) {
@@ -369,11 +377,11 @@ function RevealKeyDialog({ created, copied, onCopy, onDismiss }: RevealKeyDialog
 }
 
 interface RevokeConfirmDialogProps {
-  prefix: string;
-  owner: string;
-  isPending: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
+  readonly prefix: string;
+  readonly owner: string;
+  readonly isPending: boolean;
+  readonly onConfirm: () => void;
+  readonly onCancel: () => void;
 }
 
 function RevokeConfirmDialog({ prefix, owner, isPending, onConfirm, onCancel }: RevokeConfirmDialogProps) {
