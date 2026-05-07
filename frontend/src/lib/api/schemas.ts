@@ -69,6 +69,15 @@ export const SanctionsProofSchema = z.object({
 });
 export type SanctionsProof = z.infer<typeof SanctionsProofSchema>;
 
+export const JurisdictionProofSchema = z.object({
+  wallet: z.string(),
+  jurisdiction_id: z.number().int(),
+  path: z.array(z.string()),
+  path_indices: z.array(z.number().int()),
+  root: z.string(),
+});
+export type JurisdictionProof = z.infer<typeof JurisdictionProofSchema>;
+
 export const EventDtoSchema = z.object({
   signature: z.string(),
   slot: z.number().int().nonnegative(),

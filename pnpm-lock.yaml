@@ -41,6 +41,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.100.5
         version: 5.100.9(react@19.0.0)
+      '@zksettle/sdk':
+        specifier: workspace:*
+        version: link:../sdk
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1

@@ -6,7 +6,7 @@ import {
   type PublicKey,
   type TransactionInstruction,
 } from "@solana/web3.js";
-import { AnchorProvider, BN, Program, Wallet } from "@coral-xyz/anchor";
+import { AnchorProvider, BN, Program } from "@coral-xyz/anchor";
 import type {
   WrapOptions,
   ZkSettleConfig,
@@ -17,6 +17,19 @@ import type {
 import { ZKSETTLE_PROGRAM_ID } from "../constants.js";
 import { findIssuerPda, findHookPayloadPda } from "./pda.js";
 import idl from "../idl/zksettle.json" with { type: "json" };
+
+// Minimal wallet shim that satisfies AnchorProvider without importing
+// the Node-only `nodewallet.js` from @coral-xyz/anchor.
+class DummyWallet {
+  readonly payer: Keypair;
+  readonly publicKey: PublicKey;
+  constructor() {
+    this.payer = Keypair.generate();
+    this.publicKey = this.payer.publicKey;
+  }
+  async signTransaction<T extends Transaction>(tx: T): Promise<T> { return tx; }
+  async signAllTransactions<T extends Transaction>(txs: T[]): Promise<T[]> { return txs; }
+}
 
 const DEFAULT_LIGHT_ARGS: StagedLightArgs = {
   bubblegumTail: 0,
@@ -37,8 +50,8 @@ export async function wrap(
   const [issuerPda] = findIssuerPda(options.wallet, programId);
   const [hookPayloadPda] = findHookPayloadPda(options.wallet, programId);
 
-  const dummyWallet = new Wallet(Keypair.generate());
-  const provider = new AnchorProvider(options.connection, dummyWallet, {});
+  const dummyWallet = new DummyWallet();
+  const provider = new AnchorProvider(options.connection, dummyWallet as any, {});
   const program = new Program(idl as any, provider);
 
   const lightArgs = options.lightArgs ?? DEFAULT_LIGHT_ARGS;
@@ -72,8 +85,8 @@ export const CHUNK_SIZE = 450;
 export const WRITES_PER_TX = 2;
 
 function makeProgram(connection: Connection): Program {
-  const dummyWallet = new Wallet(Keypair.generate());
-  const provider = new AnchorProvider(connection, dummyWallet, {});
+  const dummyWallet = new DummyWallet();
+  const provider = new AnchorProvider(connection, dummyWallet as any, {});
   return new Program(idl as any, provider);
 }
 

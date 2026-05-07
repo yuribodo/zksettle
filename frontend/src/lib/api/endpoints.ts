@@ -4,6 +4,7 @@ import {
   CredentialSchema,
   DeleteKeyResponseSchema,
   HealthSchema,
+  JurisdictionProofSchema,
   ListEventsResponseSchema,
   ListKeysResponseSchema,
   MembershipProofSchema,
@@ -16,6 +17,7 @@ import {
   type Credential,
   type DeleteKeyResponse,
   type Health,
+  type JurisdictionProof,
   type ListEventsResponse,
   type ListKeysResponse,
   type MembershipProof,
@@ -46,6 +48,9 @@ export const getMembershipProof = async (wallet: string): Promise<MembershipProo
 
 export const getSanctionsProof = async (wallet: string): Promise<SanctionsProof> =>
   SanctionsProofSchema.parse(await apiFetch(`/v1/proofs/sanctions/${wallet}`));
+
+export const getJurisdictionProof = async (wallet: string): Promise<JurisdictionProof> =>
+  JurisdictionProofSchema.parse(await apiFetch(`/v1/proofs/jurisdiction/${wallet}`));
 
 export const registerWallet = async (wallet: string): Promise<RegisterWalletResponse> =>
   RegisterWalletResponseSchema.parse(

@@ -7,12 +7,12 @@ import type {
 } from "../types.js";
 import { IssuerClient } from "../issuer/client.js";
 import { loadCircuit } from "./circuit-loader.js";
-import { Prover } from "./prover.js";
 import { computeNullifier } from "./nullifier.js";
+import { Prover } from "./prover.js";
 
 export { loadCircuit } from "./circuit-loader.js";
-export { Prover } from "./prover.js";
 export { computeNullifier, type NullifierInputs } from "./nullifier.js";
+export { Prover } from "./prover.js";
 
 /**
  * Translate camelCase TypeScript `ProofInputs` to the snake_case parameter

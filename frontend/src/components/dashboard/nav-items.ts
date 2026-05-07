@@ -4,6 +4,7 @@ import {
   ClockRotateRight,
   Community,
   DollarCircle,
+  Flash,
   Key,
 } from "iconoir-react";
 import type { FC, SVGProps } from "react";
@@ -54,6 +55,14 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: "overview",
     subtitle:
       "Live merkle roots, wallet count, and last on-chain publish for the issuer behind this workspace.",
+  },
+  {
+    label: "Prove",
+    href: "/dashboard/prove",
+    icon: Flash,
+    group: "overview",
+    subtitle:
+      "Generate a compliance proof and submit it on-chain. End-to-end in under 15 seconds.",
   },
   {
     label: "API keys",

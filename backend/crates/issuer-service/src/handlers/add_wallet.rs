@@ -2,7 +2,7 @@ use axum::extract::State;
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
-use crate::convert::{wallet_hex_to_bytes, wallet_to_fr};
+use crate::convert::{wallet_hex_to_bytes, wallet_leaf, wallet_to_fr};
 use crate::error::ServiceError;
 use crate::state::SharedState;
 
@@ -29,7 +29,7 @@ pub async fn handler(
     if st.credentials.contains_key(&wallet_bytes) {
         return Err(ServiceError::DuplicateWallet);
     }
-    st.membership_tree.insert(wallet_fr);
+    st.membership_tree.insert(wallet_leaf(wallet_fr));
     st.roots_dirty = true;
     let leaf_index = st.credentials.len();
     st.credentials.insert(

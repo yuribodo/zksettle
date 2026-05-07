@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use ark_ff::AdditiveGroup;
 
-use crate::convert::bytes_be_to_fr;
+use crate::convert::{bytes_be_to_fr, wallet_leaf};
 use crate::error::ServiceError;
 use crate::state::{CredentialRecord, IssuerState};
 
@@ -58,7 +58,7 @@ pub fn load(path: &str) -> Result<IssuerState, ServiceError> {
         let fr = if cred.revoked {
             ark_bn254::Fr::ZERO
         } else {
-            bytes_be_to_fr(&cred.wallet)
+            wallet_leaf(bytes_be_to_fr(&cred.wallet))
         };
         state.membership_tree.insert(fr);
         credentials.insert(cred.wallet, cred);
@@ -83,7 +83,7 @@ mod tests {
         state.registered = true;
 
         let wallet = [42u8; 32];
-        let fr = bytes_be_to_fr(&wallet);
+        let fr = wallet_leaf(bytes_be_to_fr(&wallet));
         state.membership_tree.insert(fr);
         state.credentials.insert(
             wallet,
@@ -130,7 +130,7 @@ mod tests {
         let fr_a = bytes_be_to_fr(&wallet_a);
         let fr_b = bytes_be_to_fr(&wallet_b);
 
-        state.membership_tree.insert(fr_a);
+        state.membership_tree.insert(wallet_leaf(fr_a));
         state.credentials.insert(
             wallet_a,
             CredentialRecord {
@@ -142,7 +142,7 @@ mod tests {
             },
         );
 
-        state.membership_tree.insert(fr_b);
+        state.membership_tree.insert(wallet_leaf(fr_b));
         state.credentials.insert(
             wallet_b,
             CredentialRecord {

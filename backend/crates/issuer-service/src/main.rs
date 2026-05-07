@@ -148,6 +148,10 @@ async fn main() {
         .route(
             "/proofs/sanctions/{wallet}",
             get(handlers::get_sanctions_proof::handler),
+        )
+        .route(
+            "/proofs/jurisdiction/{wallet}",
+            get(handlers::get_jurisdiction_proof::handler),
         );
 
     let mut protected_routes = Router::new()

@@ -2,7 +2,7 @@ use axum::extract::{Path, State};
 use axum::Json;
 use serde::Serialize;
 
-use crate::convert::{wallet_hex_to_bytes, wallet_to_fr};
+use crate::convert::{wallet_hex_to_bytes, wallet_leaf, wallet_to_fr};
 use crate::error::ServiceError;
 use crate::state::SharedState;
 
@@ -49,7 +49,7 @@ pub async fn handler(
 
     if let Some(ref path) = state_path {
         if let Err(e) = crate::persist::save(path, &st) {
-            if let Err(e) = st.membership_tree.set_leaf(leaf_index, wallet_fr) {
+            if let Err(e) = st.membership_tree.set_leaf(leaf_index, wallet_leaf(wallet_fr)) {
                 tracing::error!(%e, "rollback set_leaf failed, state may be inconsistent");
             }
             if removed_from_sanctions {
@@ -87,7 +87,7 @@ mod tests {
     fn state_with_wallet(wallet: [u8; 32], revoked: bool) -> SharedState {
         let mut st = IssuerState::new();
         st.membership_tree
-            .insert(wallet_to_fr(&format!("0x{}", hex::encode(wallet))).unwrap());
+            .insert(wallet_leaf(wallet_to_fr(&format!("0x{}", hex::encode(wallet))).unwrap()));
         st.credentials.insert(
             wallet,
             CredentialRecord {
