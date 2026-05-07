@@ -169,10 +169,6 @@ export function assembleProofInputs(
     timestamp: string;
   },
 ): ProofInputs {
-  const walletHex = credential.wallet
-    .map((b) => (b & 0xff).toString(16).padStart(2, "0"))
-    .join("");
-
   const hex = (v: string) => (v.startsWith("0x") ? v : `0x${v}`);
 
   // The issuer reduces wallet bytes mod the BN254 scalar field order

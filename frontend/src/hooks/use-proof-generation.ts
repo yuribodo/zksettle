@@ -96,8 +96,7 @@ export function useProofGeneration(): UseProofGenerationResult {
     // start) onto the same in-flight init promise. Without this, both calls
     // would each spawn a Barretenberg worker pool and the loser's `api`
     // would leak — `destroy()` is never called on the orphaned instance.
-    if (!proverInitRef.current) {
-      proverInitRef.current = (async () => {
+    proverInitRef.current ??= (async () => {
         try {
           const res = await fetch(ARTIFACT_URL);
           if (!res.ok) {
@@ -122,7 +121,6 @@ export function useProofGeneration(): UseProofGenerationResult {
           throw err;
         }
       })();
-    }
     return proverInitRef.current;
   }, []);
 
@@ -133,8 +131,8 @@ export function useProofGeneration(): UseProofGenerationResult {
 
   const generate = useCallback(
     async (inputs: ProofInputs): Promise<ProofResult> => {
-      if (typeof window === "undefined") {
-        throw new Error("useProofGeneration() requires a browser");
+      if (typeof globalThis.window === "undefined") {
+        throw new TypeError("useProofGeneration() requires a browser");
       }
       setIsGenerating(true);
       setError(null);

@@ -105,7 +105,7 @@ export async function getWalletAuthHeaders(): Promise<Record<string, string>> {
   const walletHex = bytesToHex(Array.from(publicKey.toBytes()));
   const now = Date.now();
 
-  if (cached && cached.walletHex === walletHex && now < cached.expiresAt) {
+  if (cached?.walletHex === walletHex && now < cached.expiresAt) {
     return {
       "x-wallet-signature": cached.signature,
       "x-wallet-timestamp": String(cached.timestamp),
