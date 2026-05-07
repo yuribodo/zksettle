@@ -7,6 +7,7 @@ import { useEffect } from "react";
 
 import { Logo } from "@/components/icons/logo";
 import { NAV_GROUPS, NAV_ITEMS } from "@/components/dashboard/nav-items";
+import { ApiKeySelector } from "@/components/dashboard/api-key-selector";
 import { useDrawer } from "@/hooks/use-drawer";
 import { cn } from "@/lib/cn";
 
@@ -111,6 +112,9 @@ export function MobileNavDrawer() {
                 </div>
               ))}
             </nav>
+            <div className="border-t border-border-subtle px-3 py-3">
+              <ApiKeySelector compact />
+            </div>
           </div>
         </dialog>
       ) : null}
