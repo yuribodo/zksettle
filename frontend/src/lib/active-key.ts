@@ -1,7 +1,7 @@
 export const ACTIVE_KEY_STORAGE_KEY = "zks.active_api_key";
 
 export function getActiveApiKey(): string | null {
-  if (typeof globalThis.window === "undefined") return null;
+  if (globalThis.window === undefined) return null;
   try {
     return globalThis.window.localStorage.getItem(ACTIVE_KEY_STORAGE_KEY);
   } catch {
@@ -10,7 +10,7 @@ export function getActiveApiKey(): string | null {
 }
 
 export function setActiveApiKey(key: string): void {
-  if (typeof globalThis.window === "undefined") return;
+  if (globalThis.window === undefined) return;
   try {
     globalThis.window.localStorage.setItem(ACTIVE_KEY_STORAGE_KEY, key);
   } catch {
@@ -19,7 +19,7 @@ export function setActiveApiKey(key: string): void {
 }
 
 export function clearActiveApiKey(): void {
-  if (typeof globalThis.window === "undefined") return;
+  if (globalThis.window === undefined) return;
   try {
     globalThis.window.localStorage.removeItem(ACTIVE_KEY_STORAGE_KEY);
   } catch {
