@@ -12,9 +12,9 @@ type PrefixMap = Record<string, string>;
 type StoredKeyMap = Record<string, string>;
 
 function readPrefixes(): PrefixMap {
-  if (typeof window === "undefined") return {};
+  if (typeof globalThis.window === "undefined") return {};
   try {
-    const raw = window.localStorage.getItem(PREFIX_STORAGE_KEY);
+    const raw = globalThis.window.localStorage.getItem(PREFIX_STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as unknown;
     if (typeof parsed !== "object" || parsed === null) return {};
@@ -25,14 +25,14 @@ function readPrefixes(): PrefixMap {
 }
 
 function writePrefixes(map: PrefixMap): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(PREFIX_STORAGE_KEY, JSON.stringify(map));
+  if (typeof globalThis.window === "undefined") return;
+  globalThis.window.localStorage.setItem(PREFIX_STORAGE_KEY, JSON.stringify(map));
 }
 
 function readStoredKeys(): StoredKeyMap {
-  if (typeof window === "undefined") return {};
+  if (typeof globalThis.window === "undefined") return {};
   try {
-    const raw = window.localStorage.getItem(STORED_KEYS_STORAGE_KEY);
+    const raw = globalThis.window.localStorage.getItem(STORED_KEYS_STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as unknown;
     if (typeof parsed !== "object" || parsed === null) return {};
@@ -43,8 +43,8 @@ function readStoredKeys(): StoredKeyMap {
 }
 
 function writeStoredKeys(map: StoredKeyMap): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORED_KEYS_STORAGE_KEY, JSON.stringify(map));
+  if (typeof globalThis.window === "undefined") return;
+  globalThis.window.localStorage.setItem(STORED_KEYS_STORAGE_KEY, JSON.stringify(map));
 }
 
 export function rememberKeyPrefix(keyHash: string, prefix: string): void {
