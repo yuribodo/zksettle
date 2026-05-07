@@ -1,7 +1,7 @@
 "use client";
 
 import { Copy, NavArrowDown, Search, WarningTriangle, Xmark } from "iconoir-react";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type SyntheticEvent, type ReactNode } from "react";
 
 import { StatusPill, type StatusKind } from "@/components/dashboard/status-pill";
 import { Button } from "@/components/ui/button";
@@ -74,7 +74,7 @@ export function AttestationExplorerPanel() {
 
   const inputValid = isValidWalletHex(walletInput);
 
-  const lookup = (event: FormEvent<HTMLFormElement>) => {
+  const lookup = (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!inputValid) return;
     const normalized = normalizeWalletHex(walletInput);
@@ -137,9 +137,7 @@ export function AttestationExplorerPanel() {
             </span>{" "}
             and{" "}
             <span className="text-quill">
-              GET /v1/proofs/sanctions/&#123;wallet&#125;
-            </span>
-            .
+              GET /v1/proofs/sanctions/&#123;wallet&#125;</span>.
           </p>
         )}
       </section>
@@ -186,10 +184,10 @@ export function AttestationExplorerPanel() {
           extraFields={
             <><dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Leaf value</dt>
             <dd className="flex items-center gap-2 font-mono text-sm text-ink">
-              {sanctionsQuery.data.leaf_value !== EMPTY_LEAF ? (
-                <StatusPill kind="blocked" label="Present (sanctioned)" />
-              ) : (
+              {sanctionsQuery.data.leaf_value === EMPTY_LEAF ? (
                 <StatusPill kind="verified" label="Empty (not sanctioned)" />
+              ) : (
+                <StatusPill kind="blocked" label="Present (sanctioned)" />
               )}
             </dd></>
           }
@@ -208,6 +206,16 @@ export function AttestationExplorerPanel() {
 /* ------------------------------------------------------------------ */
 /*  Sub-components                                                     */
 /* ------------------------------------------------------------------ */
+
+function describeRootMismatch(membership: boolean | null, sanctions: boolean | null): string {
+  if (membership === false && sanctions === false) {
+    return "Both proof roots differ from the current published roots.";
+  }
+  if (membership === false) {
+    return "Membership proof root differs from the current published root.";
+  }
+  return "Sanctions proof root differs from the current published root.";
+}
 
 function AttestationStatusSection({
   wallet,
@@ -267,11 +275,7 @@ function AttestationStatusSection({
       {(membershipRootMatch === false || sanctionsRootMatch === false) ? (
         <p className="mt-4 flex items-start gap-2 font-mono text-xs text-warning-text">
           <WarningTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          {membershipRootMatch === false && sanctionsRootMatch === false
-            ? "Both proof roots differ from the current published roots."
-            : membershipRootMatch === false
-              ? "Membership proof root differs from the current published root."
-              : "Sanctions proof root differs from the current published root."}
+          {describeRootMismatch(membershipRootMatch, sanctionsRootMatch)}
         </p>
       ) : null}
     </section>
@@ -451,7 +455,7 @@ function MerklePathTable({
         <tbody>
           {path.map((hash, i) => (
             <tr
-              key={i}
+              key={hash}
               className="border-b border-border-subtle last:border-b-0"
             >
               <td className="px-3 py-2 font-mono text-xs text-quill">{i}</td>
