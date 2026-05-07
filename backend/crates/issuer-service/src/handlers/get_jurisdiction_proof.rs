@@ -5,7 +5,7 @@ use serde::Serialize;
 use crate::auth::WalletAuth;
 use crate::convert::fr_to_bytes_be;
 use crate::error::ServiceError;
-use crate::state::SharedState;
+use crate::state::{SharedState, JURISDICTION_ID};
 
 #[derive(Debug, Serialize)]
 pub struct JurisdictionProofResponse {
@@ -31,13 +31,13 @@ pub async fn handler(
         return Err(ServiceError::WalletRevoked);
     }
 
-    // The jurisdiction tree currently has a single leaf (index 0) = poseidon2_hash([1])
+    // Single-jurisdiction: one leaf at index 0 = poseidon2_hash([Fr(JURISDICTION_ID)])
     let proof = st.jurisdiction_tree.proof(0)?;
     let root = st.jurisdiction_tree.root();
 
     Ok(Json(JurisdictionProofResponse {
         wallet: wallet_auth.wallet_hex,
-        jurisdiction_id: 1,
+        jurisdiction_id: JURISDICTION_ID,
         path: proof
             .path
             .iter()
@@ -59,7 +59,7 @@ mod tests {
     use super::*;
     use crate::auth::WalletAuth;
     use crate::convert::{bytes_be_to_fr, wallet_leaf, wallet_to_fr};
-    use crate::state::{CredentialRecord, IssuerState};
+    use crate::state::{CredentialRecord, IssuerState, JURISDICTION_ID};
 
     fn state_with_wallet(wallet: [u8; 32], revoked: bool) -> SharedState {
         let mut st = IssuerState::new();
@@ -103,9 +103,9 @@ mod tests {
 
         let resp = handler(State(state), auth(wallet)).await.unwrap().0;
 
-        assert_eq!(resp.jurisdiction_id, 1);
+        assert_eq!(resp.jurisdiction_id, JURISDICTION_ID);
 
-        let leaf = poseidon2_hash(&[Fr::from(1u64)]);
+        let leaf = poseidon2_hash(&[Fr::from(JURISDICTION_ID)]);
         let path: [Fr; MERKLE_DEPTH] = parse_path(&resp.path);
         let mut path_indices = [0u8; MERKLE_DEPTH];
         for (i, &b) in resp.path_indices.iter().enumerate() {
