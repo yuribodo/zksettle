@@ -19,11 +19,13 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     ...(init.headers as Record<string, string>),
   };
 
-  const activeKey = getActiveApiKey();
-  if (activeKey && !headers.Authorization) {
-    headers.Authorization = `Bearer ${activeKey}`;
+  const isBrowser = typeof globalThis.window !== "undefined";
+  if (isBrowser && !headers.Authorization) {
+    const activeKey = getActiveApiKey();
+    if (activeKey) {
+      headers.Authorization = `Bearer ${activeKey}`;
+    }
   }
-
   if (isWalletScopedPath(path)) {
     const walletHeaders = await getWalletAuthHeaders();
     Object.assign(headers, walletHeaders);
