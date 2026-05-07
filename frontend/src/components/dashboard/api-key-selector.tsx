@@ -19,7 +19,7 @@ function keyDisplayLabel(keyHash: string): string {
   return `${keyHash.slice(0, 8)}…${keyHash.slice(-4)}`;
 }
 
-export function ApiKeySelector({ compact = false }: { compact?: boolean }) {
+export function ApiKeySelector({ compact = false }: { readonly compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -55,7 +55,7 @@ export function ApiKeySelector({ compact = false }: { compact?: boolean }) {
         onClick={() => setOpen(!open)}
         className={triggerClass}
         aria-expanded={open}
-        aria-haspopup="listbox"
+        aria-haspopup="menu"
       >
         <Key className={`${iconSize} shrink-0 text-stone`} aria-hidden="true" strokeWidth={1.5} />
         <span className="flex-1 truncate font-mono text-muted">
@@ -76,10 +76,10 @@ export function ApiKeySelector({ compact = false }: { compact?: boolean }) {
 }
 
 interface KeyDropdownProps {
-  keys: ListedKey[];
-  isLoading: boolean;
-  onClear: () => void;
-  onClose: () => void;
+  readonly keys: ListedKey[];
+  readonly isLoading: boolean;
+  readonly onClear: () => void;
+  readonly onClose: () => void;
 }
 
 function KeyDropdown({ keys, isLoading, onClear, onClose }: KeyDropdownProps) {
@@ -105,62 +105,70 @@ function KeyDropdown({ keys, isLoading, onClear, onClose }: KeyDropdownProps) {
     onClose();
   };
 
+  let dropdownContent: React.ReactNode;
+  if (isLoading) {
+    dropdownContent = (
+      <span className="block px-2 py-1.5 font-mono text-[11px] text-muted">Loading…</span>
+    );
+  } else if (keys.length === 0) {
+    dropdownContent = (
+      <div className="px-2 py-2">
+        <p className="font-mono text-[11px] text-muted">No keys found.</p>
+        <Link
+          href="/dashboard/api-keys"
+          onClick={onClose}
+          className="mt-1 inline-block cursor-pointer font-mono text-[11px] text-forest hover:text-forest-hover"
+        >
+          Create one →
+        </Link>
+      </div>
+    );
+  } else {
+    dropdownContent = (
+      <div className="flex flex-col">
+        <span className="px-2 py-1 font-mono text-[10px] tracking-[0.08em] text-muted uppercase">
+          Select a key
+        </span>
+        <div className="flex flex-col gap-px">
+          {keys.map((key) => {
+            const fullKey = lookupFullKey(key.key_hash);
+            const isActive = activeKey === fullKey;
+            return (
+              <button
+                key={key.key_hash}
+                type="button"
+                onClick={() => fullKey && activateStoredKey(key.key_hash)}
+                disabled={!fullKey}
+                className={[
+                  "flex w-full items-center gap-2 rounded-[var(--radius-2)] px-2 py-1.5 text-left text-xs transition-colors",
+                  fullKey ? "text-quill hover:bg-surface-deep cursor-pointer" : "text-muted cursor-not-allowed",
+                  isActive && fullKey ? "bg-surface-deep text-ink" : "",
+                ].join(" ")}
+              >
+                <span
+                  className={`size-1.5 shrink-0 rounded-full ${isActive && fullKey ? "bg-forest" : "bg-transparent"}`}
+                  aria-hidden="true"
+                />
+                <span className="min-w-0 flex-1 truncate font-mono">
+                  {keyDisplayLabel(key.key_hash)}
+                </span>
+                {!fullKey && (
+                  <span className="shrink-0 font-mono text-[10px] text-muted italic">not stored</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      role="listbox"
       aria-label="Select API key"
       className="absolute bottom-full left-0 right-0 z-50 mb-1 rounded-[var(--radius-4)] border border-border-subtle bg-surface p-2 shadow-lg"
     >
-      {isLoading ? (
-        <span className="block px-2 py-1.5 font-mono text-[11px] text-muted">Loading…</span>
-      ) : keys.length === 0 ? (
-        <div className="px-2 py-2">
-          <p className="font-mono text-[11px] text-muted">No keys found.</p>
-          <Link
-            href="/dashboard/api-keys"
-            onClick={onClose}
-            className="mt-1 inline-block cursor-pointer font-mono text-[11px] text-forest hover:text-forest-hover"
-          >
-            Create one →
-          </Link>
-        </div>
-      ) : (
-        <div className="flex flex-col">
-          <span className="px-2 py-1 font-mono text-[10px] tracking-[0.08em] text-muted uppercase">
-            Select a key
-          </span>
-          <div className="flex flex-col gap-px">
-            {keys.map((key) => {
-              const fullKey = lookupFullKey(key.key_hash);
-              const isActive = activeKey === fullKey;
-              return (
-                <button
-                  key={key.key_hash}
-                  type="button"
-                  onClick={() => fullKey && activateStoredKey(key.key_hash)}
-                  disabled={!fullKey}
-                  className={[
-                    "flex w-full items-center gap-2 rounded-[var(--radius-2)] px-2 py-1.5 text-left text-xs transition-colors",
-                    fullKey ? "text-quill hover:bg-surface-deep cursor-pointer" : "text-muted cursor-not-allowed",
-                    isActive && fullKey ? "bg-surface-deep text-ink" : "",
-                  ].join(" ")}
-                >
-                  <span
-                    className={`size-1.5 shrink-0 rounded-full ${isActive && fullKey ? "bg-forest" : "bg-transparent"}`}
-                    aria-hidden="true"
-                  />
-                  <span className="min-w-0 flex-1 truncate font-mono">
-                    {keyDisplayLabel(key.key_hash)}
-                  </span>
-                  {!fullKey && (
-                    <span className="shrink-0 font-mono text-[10px] text-muted italic">not stored</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {dropdownContent}
 
       {showPaste ? (
         <div className="mt-2 border-t border-border-subtle pt-2">
