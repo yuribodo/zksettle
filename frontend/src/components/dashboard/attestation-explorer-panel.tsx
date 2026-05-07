@@ -60,7 +60,7 @@ function describeProofError(err: unknown): { kind: "not-found" | "auth" | "other
   if (err instanceof ApiError) {
     if (err.status === 404) return { kind: "not-found", message: "No proof found for this wallet." };
     if (err.status === 401 || err.status === 403)
-      return { kind: "auth", message: "Not authorized. Check NEXT_PUBLIC_API_KEY." };
+      return { kind: "auth", message: "Not authorized. Select an active API key in the sidebar." };
     return { kind: "other", message: err.message };
   }
   return { kind: "other", message: err instanceof Error ? err.message : "Unknown error" };

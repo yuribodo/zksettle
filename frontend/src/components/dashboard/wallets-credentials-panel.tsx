@@ -36,7 +36,7 @@ function describeError(err: unknown): { kind: "not-found" | "auth" | "conflict" 
   if (err instanceof ApiError) {
     if (err.status === 404) return { kind: "not-found", message: "No credential for this wallet." };
     if (err.status === 401 || err.status === 403)
-      return { kind: "auth", message: "Not authorized. Check NEXT_PUBLIC_API_KEY." };
+      return { kind: "auth", message: "Not authorized. Select an active API key in the sidebar." };
     if (err.status === 409) return { kind: "conflict", message: "Wallet already has a credential." };
     if (err.status === 400) return { kind: "other", message: "Invalid wallet hex (need 64 chars)." };
     return { kind: "other", message: err.message };
@@ -49,7 +49,7 @@ function describeRegisterError(err: unknown): string {
     if (err.status === 409) return "Wallet is already registered in the membership tree.";
     if (err.status === 400) return "Invalid wallet hex (need exactly 64 hex characters).";
     if (err.status === 401 || err.status === 403)
-      return "Not authorized. Check NEXT_PUBLIC_API_KEY.";
+      return "Not authorized. Select an active API key in the sidebar.";
     return err.message;
   }
   return err instanceof Error ? err.message : "Unknown error";

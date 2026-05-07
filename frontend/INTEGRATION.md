@@ -95,7 +95,7 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
 ```
 
 Notas:
-- ~~`NEXT_PUBLIC_API_KEY`~~ foi removido. A API key agora é selecionada pelo usuário na dashboard e armazenada em `localStorage` (`zks.active_api_key`). O `apiFetch` lê a key ativa via `getActiveApiKey()` e injeta `Authorization: Bearer` automaticamente. Ver §4.2.
+- ~~`NEXT_PUBLIC_API_KEY`~~ foi removido. A API key ativa é selecionada pelo usuário na dashboard e armazenada como **cookie HttpOnly** (`zks_active_key`) — JS no browser não consegue ler. Todas as chamadas ao gateway passam pelo proxy server-side `/api/proxy/[...path]`, que lê o cookie e injeta `Authorization: Bearer` antes de encaminhar. Ver §4.2.
 - Backend roda em `:4000` por padrão (`GATEWAY_PORT`). O issuer-service em `:3000` é interno — **não chamar direto**.
 
 ### 3.3 ✅ CORS (implementado)
@@ -113,16 +113,16 @@ export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
 ```
 
-`API_KEY` foi removido — a key ativa vem de `localStorage` via `src/lib/api/active-key.ts`.
+`API_KEY` foi removido — a key ativa é gerenciada server-side via cookie HttpOnly e o frontend nunca a manipula diretamente.
 
 ### 4.2 `src/lib/api/client.ts`
 
-Wrapper `fetch` com auth + error parsing. Sem retry (deixa pro react-query). No browser, injeta `Authorization: Bearer` a partir da key ativa em `localStorage`. Para rotas wallet-scoped (`/credentials/`, `/proofs/membership/`, `/proofs/sanctions/`, `/proofs/jurisdiction/`), injeta `x-wallet-signature` e `x-wallet-timestamp` via `wallet-auth.ts`.
+Wrapper `fetch` com error parsing. Sem retry (deixa pro react-query). Não envia mais `Authorization` direto — chamadas vão para `/api/proxy/[...path]` (mesma origem), e o Route Handler server-side lê o cookie HttpOnly `zks_active_key` e injeta `Authorization: Bearer` antes de encaminhar ao gateway. Para rotas wallet-scoped (`/credentials/`, `/proofs/membership/`, `/proofs/sanctions/`, `/proofs/jurisdiction/`), o browser ainda injeta `x-wallet-signature` e `x-wallet-timestamp` (a assinatura precisa da wallet) — o proxy os encaminha sem alteração.
 
 ```ts
-import { API_BASE_URL } from "../config";
-import { getActiveApiKey } from "./active-key";
 import { getWalletAuthHeaders, isWalletScopedPath } from "./wallet-auth";
+
+const PROXY_BASE = "/api/proxy";
 
 export class ApiError extends Error {
   constructor(public status: number, public body: unknown, message: string) {
@@ -136,21 +136,15 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     ...(init.headers as Record<string, string>),
   };
 
-  const isBrowser = globalThis.window !== undefined;
-  if (isBrowser && !headers.Authorization) {
-    const activeKey = getActiveApiKey();
-    if (activeKey) {
-      headers.Authorization = `Bearer ${activeKey}`;
-    }
-  }
   if (isWalletScopedPath(path)) {
     const walletHeaders = await getWalletAuthHeaders();
     Object.assign(headers, walletHeaders);
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const res = await fetch(`${PROXY_BASE}${path}`, {
     ...init,
     headers,
+    credentials: "same-origin",
   });
 
   if (!res.ok) {
@@ -383,13 +377,14 @@ Pré-requisitos para fechar a dashboard:
 
 A dashboard usa dois mecanismos de auth complementares:
 
-### 7.1 API key — seleção pelo usuário
+### 7.1 API key — seleção pelo usuário (HttpOnly cookie)
 
 1. Usuário provisiona keys via `/dashboard/api-keys` (`POST /api-keys`).
-2. Seleciona a key ativa no `ApiKeySelector` (sidebar/drawer).
-3. Key armazenada em `localStorage` (`zks.active_api_key`) via `src/lib/api/active-key.ts`.
-4. `apiFetch` lê a key ativa e injeta `Authorization: Bearer` em todas as chamadas browser-side.
-5. `NoKeyGuard` no layout + `RequireApiKey` por página impedem uso sem key selecionada.
+2. Ao criar uma key (ou colá-la na gate), o frontend faz `POST /api/active-key` no Next.js server.
+3. O Route Handler valida o formato e seta um cookie **HttpOnly + SameSite=Lax + Secure (prod)** chamado `zks_active_key`. JS no browser nunca lê o valor.
+4. Todas as chamadas ao gateway são feitas para `/api/proxy/[...path]` (mesma origem). O proxy server-side lê o cookie e injeta `Authorization: Bearer` antes de encaminhar.
+5. `RequireApiKey` por página chama `GET /api/active-key/status` (que retorna apenas `{ hasKey, prefix }`) e mostra a gate enquanto não houver key ativa.
+6. `DELETE /api/active-key` limpa o cookie. Na revoke de uma key que está ativa, o panel chama esse endpoint automaticamente para evitar bearer "morto".
 
 ### 7.2 Wallet auth — endpoints per-wallet
 
@@ -400,9 +395,11 @@ Rotas de credential/proof (`/v1/credentials/{wallet}`, `/v1/proofs/*/{wallet}`) 
 3. `apiFetch` detecta rotas wallet-scoped e injeta `x-wallet-signature` + `x-wallet-timestamp` automaticamente.
 4. Signature cacheada por 240s (refresh antes da janela de 300s do servidor).
 
-### 7.3 Futuro (produção)
+### 7.3 CSRF & próximos passos
 
-Para produção, migrar a API key de `localStorage` para cookie HttpOnly via Route Handler — elimina exposição no DevTools. O mecanismo wallet auth já é seguro (signature efêmera, não armazena segredos).
+- `SameSite=Lax` bloqueia que outros sites disparem `POST`/`DELETE` cross-site carregando o cookie. Suficiente para v1. Se um dia houver embed cross-site, adicionar token CSRF no header.
+- Cookie tem `Max-Age` de 7 dias. Para idle-timeout mais agressivo, renovar o cookie em cada request server-side.
+- Wallet auth (signature efêmera) continua igual — sem segredos persistidos.
 
 ---
 
@@ -414,6 +411,6 @@ Para produção, migrar a API key de `localStorage` para cookie HttpOnly via Rou
 4. ✅ Pivot `/dashboard/counterparties` → "Issuer Status" usando `useRoots()`.
 5. ✅ Pivot `/dashboard/transactions` → "Wallets & Credentials".
 6. ✅ Wire `/dashboard/audit-log` em `useEvents(limit, filters)` — cursor pagination + filtros server-side (range, issuer, recipient).
-7. ✅ Active API key (localStorage) + wallet auth + `NoKeyGuard` + `RequireApiKey` — substitui `NEXT_PUBLIC_API_KEY`.
+7. ✅ Active API key (HttpOnly cookie) + wallet auth + `RequireApiKey` — substitui `NEXT_PUBLIC_API_KEY` e elimina exposição via XSS/localStorage.
 8. ✅ `/dashboard/prove` — flow E2E com proof generation in-browser + on-chain submission via SDK `wrap()`.
 9. Aguardando §6.3 (invoices) — único bloqueio é decisão de produto.

@@ -53,7 +53,7 @@ function pluralizeEvents(count: number): string {
 function describeError(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 401 || err.status === 403) {
-      return "Not authorized. Set NEXT_PUBLIC_API_KEY.";
+      return "Not authorized. Select an active API key in the sidebar.";
     }
     if (err.status === 502) {
       return "Indexer is unreachable from the gateway.";
