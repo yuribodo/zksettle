@@ -123,6 +123,12 @@ mod tests {
     }
 
     #[test]
+    fn wallet_leaf_is_poseidon2_hash() {
+        let fr = Fr::from(42u64);
+        assert_eq!(wallet_leaf(fr), zksettle_crypto::poseidon2_hash(&[fr]));
+    }
+
+    #[test]
     fn fr_to_bytes_be_is_big_endian() {
         let f = Fr::from(1u64);
         let bytes = fr_to_bytes_be(&f);
