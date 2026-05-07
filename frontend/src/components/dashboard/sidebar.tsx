@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import pkg from "@/../package.json";
 import { Logo } from "@/components/icons/logo";
 import { NAV_GROUPS, NAV_ITEMS } from "@/components/dashboard/nav-items";
+import { ApiKeySelector } from "@/components/dashboard/api-key-selector";
 import { cn } from "@/lib/cn";
 
 export function Sidebar() {
@@ -76,8 +77,9 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="border-t border-border-subtle px-4 py-4">
-        <div className="flex items-center justify-between text-[11px]">
+      <div className="border-t border-border-subtle px-3 py-3">
+        <ApiKeySelector compact />
+        <div className="mt-2 flex items-center justify-between px-1 text-[11px]">
           <span className="flex items-center gap-1 font-mono text-muted uppercase tracking-[0.08em]">
             <span className="size-1.5 rounded-full bg-emerald" aria-hidden="true" />{" "}
             Devnet
