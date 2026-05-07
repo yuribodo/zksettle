@@ -47,6 +47,17 @@ function describeError(err: unknown): string {
   return err instanceof Error ? err.message : "Unknown error";
 }
 
+function statOrDash(isLoading: boolean, roots: Roots | undefined, getValue: (r: Roots) => string): string {
+  if (isLoading || !roots) return "—";
+  return getValue(roots);
+}
+
+function rootDisplay(isLoading: boolean, value: string | undefined): string {
+  if (isLoading) return "loading…";
+  if (!value) return "—";
+  return truncateWallet(value, 10, 8);
+}
+
 export function IssuerStatusPanel() {
   const { data: roots, isLoading, isError, error, refetch, isFetching } = useRoots();
   const publish = usePublishRoots();
@@ -129,12 +140,12 @@ export function IssuerStatusPanel() {
       <div className="grid gap-4 sm:grid-cols-2">
         <StatCard
           label="Wallet count"
-          value={isLoading ? "—" : roots ? fmtCompact(roots.wallet_count) : "—"}
+          value={statOrDash(isLoading, roots, (r) => fmtCompact(r.wallet_count))}
           sub="Credentialed wallets in the membership tree"
         />
         <StatCard
           label="Last publish"
-          value={isLoading ? "—" : roots ? formatSlot(roots.last_publish_slot) : "—"}
+          value={statOrDash(isLoading, roots, (r) => formatSlot(r.last_publish_slot))}
           sub="Most recent on-chain root commit"
         />
       </div>
@@ -165,11 +176,7 @@ export function IssuerStatusPanel() {
           <ul className="mt-4 flex flex-col divide-y divide-border-subtle">
             {ROOT_FIELDS.map((field) => {
               const value = roots?.[field.key];
-              const display = isLoading
-                ? "loading…"
-                : value
-                  ? truncateWallet(value, 10, 8)
-                  : "—";
+              const display = rootDisplay(isLoading, value);
               return (
                 <li
                   key={field.key}
