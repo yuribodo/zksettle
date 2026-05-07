@@ -41,6 +41,19 @@ vi.mock("@/contexts/auth-context", () => ({
   }),
 }));
 
+vi.mock("@/hooks/use-api-keys", () => ({
+  useApiKeys: () => ({ data: { keys: [] }, isLoading: false }),
+  lookupKeyPrefix: () => null,
+  lookupFullKey: () => null,
+}));
+
+vi.mock("@/hooks/use-active-key", () => ({
+  useActiveKey: () => ({ data: null }),
+  useSetActiveKey: () => ({ mutate: vi.fn() }),
+  useClearActiveKey: () => ({ mutate: vi.fn() }),
+  useKeyStatus: () => ({ hasKey: false, activeKey: null, availableKeys: 0, isLoading: false }),
+}));
+
 import { findNavItem, NAV_GROUPS, NAV_ITEMS } from "./nav-items";
 import { MobileNavDrawer } from "./mobile-nav-drawer";
 import { Sidebar } from "./sidebar";
