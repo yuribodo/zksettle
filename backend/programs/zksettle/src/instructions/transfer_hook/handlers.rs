@@ -58,6 +58,11 @@ pub fn set_hook_payload_handler(
     Ok(())
 }
 
+// The PDA pays rent for MAX_HOOK_PROOF_BYTES regardless of `expected_proof_len`
+// because Anchor `init` allocates a fixed `space`. The Vec is sized to the
+// actual proof length so writes stay in-bounds; unused account space is wasted
+// rent. A `realloc` pattern could reclaim it but adds complexity for a
+// short-lived PDA that gets closed after settlement.
 pub fn init_hook_payload_handler(
     ctx: Context<InitHookPayload>,
     expected_proof_len: u32,
