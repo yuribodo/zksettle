@@ -1,4 +1,5 @@
-import { API_BASE_URL, API_KEY } from "../config";
+import { API_BASE_URL } from "../config";
+import { getActiveApiKey } from "../active-key";
 
 export class ApiError extends Error {
   constructor(
@@ -18,8 +19,11 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   };
 
   const isBrowser = typeof globalThis.window !== "undefined";
-  if (API_KEY && !isBrowser && !headers.Authorization) {
-    headers.Authorization = `Bearer ${API_KEY}`;
+  if (isBrowser && !headers.Authorization) {
+    const activeKey = getActiveApiKey();
+    if (activeKey) {
+      headers.Authorization = `Bearer ${activeKey}`;
+    }
   }
 
   const res = await fetch(`${API_BASE_URL}${path}`, {
