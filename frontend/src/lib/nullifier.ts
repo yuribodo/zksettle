@@ -1,23 +1,27 @@
 import type { Barretenberg } from "@aztec/bb.js";
 
+export interface NullifierInputs {
+  privateKey: string;
+  mintLo: string;
+  mintHi: string;
+  epoch: string;
+  recipientLo: string;
+  recipientHi: string;
+  amount: string;
+}
+
 export async function computeNullifier(
   api: Barretenberg,
-  privateKey: string,
-  mintLo: string,
-  mintHi: string,
-  epoch: string,
-  recipientLo: string,
-  recipientHi: string,
-  amount: string,
+  fields: NullifierInputs,
 ): Promise<string> {
   const inputs = [
-    privateKey,
-    mintLo,
-    mintHi,
-    epoch,
-    recipientLo,
-    recipientHi,
-    amount,
+    fields.privateKey,
+    fields.mintLo,
+    fields.mintHi,
+    fields.epoch,
+    fields.recipientLo,
+    fields.recipientHi,
+    fields.amount,
   ].map(fieldToBytes32);
 
   const { hash } = await api.poseidon2Hash({ inputs });
