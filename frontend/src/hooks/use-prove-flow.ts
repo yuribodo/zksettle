@@ -283,7 +283,10 @@ export function useProveFlow(): UseProveFlowReturn {
       } else {
         try {
           const start = performance.now();
-          const { wrap } = await import("@zksettle/sdk/wrap");
+          const [{ wrap }, { BN }] = await Promise.all([
+            import("@zksettle/sdk/wrap"),
+            import("@coral-xyz/anchor"),
+          ]);
 
           const nullifierHex = proofResult.publicInputs[1] ?? "";
           const cleanHex = nullifierHex.startsWith("0x")
@@ -301,7 +304,7 @@ export function useProveFlow(): UseProveFlowReturn {
             transferContext: {
               mint: publicKey,
               recipient: publicKey,
-              amount: 1000 as any,
+              amount: new BN(1000),
               epoch: Math.floor(Date.now() / 1000 / 86400),
               privateKey: zkPrivateKey,
               credentialExpiry,
