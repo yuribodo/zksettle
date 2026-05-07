@@ -1,7 +1,7 @@
 "use client";
 
 import { Copy, Trash, WarningTriangle } from "iconoir-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,13 @@ import {
   type CreatedKey,
 } from "@/hooks/use-api-keys";
 import { ApiError } from "@/lib/api/client";
+import {
+  clearActiveApiKey,
+  fetchActiveKeyStatus,
+  onActiveKeyChanged,
+  setActiveApiKey,
+  type ActiveKeyStatus,
+} from "@/lib/api/active-key";
 import type { ListedKey, Tier } from "@/lib/api/schemas";
 
 const TIER_LABEL: Record<Tier, string> = {
@@ -35,7 +42,7 @@ function formatDate(unixSeconds: number): string {
 function describeError(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 401 || err.status === 403) {
-      return "Not authorized. Set NEXT_PUBLIC_API_KEY to your admin key, or set GATEWAY_ALLOW_OPEN_KEYS=true on the gateway.";
+      return "Not authorized. Select an active API key in the sidebar, or set GATEWAY_ALLOW_OPEN_KEYS=true on the gateway.";
     }
     if (err.status === 500) {
       return "Key administration is disabled on the gateway. Set GATEWAY_ADMIN_KEY or GATEWAY_ALLOW_OPEN_KEYS=true.";
@@ -62,6 +69,23 @@ export function ApiKeysPanel() {
   const [owner, setOwner] = useState("");
   const [revealed, setRevealed] = useState<CreatedKey | null>(null);
   const [copied, setCopied] = useState(false);
+  const [pendingRevoke, setPendingRevoke] = useState<ListedKey | null>(null);
+  const [activePrefix, setActivePrefix] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      const fallback: ActiveKeyStatus = { hasKey: false };
+      const status = await fetchActiveKeyStatus().catch(() => fallback);
+      if (!cancelled) setActivePrefix(status.hasKey ? status.prefix ?? null : null);
+    };
+    void refresh();
+    const off = onActiveKeyChanged(() => void refresh());
+    return () => {
+      cancelled = true;
+      off();
+    };
+  }, []);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -72,6 +96,12 @@ export function ApiKeysPanel() {
       setRevealed(created);
       setOwner("");
       setCopied(false);
+      // Auto-activate the freshly created key as the active one.
+      try {
+        await setActiveApiKey(created.api_key);
+      } catch {
+        // surfaced via subsequent UI checks; not fatal here.
+      }
     } catch {
       // surfaced via createKey.error
     }
@@ -88,14 +118,21 @@ export function ApiKeysPanel() {
     }
   };
 
-  const onRevoke = async (key: ListedKey) => {
-    const confirmed = window.confirm(
-      `Revoke key "${displayPrefix(key.key_hash)}" owned by "${key.owner}"? This cannot be undone.`,
-    );
-    if (!confirmed) return;
+  const requestRevoke = (key: ListedKey) => {
     deleteKey.reset();
+    setPendingRevoke(key);
+  };
+
+  const confirmRevoke = async () => {
+    if (!pendingRevoke) return;
+    const target = pendingRevoke;
+    const targetPrefix = lookupKeyPrefix(target.key_hash);
+    setPendingRevoke(null);
     try {
-      await deleteKey.mutateAsync(key.key_hash);
+      await deleteKey.mutateAsync(target.key_hash);
+      if (targetPrefix && activePrefix && targetPrefix === activePrefix) {
+        await clearActiveApiKey();
+      }
     } catch {
       // surfaced via deleteKey.error
     }
@@ -222,37 +259,47 @@ export function ApiKeysPanel() {
               </tr>
             </thead>
             <tbody>
-              {keys.map((key) => (
-                <tr
-                  key={key.key_hash}
-                  className="border-b border-border-subtle text-quill last:border-b-0"
-                >
-                  <td className="py-3 pr-3 font-mono text-ink">
-                    {displayPrefix(key.key_hash)}
-                  </td>
-                  <td className="py-3 pr-3">{key.owner}</td>
-                  <td className="py-3 pr-3 font-mono text-stone">{TIER_LABEL[key.tier]}</td>
-                  <td className="py-3 pr-3 font-mono text-xs text-stone">
-                    {formatDate(key.created_at)}
-                  </td>
-                  <td className="py-3 text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`Revoke key ${displayPrefix(key.key_hash)}`}
-                      disabled={
-                        deleteKey.isPending && deleteKey.variables === key.key_hash
-                      }
-                      onClick={() => onRevoke(key)}
-                    >
-                      <Trash aria-hidden="true" className="size-4" />
-                      {deleteKey.isPending && deleteKey.variables === key.key_hash
-                        ? "Revoking…"
-                        : "Revoke"}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {keys.map((key) => {
+                const prefix = displayPrefix(key.key_hash);
+                const isActive =
+                  activePrefix !== null && lookupKeyPrefix(key.key_hash) === activePrefix;
+                return (
+                  <tr
+                    key={key.key_hash}
+                    className="border-b border-border-subtle text-quill last:border-b-0"
+                  >
+                    <td className="py-3 pr-3 font-mono text-ink">
+                      {prefix}
+                      {isActive ? (
+                        <span className="ml-2 rounded-full border border-emerald/40 bg-emerald/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-emerald">
+                          active
+                        </span>
+                      ) : null}
+                    </td>
+                    <td className="py-3 pr-3">{key.owner}</td>
+                    <td className="py-3 pr-3 font-mono text-stone">{TIER_LABEL[key.tier]}</td>
+                    <td className="py-3 pr-3 font-mono text-xs text-stone">
+                      {formatDate(key.created_at)}
+                    </td>
+                    <td className="py-3 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Revoke key ${prefix}`}
+                        disabled={
+                          deleteKey.isPending && deleteKey.variables === key.key_hash
+                        }
+                        onClick={() => requestRevoke(key)}
+                      >
+                        <Trash aria-hidden="true" className="size-4" />
+                        {deleteKey.isPending && deleteKey.variables === key.key_hash
+                          ? "Revoking…"
+                          : "Revoke"}
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         ) : null}
@@ -264,6 +311,14 @@ export function ApiKeysPanel() {
           copied={copied}
           onCopy={copyKey}
           onDismiss={() => setRevealed(null)}
+        />
+      ) : null}
+
+      {pendingRevoke ? (
+        <RevokeConfirmDialog
+          target={pendingRevoke}
+          onCancel={() => setPendingRevoke(null)}
+          onConfirm={confirmRevoke}
         />
       ) : null}
     </div>
@@ -278,14 +333,29 @@ interface RevealKeyDialogProps {
 }
 
 function RevealKeyDialog({ created, copied, onCopy, onDismiss }: RevealKeyDialogProps) {
+  const ref = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return;
+    if (!dialog.open) dialog.showModal();
+    return () => {
+      if (dialog.open) dialog.close();
+    };
+  }, []);
+
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      ref={ref}
       aria-labelledby="reveal-key-heading"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
+      onCancel={(event) => {
+        event.preventDefault();
+        onDismiss();
+      }}
+      onClose={onDismiss}
+      className="m-auto rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6 shadow-lg backdrop:bg-ink/40"
     >
-      <div className="w-full max-w-lg rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6 shadow-lg">
+      <div className="w-full max-w-lg">
         <div className="flex items-start gap-3">
           <WarningTriangle aria-hidden="true" className="mt-1 size-5 shrink-0 text-rust" />
           <div className="flex flex-col gap-1">
@@ -297,7 +367,7 @@ function RevealKeyDialog({ created, copied, onCopy, onDismiss }: RevealKeyDialog
             </h2>
             <p className="text-sm text-stone">
               We won&apos;t show it again. Store it in your secret manager before closing
-              this dialog.
+              this dialog. The key is also set as your active key (HttpOnly cookie).
             </p>
           </div>
         </div>
@@ -323,6 +393,58 @@ function RevealKeyDialog({ created, copied, onCopy, onDismiss }: RevealKeyDialog
           </Button>
         </div>
       </div>
-    </div>
+    </dialog>
+  );
+}
+
+interface RevokeConfirmDialogProps {
+  target: ListedKey;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+function RevokeConfirmDialog({ target, onCancel, onConfirm }: RevokeConfirmDialogProps) {
+  const ref = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return;
+    if (!dialog.open) dialog.showModal();
+    return () => {
+      if (dialog.open) dialog.close();
+    };
+  }, []);
+
+  return (
+    <dialog
+      ref={ref}
+      aria-labelledby="revoke-key-heading"
+      onCancel={(event) => {
+        event.preventDefault();
+        onCancel();
+      }}
+      onClose={onCancel}
+      className="m-auto rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6 shadow-lg backdrop:bg-ink/40"
+    >
+      <div className="w-full max-w-md">
+        <h2 id="revoke-key-heading" className="font-display text-xl text-ink">
+          Revoke API key?
+        </h2>
+        <p className="mt-2 text-sm text-stone">
+          This will permanently revoke{" "}
+          <span className="font-mono text-ink">{displayPrefix(target.key_hash)}</span>{" "}
+          owned by <span className="font-mono text-ink">{target.owner}</span>. This
+          cannot be undone.
+        </p>
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="ghost" size="md" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="primary" size="md" onClick={onConfirm}>
+            Revoke key
+          </Button>
+        </div>
+      </div>
+    </dialog>
   );
 }
