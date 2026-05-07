@@ -19,7 +19,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     ...(init.headers as Record<string, string>),
   };
 
-  const isBrowser = typeof globalThis.window !== "undefined";
+  const isBrowser = globalThis.window !== undefined;
   if (isBrowser && !headers.Authorization) {
     const activeKey = getActiveApiKey();
     if (activeKey) {
