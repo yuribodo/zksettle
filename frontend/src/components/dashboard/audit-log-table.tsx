@@ -36,6 +36,20 @@ function formatDateTime(unixSeconds: number): string {
   }).format(d);
 }
 
+function eventCountStatus(
+  isLoading: boolean,
+  isError: boolean,
+  count: number,
+): string {
+  if (isLoading) return "loading…";
+  if (isError) return "Unavailable";
+  return `${fmtCompact(count)} event${count === 1 ? "" : "s"} loaded`;
+}
+
+function pluralizeEvents(count: number): string {
+  return `Showing ${fmtCompact(count)} event${count === 1 ? "" : "s"}`;
+}
+
 function describeError(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 401 || err.status === 403) {
@@ -122,6 +136,22 @@ export function AuditLogTable() {
     }, 3_000);
   }, []);
 
+  const handleExportCsv = () => {
+    if (events.length === 0) {
+      showToast("No events to export");
+      return;
+    }
+    exportToCsv(events, "zksettle-audit-log.csv");
+  };
+
+  const handleExportJson = () => {
+    if (events.length === 0) {
+      showToast("No events to export");
+      return;
+    }
+    exportToJson(events, "zksettle-audit-log.json");
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 border-b border-border-subtle pb-4">
@@ -159,38 +189,16 @@ export function AuditLogTable() {
               <Refresh aria-hidden="true" className="size-4" />
               Refresh
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                events.length
-                  ? exportToCsv(events, "zksettle-audit-log.csv")
-                  : showToast("No events to export")
-              }
-            >
+            <Button variant="ghost" size="sm" onClick={handleExportCsv}>
               Export CSV
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                events.length
-                  ? exportToJson(events, "zksettle-audit-log.json")
-                  : showToast("No events to export")
-              }
-            >
+            <Button variant="ghost" size="sm" onClick={handleExportJson}>
               Export JSON
             </Button>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 font-mono text-xs text-muted">
-          <span>
-            {isLoading
-              ? "loading…"
-              : isError
-                ? "Unavailable"
-                : `${fmtCompact(events.length)} event${events.length === 1 ? "" : "s"} loaded`}
-          </span>
+          <span>{eventCountStatus(isLoading, isError, events.length)}</span>
           <span>· filters applied server-side via GET /v1/events</span>
         </div>
       </div>
@@ -274,12 +282,8 @@ export function AuditLogTable() {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-4 font-mono text-xs text-muted">
-        <span>
-          {events.length > 0
-            ? `Showing ${fmtCompact(events.length)} event${events.length === 1 ? "" : "s"}`
-            : ""}
-        </span>
-        {hasNextPage ? (
+        <span>{events.length > 0 ? pluralizeEvents(events.length) : ""}</span>
+        {hasNextPage && (
           <Button
             variant="ghost"
             size="sm"
@@ -288,9 +292,8 @@ export function AuditLogTable() {
           >
             {isFetchingNextPage ? "Loading…" : "Load more"}
           </Button>
-        ) : events.length > 0 ? (
-          <span>End of results</span>
-        ) : null}
+        )}
+        {!hasNextPage && events.length > 0 && <span>End of results</span>}
       </div>
 
       {toast ? (
@@ -306,7 +309,7 @@ export function AuditLogTable() {
   );
 }
 
-function Th({ children, className }: { children: React.ReactNode; className?: string }) {
+function Th({ children, className }: Readonly<{ children: React.ReactNode; className?: string }>) {
   return (
     <th scope="col" className={cn("py-2.5 pr-3 font-medium", className)}>
       {children}
@@ -319,12 +322,12 @@ function FilterSelect({
   value,
   onChange,
   options,
-}: {
+}: Readonly<{
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: readonly { value: string; label: string }[];
-}) {
+}>) {
   return (
     <label className="flex flex-col gap-1.5 text-xs text-stone">
       <span className="font-mono tracking-[0.08em] text-muted uppercase">{label}</span>
@@ -350,14 +353,14 @@ function HexFilterInput({
   invalid,
   onChange,
   onCommit,
-}: {
+}: Readonly<{
   label: string;
   placeholder: string;
   value: string;
   invalid: boolean;
   onChange: (v: string) => void;
   onCommit: () => void;
-}) {
+}>) {
   return (
     <label className="flex flex-col gap-1.5 text-xs text-stone">
       <span className="font-mono tracking-[0.08em] text-muted uppercase">{label}</span>
