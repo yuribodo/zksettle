@@ -30,7 +30,7 @@ export function ProveProgressBar({ steps, currentStep }: Readonly<ProveProgressB
         {completedCount}/{steps.length} steps complete
       </progress>
       {/* Desktop: dot indicators */}
-      <div className="hidden items-center gap-1 md:flex" role="group" aria-label="Proof flow progress">
+      <div className="hidden items-center gap-1 md:flex" aria-label="Proof flow progress">
         {steps.map((step, i) => (
           <div key={step.id} className="flex items-center">
             <div

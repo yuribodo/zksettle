@@ -77,7 +77,6 @@ interface StepContentProps {
   readonly state: FlowState;
   readonly startDemo: () => void;
   readonly isRunning: boolean;
-  readonly txUrl: string | null;
 }
 
 function StepRunningContent(): ReactNode {
@@ -97,40 +96,49 @@ function StepErrorContent({ index, step, startDemo, isRunning }: Readonly<{ inde
   return null;
 }
 
-function StepSuccessContent({ index, step, state }: Readonly<{ index: number; step: { data?: unknown }; state: FlowState }>): ReactNode {
-  if (index === 1 && step.data) {
-    const d = step.data as { jurisdiction?: string; demo?: boolean };
-    if (d.demo) return <Badge variant="default"><Sparks className="size-3" strokeWidth={1.5} aria-hidden="true" />Test data</Badge>;
-    if (d.jurisdiction) return <Badge variant="success">Jurisdiction: {d.jurisdiction}</Badge>;
+function CredentialSuccess({ data }: Readonly<{ data: unknown }>): ReactNode {
+  const d = data as { jurisdiction?: string; demo?: boolean };
+  if (d.demo) return <Badge variant="default"><Sparks className="size-3" strokeWidth={1.5} aria-hidden="true" />Test data</Badge>;
+  if (d.jurisdiction) return <Badge variant="success">Jurisdiction: {d.jurisdiction}</Badge>;
+  return null;
+}
+
+function SubmitSuccess({ data, mode }: Readonly<{ data: unknown; mode: string }>): ReactNode {
+  const d = data as { signature?: string; skipped?: boolean; reason?: string } | undefined;
+  if (mode === "demo" || d?.skipped) {
+    return <Badge variant="default"><Sparks className="size-3" strokeWidth={1.5} aria-hidden="true" />{d?.reason ?? "Skipped in demo"}</Badge>;
   }
-  if (index === 2 && step.data) {
-    const d = step.data as { root?: string; demo?: boolean };
-    if (!d.demo && d.root) return <span className="font-mono text-[11px] text-muted">root: {d.root}...</span>;
-  }
-  if (index === 3 && step.data) {
-    const d = step.data as { proofPreview: string; publicInputCount: number };
+  if (d?.signature) {
     return (
-      <div className="flex items-center gap-3">
-        <span className="font-mono text-[11px] text-stone">{d.publicInputCount} public inputs</span>
-        <CopyButton text={d.proofPreview} label="Copy proof bytes" />
+      <div className="flex items-center gap-2">
+        <code className="font-mono text-[11px] text-stone">{d.signature.slice(0, 16)}...{d.signature.slice(-8)}</code>
+        <CopyButton text={d.signature} label="Copy transaction signature" />
       </div>
     );
   }
-  if (index === 4) {
-    const d = step.data as { signature?: string; skipped?: boolean; reason?: string } | undefined;
-    if (state.mode === "demo" || d?.skipped) {
-      return <Badge variant="default"><Sparks className="size-3" strokeWidth={1.5} aria-hidden="true" />{d?.reason ?? "Skipped in demo"}</Badge>;
+  return null;
+}
+
+function StepSuccessContent({ index, step, state }: Readonly<{ index: number; step: { data?: unknown }; state: FlowState }>): ReactNode {
+  if (!step.data && index !== 4) return null;
+  switch (index) {
+    case 1: return <CredentialSuccess data={step.data} />;
+    case 2: {
+      const d = step.data as { root?: string; demo?: boolean };
+      return (!d.demo && d.root) ? <span className="font-mono text-[11px] text-muted">root: {d.root}...</span> : null;
     }
-    if (d?.signature) {
+    case 3: {
+      const d = step.data as { proofPreview: string; publicInputCount: number };
       return (
-        <div className="flex items-center gap-2">
-          <code className="font-mono text-[11px] text-stone">{d.signature.slice(0, 16)}...{d.signature.slice(-8)}</code>
-          <CopyButton text={d.signature} label="Copy transaction signature" />
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-[11px] text-stone">{d.publicInputCount} public inputs</span>
+          <CopyButton text={d.proofPreview} label="Copy proof bytes" />
         </div>
       );
     }
+    case 4: return <SubmitSuccess data={step.data} mode={state.mode} />;
+    default: return null;
   }
-  return null;
 }
 
 function StepContent({ index, state, startDemo, isRunning }: StepContentProps): ReactNode {
@@ -418,7 +426,6 @@ export function ProveFlowPanel() {
                 state={state}
                 startDemo={startDemo}
                 isRunning={isRunning}
-                txUrl={txUrl}
               />
             </ProofStepCard>
           ))}
