@@ -51,7 +51,7 @@ function describeError(err: unknown): string {
 }
 
 function displayPrefix(keyHash: string): string {
-  const cached = typeof globalThis.window === "undefined" ? null : lookupKeyPrefix(keyHash);
+  const cached = globalThis.window === undefined ? null : lookupKeyPrefix(keyHash);
   if (cached) return cached;
   return `hash ${keyHash.slice(0, 8)}…${keyHash.slice(-4)}`;
 }
