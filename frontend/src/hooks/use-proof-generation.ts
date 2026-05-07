@@ -131,7 +131,7 @@ export function useProofGeneration(): UseProofGenerationResult {
 
   const generate = useCallback(
     async (inputs: ProofInputs): Promise<ProofResult> => {
-      if (typeof globalThis.window === "undefined") {
+      if (globalThis.window === undefined) {
         throw new TypeError("useProofGeneration() requires a browser");
       }
       setIsGenerating(true);
