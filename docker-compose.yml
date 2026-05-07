@@ -2,9 +2,9 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: zksettle
-      POSTGRES_PASSWORD: zksettle_dev
-      POSTGRES_DB: zksettle_gateway
+      POSTGRES_USER: "${POSTGRES_USER:-zksettle}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD (any non-empty string for local dev; rotate in prod)}"
+      POSTGRES_DB: "${POSTGRES_DB:-zksettle_gateway}"
     ports:
       - "5432:5432"
     volumes:
@@ -27,7 +27,7 @@ services:
       GATEWAY_PORT: "4000"
       GATEWAY_UPSTREAM_URL: "http://issuer-service:3000"
       GATEWAY_INDEXER_URL: "http://indexer:3001"
-      GATEWAY_DATABASE_URL: "postgres://zksettle:zksettle_dev@postgres:5432/zksettle_gateway"
+      GATEWAY_DATABASE_URL: "postgres://${POSTGRES_USER:-zksettle}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zksettle_gateway}"
       GATEWAY_ALLOW_OPEN_KEYS: "true"
       GATEWAY_JWT_SECRET: "${GATEWAY_JWT_SECRET:?set GATEWAY_JWT_SECRET}"
       GATEWAY_SIWS_DOMAIN: "${GATEWAY_SIWS_DOMAIN:-localhost:3000}"
@@ -61,7 +61,7 @@ services:
       INDEXER_PORT: "3001"
       INDEXER_HELIUS_AUTH_TOKEN: "${INDEXER_HELIUS_AUTH_TOKEN:?set INDEXER_HELIUS_AUTH_TOKEN}"
       INDEXER_PROGRAM_ID: "${INDEXER_PROGRAM_ID:?set INDEXER_PROGRAM_ID}"
-      INDEXER_DATABASE_URL: "postgres://zksettle:zksettle_dev@postgres:5432/zksettle_gateway"
+      INDEXER_DATABASE_URL: "postgres://${POSTGRES_USER:-zksettle}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zksettle_gateway}"
     depends_on:
       postgres:
         condition: service_healthy
