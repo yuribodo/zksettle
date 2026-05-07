@@ -33,7 +33,7 @@ mod tests {
     use tokio::sync::RwLock;
 
     use super::*;
-    use crate::convert::wallet_to_fr;
+    use crate::convert::{wallet_leaf, wallet_to_fr};
     use crate::state::{CredentialRecord, IssuerState};
 
     fn shared_state(state: IssuerState) -> SharedState {
@@ -58,7 +58,7 @@ mod tests {
         let mut st = IssuerState::new();
         let wallet_hex = format!("0x{}", hex::encode([1u8; 32]));
         st.membership_tree
-            .insert(wallet_to_fr(&wallet_hex).unwrap());
+            .insert(wallet_leaf(wallet_to_fr(&wallet_hex).unwrap()));
         st.credentials.insert(
             [1u8; 32],
             CredentialRecord {
@@ -82,7 +82,7 @@ mod tests {
 
         let mut st = IssuerState::new();
         st.membership_tree
-            .insert(wallet_to_fr(&format!("0x{}", hex::encode([9u8; 32]))).unwrap());
+            .insert(wallet_leaf(wallet_to_fr(&format!("0x{}", hex::encode([9u8; 32]))).unwrap()));
         let inserted_body = handler(State(shared_state(st))).await.0;
 
         assert_ne!(empty_body.membership_root, inserted_body.membership_root);
