@@ -1,7 +1,7 @@
 "use client";
 
 import { Copy, Trash, WarningTriangle } from "iconoir-react";
-import { useState, type FormEvent } from "react";
+import { useState, type SyntheticEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,7 +68,7 @@ export function ApiKeysPanel() {
   const [copied, setCopied] = useState(false);
   const [revoking, setRevoking] = useState<ListedKey | null>(null);
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = owner.trim();
     if (!trimmed || createKey.isPending) return;
@@ -328,11 +328,10 @@ interface RevealKeyDialogProps {
 
 function RevealKeyDialog({ created, copied, onCopy, onDismiss }: RevealKeyDialogProps) {
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      open
       aria-labelledby="reveal-key-heading"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
+      className="fixed inset-0 z-50 m-0 flex h-full w-full max-w-none items-center justify-center border-none bg-ink/40 p-4"
     >
       <div className="w-full max-w-lg rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6 shadow-lg">
         <div className="flex items-start gap-3">
@@ -372,7 +371,7 @@ function RevealKeyDialog({ created, copied, onCopy, onDismiss }: RevealKeyDialog
           </Button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }
 
@@ -386,12 +385,11 @@ interface RevokeConfirmDialogProps {
 
 function RevokeConfirmDialog({ prefix, owner, isPending, onConfirm, onCancel }: RevokeConfirmDialogProps) {
   return (
-    <div
-      role="alertdialog"
-      aria-modal="true"
+    <dialog
+      open
       aria-labelledby="revoke-heading"
       aria-describedby="revoke-desc"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
+      className="fixed inset-0 z-50 m-0 flex h-full w-full max-w-none items-center justify-center border-none bg-ink/40 p-4"
     >
       <div className="w-full max-w-md rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6 shadow-lg">
         <div className="flex items-start gap-3">
@@ -429,9 +427,9 @@ function RevokeConfirmDialog({ prefix, owner, isPending, onConfirm, onCancel }: 
             style={{ backgroundColor: "var(--color-danger-text)" }}
           >
             {isPending ? "Revoking…" : "Revoke key"}
-          </button>
+           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }
