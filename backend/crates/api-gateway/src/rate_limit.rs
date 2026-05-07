@@ -73,7 +73,7 @@ impl Default for LoginRateLimiter {
 fn build_limiter(tier: Tier) -> Limiter {
     let per_second = match tier {
         Tier::Developer => 10,
-        Tier::Startup => 10,
+        Tier::Startup => 20,
         Tier::Growth => 50,
         Tier::Enterprise => 200,
     };
