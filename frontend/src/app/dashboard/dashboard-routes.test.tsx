@@ -56,6 +56,10 @@ vi.mock("@/components/dashboard/no-key-guard", () => ({
   NoKeyGuard: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+vi.mock("@/components/dashboard/require-api-key", () => ({
+  RequireApiKey: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
 import DashboardLayout from "./layout";
 import DashboardIndex from "./page";
 import ApiKeysPage from "./api-keys/page";
