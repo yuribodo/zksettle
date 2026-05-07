@@ -6,8 +6,10 @@ import { createApiKey, deleteApiKey, listApiKeys } from "@/lib/api/endpoints";
 import type { ApiKeyResponse } from "@/lib/api/schemas";
 
 const PREFIX_STORAGE_KEY = "zks.api_key_prefixes.v1";
+const STORED_KEYS_STORAGE_KEY = "zks.stored_api_keys.v1";
 
 type PrefixMap = Record<string, string>;
+type StoredKeyMap = Record<string, string>;
 
 function readPrefixes(): PrefixMap {
   if (typeof window === "undefined") return {};
@@ -27,6 +29,24 @@ function writePrefixes(map: PrefixMap): void {
   window.localStorage.setItem(PREFIX_STORAGE_KEY, JSON.stringify(map));
 }
 
+function readStoredKeys(): StoredKeyMap {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(STORED_KEYS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== "object" || parsed === null) return {};
+    return parsed as StoredKeyMap;
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredKeys(map: StoredKeyMap): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(STORED_KEYS_STORAGE_KEY, JSON.stringify(map));
+}
+
 export function rememberKeyPrefix(keyHash: string, prefix: string): void {
   const map = readPrefixes();
   map[keyHash] = prefix;
@@ -40,6 +60,21 @@ export function lookupKeyPrefix(keyHash: string): string | null {
 export function forgetKeyPrefix(keyHash: string): void {
   const map = readPrefixes();
   if (delete map[keyHash]) writePrefixes(map);
+}
+
+export function storeFullKey(keyHash: string, fullKey: string): void {
+  const map = readStoredKeys();
+  map[keyHash] = fullKey;
+  writeStoredKeys(map);
+}
+
+export function lookupFullKey(keyHash: string): string | null {
+  return readStoredKeys()[keyHash] ?? null;
+}
+
+export function forgetStoredKey(keyHash: string): void {
+  const map = readStoredKeys();
+  if (delete map[keyHash]) writeStoredKeys(map);
 }
 
 async function sha256Hex(text: string): Promise<string> {
@@ -77,6 +112,7 @@ export function useCreateApiKey() {
       const created = await createApiKey(owner);
       const keyHash = await sha256Hex(created.api_key);
       rememberKeyPrefix(keyHash, prefixForRevealedKey(created.api_key));
+      storeFullKey(keyHash, created.api_key);
       return { ...created, createdAt: Date.now(), keyHash };
     },
     onSuccess: () => {
@@ -91,6 +127,7 @@ export function useDeleteApiKey() {
     mutationFn: (keyHash: string) => deleteApiKey(keyHash),
     onSuccess: (_data, keyHash) => {
       forgetKeyPrefix(keyHash);
+      forgetStoredKey(keyHash);
       queryClient.invalidateQueries({ queryKey: apiKeysQueryKey });
     },
   });
