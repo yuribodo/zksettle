@@ -34,6 +34,22 @@ function formatSlot(slot: number): string {
   return `Slot ${slot.toLocaleString("en-US")}`;
 }
 
+function statCardValue(
+  isLoading: boolean,
+  roots: Roots | undefined,
+  format: (roots: Roots) => string,
+): string {
+  if (isLoading) return "—";
+  if (!roots) return "—";
+  return format(roots);
+}
+
+function rootDisplayValue(isLoading: boolean, value: string | undefined): string {
+  if (isLoading) return "loading…";
+  if (!value) return "—";
+  return truncateWallet(value, 10, 8);
+}
+
 function describeError(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 401 || err.status === 403) {
@@ -129,12 +145,12 @@ export function IssuerStatusPanel() {
       <div className="grid gap-4 sm:grid-cols-2">
         <StatCard
           label="Wallet count"
-          value={isLoading ? "—" : roots ? fmtCompact(roots.wallet_count) : "—"}
+          value={statCardValue(isLoading, roots, (r) => fmtCompact(r.wallet_count))}
           sub="Credentialed wallets in the membership tree"
         />
         <StatCard
           label="Last publish"
-          value={isLoading ? "—" : roots ? formatSlot(roots.last_publish_slot) : "—"}
+          value={statCardValue(isLoading, roots, (r) => formatSlot(r.last_publish_slot))}
           sub="Most recent on-chain root commit"
         />
       </div>
@@ -165,11 +181,7 @@ export function IssuerStatusPanel() {
           <ul className="mt-4 flex flex-col divide-y divide-border-subtle">
             {ROOT_FIELDS.map((field) => {
               const value = roots?.[field.key];
-              const display = isLoading
-                ? "loading…"
-                : value
-                  ? truncateWallet(value, 10, 8)
-                  : "—";
+              const display = rootDisplayValue(isLoading, value);
               return (
                 <li
                   key={field.key}

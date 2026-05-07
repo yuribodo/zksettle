@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Plus, Search, Trash, WarningTriangle, Xmark } from "iconoir-react";
-import { useState, type FormEvent } from "react";
+import { useState, type SyntheticEvent } from "react";
 
 import { StatusPill } from "@/components/dashboard/status-pill";
 import { Button } from "@/components/ui/button";
@@ -72,10 +72,7 @@ export function WalletsCredentialsPanel() {
 
   const inputValid = isValidWalletHex(walletInput);
 
-  const onRegister = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!registerInputValid) return;
-    const normalized = normalizeWalletHex(registerInput);
+  const runRegister = async (normalized: string): Promise<void> => {
     register.reset();
     try {
       await register.mutateAsync(normalized);
@@ -86,7 +83,13 @@ export function WalletsCredentialsPanel() {
     }
   };
 
-  const lookup = (event: FormEvent<HTMLFormElement>) => {
+  const onRegister = (event: SyntheticEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!registerInputValid) return;
+    void runRegister(normalizeWalletHex(registerInput));
+  };
+
+  const lookup = (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!inputValid) return;
     const normalized = normalizeWalletHex(walletInput);
