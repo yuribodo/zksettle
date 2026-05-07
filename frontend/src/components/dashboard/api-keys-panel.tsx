@@ -96,14 +96,21 @@ export function ApiKeysPanel() {
       setRevealed(created);
       setOwner("");
       setCopied(false);
-      // Auto-activate the freshly created key as the active one.
-      try {
-        await setActiveApiKey(created.api_key);
-      } catch {
-        // surfaced via subsequent UI checks; not fatal here.
-      }
     } catch {
       // surfaced via createKey.error
+    }
+  };
+
+  const dismissReveal = async () => {
+    const created = revealed;
+    setRevealed(null);
+    if (!created) return;
+    // Activate the new key as the cookie *after* the user dismisses the
+    // reveal — avoids a re-render cascade clobbering the dialog mid-display.
+    try {
+      await setActiveApiKey(created.api_key);
+    } catch {
+      // non-fatal: user can re-paste from their secret manager
     }
   };
 
@@ -310,7 +317,7 @@ export function ApiKeysPanel() {
           created={revealed}
           copied={copied}
           onCopy={copyKey}
-          onDismiss={() => setRevealed(null)}
+          onDismiss={dismissReveal}
         />
       ) : null}
 
