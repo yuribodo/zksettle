@@ -8,7 +8,7 @@ Plano de integração da dashboard Next.js (`/dashboard/*`) com os serviços HTT
 
 ## 1. Inventário de serviços do backend
 
-Três serviços HTTP (Axum). Sem CORS, sem OpenAPI, sem WebSocket/SSE.
+Três serviços HTTP (Axum). CORS implementado (§3.3). Sem OpenAPI, sem WebSocket/SSE.
 
 | Serviço | Porta | Path | Auth |
 |---|---|---|---|
@@ -43,6 +43,7 @@ Tiers: `developer` (1k/mês, free), `startup` (10k, $49), `growth` (100k, $199),
 | `GET` | `/v1/credentials/{wallet_hex}` | `{ wallet, leaf_index, jurisdiction, issued_at, revoked }` |
 | `GET` | `/v1/proofs/membership/{wallet_hex}` | `{ wallet, leaf_index, path[], path_indices[], root }` |
 | `GET` | `/v1/proofs/sanctions/{wallet_hex}` | `{ wallet, path[], path_indices[], leaf_value, root }` |
+| `GET` | `/v1/proofs/jurisdiction/{wallet_hex}` | `{ wallet, jurisdiction_id, path[], path_indices[], root }` — Merkle proof de membership da jurisdiction (ADR-013). Auth: `x-wallet-signature` + `x-wallet-timestamp` |
 | `POST` | `/v1/credentials` | body `{ wallet, jurisdiction? }` → `{ wallet, leaf_index, jurisdiction }` |
 | `POST` | `/v1/wallets` | body `{ wallet }` → `{ wallet, message }` |
 | `DELETE` | `/v1/credentials/{wallet_hex}` | `{ wallet, revoked }` |
@@ -63,6 +64,7 @@ A dashboard foi desenhada para um modelo "compliance ops" com transações, audi
 | `/billing` | 30d de uso + invoices + tier | ⚠️ **parcial**: `GET /usage` cobre tier+contagem do mês corrente; sem série temporal nem invoices |
 | `/counterparties` | 6 issuers (Persona, Sumsub, …) | ❌ **não existe** endpoint de issuers; conceito mais próximo é `/v1/credentials/{wallet}` (1 por wallet) |
 | `/api-keys` | stub | ✅ `POST /api-keys` (provisão), `GET /api-keys` (listar), `DELETE /api-keys/{key_hash}` (revogar) |
+| `/prove` | flow E2E: connect → credential → merkle → proof → submit → result | ✅ `GET /v1/credentials`, `GET /v1/proofs/membership`, `GET /v1/proofs/sanctions`, `GET /v1/proofs/jurisdiction`, `GET /v1/roots` + SDK `wrap()` |
 | `/attestations` | stub | parcial: `/v1/roots` + `/v1/proofs/*` |
 | `/policies` | stub | ❌ não existe |
 | `/team` | stub | ❌ não existe |
@@ -90,26 +92,15 @@ Criar `.env.local` (e commitar `.env.example`):
 
 ```env
 NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
-NEXT_PUBLIC_API_KEY=zks_dev_xxxxxxxxxxxxxxxx
 ```
 
 Notas:
-- Botar a chave em `NEXT_PUBLIC_*` **só serve para dev local** (a chave fica visível no bundle). Para produção, ou (a) cada usuário cola a própria chave numa tela de settings (armazenada em cookie HttpOnly via Route Handler), ou (b) a dashboard chama Route Handlers do Next que injetam a chave server-side.
+- ~~`NEXT_PUBLIC_API_KEY`~~ foi removido. A API key agora é selecionada pelo usuário na dashboard e armazenada em `localStorage` (`zks.active_api_key`). O `apiFetch` lê a key ativa via `getActiveApiKey()` e injeta `Authorization: Bearer` automaticamente. Ver §4.2.
 - Backend roda em `:4000` por padrão (`GATEWAY_PORT`). O issuer-service em `:3000` é interno — **não chamar direto**.
 
-### 3.3 CORS (bloqueador)
+### 3.3 ✅ CORS (implementado)
 
-O api-gateway não tem `tower_http::cors::CorsLayer`. Browser vai falhar com CORS error em produção. **Antes** de integrar, abrir issue no backend para adicionar:
-
-```rust
-// backend/crates/api-gateway/src/main.rs
-.layer(CorsLayer::new()
-    .allow_origin(["https://app.zksettle.io".parse()?, "http://localhost:3001".parse()?])
-    .allow_methods([Method::GET, Method::POST, Method::DELETE])
-    .allow_headers([AUTHORIZATION, CONTENT_TYPE]))
-```
-
-Workaround temporário em dev: usar Next Route Handlers (`src/app/api/proxy/[...path]/route.ts`) como reverse proxy — mata CORS e esconde a API key do bundle.
+O api-gateway implementa `tower_http::cors::CorsLayer` via `GATEWAY_CORS_ALLOWED_ORIGINS` (allowlist por vírgula). Headers permitidos incluem `Authorization`, `Content-Type`, `x-wallet-signature`, e `x-wallet-timestamp` (necessários para wallet auth nos endpoints de credential/proof — ver §1.2).
 
 ---
 
@@ -120,16 +111,18 @@ Workaround temporário em dev: usar Next Route Handlers (`src/app/api/proxy/[...
 ```ts
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000";
-
-export const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
 ```
+
+`API_KEY` foi removido — a key ativa vem de `localStorage` via `src/lib/api/active-key.ts`.
 
 ### 4.2 `src/lib/api/client.ts`
 
-Wrapper `fetch` com auth + error parsing. Sem retry (deixa pro react-query).
+Wrapper `fetch` com auth + error parsing. Sem retry (deixa pro react-query). No browser, injeta `Authorization: Bearer` a partir da key ativa em `localStorage`. Para rotas wallet-scoped (`/credentials/`, `/proofs/membership/`, `/proofs/sanctions/`, `/proofs/jurisdiction/`), injeta `x-wallet-signature` e `x-wallet-timestamp` via `wallet-auth.ts`.
 
 ```ts
-import { API_BASE_URL, API_KEY } from "../config";
+import { API_BASE_URL } from "../config";
+import { getActiveApiKey } from "./active-key";
+import { getWalletAuthHeaders, isWalletScopedPath } from "./wallet-auth";
 
 export class ApiError extends Error {
   constructor(public status: number, public body: unknown, message: string) {
@@ -137,17 +130,27 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiFetch<T>(
-  path: string,
-  init: RequestInit = {},
-): Promise<T> {
+export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(init.headers as Record<string, string>),
+  };
+
+  const isBrowser = globalThis.window !== undefined;
+  if (isBrowser && !headers.Authorization) {
+    const activeKey = getActiveApiKey();
+    if (activeKey) {
+      headers.Authorization = `Bearer ${activeKey}`;
+    }
+  }
+  if (isWalletScopedPath(path)) {
+    const walletHeaders = await getWalletAuthHeaders();
+    Object.assign(headers, walletHeaders);
+  }
+
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${API_KEY}`,
-      ...init.headers,
-    },
+    headers,
   });
 
   if (!res.ok) {
@@ -350,7 +353,11 @@ Filtros server-side: range (24h/7d/30d/all → `from_ts`), issuer hex e recipien
 - Trocar a página por "Issuer Status": mostrar `useRoots()` (membership/sanctions/jurisdiction roots, `last_publish_slot`, `wallet_count`) + botão "Publish roots" (`publishRoots()`).
 - Manter como está e tratar "issuers externos" como conceito futuro do backend.
 
-### 5.6 ❌ Bloqueado — `/policies`, `/team`, `/attestations`
+### 5.6 ✅ Integrada — `/dashboard/prove`
+
+**Wire**: flow de 6 passos (connect → credential → merkle → proof → submit → result) que executa o UC-01 completo do PRD. Usa `getCredential`, `getMembershipProof`, `getSanctionsProof`, `getJurisdictionProof`, `getRoots` para montar os inputs do circuit. Proof gerada in-browser via Barretenberg WASM (`useProofGeneration`). Nullifier computado client-side com Poseidon2 (ADR-020). Submissão on-chain via `@zksettle/sdk/wrap`. Modo demo disponível com fixture de prova (sem wallet). Guarded por `RequireApiKey`.
+
+### 5.7 ❌ Bloqueado — `/policies`, `/team`, `/attestations`
 
 Sem endpoints. Manter stubs. Abrir issues por feature.
 
@@ -372,16 +379,30 @@ Pré-requisitos para fechar a dashboard:
 
 ---
 
-## 7. Auth & wallet — fora de escopo no MVP
+## 7. Auth & wallet — implementado (MVP)
 
-A dashboard hoje não tem login. O backend só conhece `Bearer <api_key>`. Fluxo proposto para depois do MVP de integração:
+A dashboard usa dois mecanismos de auth complementares:
+
+### 7.1 API key — seleção pelo usuário
+
+1. Usuário provisiona keys via `/dashboard/api-keys` (`POST /api-keys`).
+2. Seleciona a key ativa no `ApiKeySelector` (sidebar/drawer).
+3. Key armazenada em `localStorage` (`zks.active_api_key`) via `src/lib/api/active-key.ts`.
+4. `apiFetch` lê a key ativa e injeta `Authorization: Bearer` em todas as chamadas browser-side.
+5. `NoKeyGuard` no layout + `RequireApiKey` por página impedem uso sem key selecionada.
+
+### 7.2 Wallet auth — endpoints per-wallet
+
+Rotas de credential/proof (`/v1/credentials/{wallet}`, `/v1/proofs/*/{wallet}`) exigem prova de posse da wallet:
 
 1. Usuário conecta wallet Solana (Phantom/Solflare via `@solana/wallet-adapter-react`).
-2. Tela "Settings" → cola a `api_key` provisionada via `POST /api-keys`.
-3. Key vai para cookie HttpOnly via Route Handler `src/app/api/auth/route.ts`.
-4. Todas as chamadas passam por `src/app/api/proxy/[...path]/route.ts` que injeta o `Authorization` server-side.
+2. `useWalletAuthSync` registra o signer em `src/lib/api/wallet-auth.ts`.
+3. `apiFetch` detecta rotas wallet-scoped e injeta `x-wallet-signature` + `x-wallet-timestamp` automaticamente.
+4. Signature cacheada por 240s (refresh antes da janela de 300s do servidor).
 
-Esse desenho mata o problema de expor key no bundle e o problema de CORS de uma vez só.
+### 7.3 Futuro (produção)
+
+Para produção, migrar a API key de `localStorage` para cookie HttpOnly via Route Handler — elimina exposição no DevTools. O mecanismo wallet auth já é seguro (signature efêmera, não armazena segredos).
 
 ---
 
@@ -393,4 +414,6 @@ Esse desenho mata o problema de expor key no bundle e o problema de CORS de uma 
 4. ✅ Pivot `/dashboard/counterparties` → "Issuer Status" usando `useRoots()`.
 5. ✅ Pivot `/dashboard/transactions` → "Wallets & Credentials".
 6. ✅ Wire `/dashboard/audit-log` em `useEvents(limit, filters)` — cursor pagination + filtros server-side (range, issuer, recipient).
-7. Aguardando §6.3 (invoices) — único bloqueio é decisão de produto.
+7. ✅ Active API key (localStorage) + wallet auth + `NoKeyGuard` + `RequireApiKey` — substitui `NEXT_PUBLIC_API_KEY`.
+8. ✅ `/dashboard/prove` — flow E2E com proof generation in-browser + on-chain submission via SDK `wrap()`.
+9. Aguardando §6.3 (invoices) — único bloqueio é decisão de produto.
