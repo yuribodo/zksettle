@@ -356,10 +356,16 @@ function RevealKeyDialog({ created, copied, onCopy, onDismiss }: RevealKeyDialog
       ref={ref}
       aria-labelledby="reveal-key-heading"
       onCancel={(event) => {
+        // Esc was pressed. preventDefault stops the browser's native close so
+        // we can dismiss through React state — otherwise the close event would
+        // race with our unmount-driven cleanup.
         event.preventDefault();
         onDismiss();
       }}
-      onClose={onDismiss}
+      // No onClose handler: the DOM "close" event also fires from the cleanup
+      // function below (which runs in dev under React Strict Mode's
+      // mount→cleanup→mount cycle). Wiring onClose to onDismiss would set
+      // revealed=null mid-mount and the user would never see the dialog.
       className="m-auto rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6 shadow-lg backdrop:bg-ink/40"
     >
       <div className="w-full max-w-lg">
@@ -430,7 +436,8 @@ function RevokeConfirmDialog({ target, onCancel, onConfirm }: RevokeConfirmDialo
         event.preventDefault();
         onCancel();
       }}
-      onClose={onCancel}
+      // See note in RevealKeyDialog: no onClose handler to avoid React Strict
+      // Mode's cleanup-triggered close event clobbering the dialog mid-mount.
       className="m-auto rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6 shadow-lg backdrop:bg-ink/40"
     >
       <div className="w-full max-w-md">
