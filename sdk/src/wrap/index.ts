@@ -6,7 +6,7 @@ import {
   type PublicKey,
   type TransactionInstruction,
 } from "@solana/web3.js";
-import { AnchorProvider, BN, Program, Wallet } from "@coral-xyz/anchor";
+import { AnchorProvider, BN, Program } from "@coral-xyz/anchor";
 import type {
   WrapOptions,
   ZkSettleConfig,
@@ -85,8 +85,8 @@ export const CHUNK_SIZE = 450;
 export const WRITES_PER_TX = 2;
 
 function makeProgram(connection: Connection): Program {
-  const dummyWallet = new Wallet(Keypair.generate());
-  const provider = new AnchorProvider(connection, dummyWallet, {});
+  const dummyWallet = new DummyWallet();
+  const provider = new AnchorProvider(connection, dummyWallet as any, {});
   return new Program(idl as any, provider);
 }
 
