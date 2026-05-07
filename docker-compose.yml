@@ -29,6 +29,8 @@ services:
       GATEWAY_INDEXER_URL: "http://indexer:3001"
       GATEWAY_DATABASE_URL: "postgres://zksettle:zksettle_dev@postgres:5432/zksettle_gateway"
       GATEWAY_ALLOW_OPEN_KEYS: "true"
+      GATEWAY_JWT_SECRET: "${GATEWAY_JWT_SECRET:?set GATEWAY_JWT_SECRET}"
+      GATEWAY_SIWS_DOMAIN: "${GATEWAY_SIWS_DOMAIN:-localhost:3000}"
     depends_on:
       postgres:
         condition: service_healthy
