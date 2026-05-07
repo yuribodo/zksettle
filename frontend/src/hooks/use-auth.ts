@@ -42,8 +42,8 @@ export function useSignOut() {
 
   return useMutation({
     mutationFn: authSignOut,
-    onSuccess: () => {
-      clearActiveApiKey();
+    onSuccess: async () => {
+      await clearActiveApiKey().catch(() => {});
       queryClient.removeQueries();
       disconnect();
       router.replace("/login");

@@ -1,18 +1,48 @@
-const STORAGE_KEY = "zks.active_api_key.v1";
-
-export function getActiveApiKey(): string | null {
-  if (globalThis.window === undefined) return null;
-  return globalThis.localStorage.getItem(STORAGE_KEY);
+export interface ActiveKeyStatus {
+  hasKey: boolean;
+  prefix?: string;
 }
 
-export function setActiveApiKey(key: string): void {
-  if (globalThis.window === undefined) return;
-  globalThis.localStorage.setItem(STORAGE_KEY, key);
-  globalThis.dispatchEvent(new CustomEvent("zks:active-key-changed"));
+const ACTIVE_KEY_CHANGED_EVENT = "zks:active-key-changed";
+
+export async function fetchActiveKeyStatus(): Promise<ActiveKeyStatus> {
+  const res = await fetch("/api/active-key/status", {
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  if (!res.ok) return { hasKey: false };
+  return (await res.json()) as ActiveKeyStatus;
 }
 
-export function clearActiveApiKey(): void {
-  if (globalThis.window === undefined) return;
-  globalThis.localStorage.removeItem(STORAGE_KEY);
-  globalThis.dispatchEvent(new CustomEvent("zks:active-key-changed"));
+export async function setActiveApiKey(key: string): Promise<void> {
+  const res = await fetch("/api/active-key", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key }),
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `failed_to_set_active_key_${res.status}`);
+  }
+  notifyActiveKeyChanged();
+}
+
+export async function clearActiveApiKey(): Promise<void> {
+  await fetch("/api/active-key", {
+    method: "DELETE",
+    credentials: "same-origin",
+  });
+  notifyActiveKeyChanged();
+}
+
+function notifyActiveKeyChanged(): void {
+  if (typeof window === "undefined") return;
+  globalThis.dispatchEvent(new CustomEvent(ACTIVE_KEY_CHANGED_EVENT));
+}
+
+export function onActiveKeyChanged(handler: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  globalThis.addEventListener(ACTIVE_KEY_CHANGED_EVENT, handler);
+  return () => globalThis.removeEventListener(ACTIVE_KEY_CHANGED_EVENT, handler);
 }

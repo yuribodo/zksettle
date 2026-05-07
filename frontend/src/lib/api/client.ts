@@ -1,6 +1,6 @@
-import { API_BASE_URL } from "../config";
-import { getActiveApiKey } from "./active-key";
 import { getWalletAuthHeaders, isWalletScopedPath } from "./wallet-auth";
+
+const PROXY_BASE = "/api/proxy";
 
 export class ApiError extends Error {
   constructor(
@@ -19,20 +19,15 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     ...(init.headers as Record<string, string>),
   };
 
-  const activeKey = getActiveApiKey();
-  if (activeKey && !headers.Authorization) {
-    headers.Authorization = `Bearer ${activeKey}`;
-  }
-
   if (isWalletScopedPath(path)) {
     const walletHeaders = await getWalletAuthHeaders();
     Object.assign(headers, walletHeaders);
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const res = await fetch(`${PROXY_BASE}${path}`, {
     ...init,
     headers,
-    credentials: "include",
+    credentials: "same-origin",
   });
 
   if (!res.ok) {
