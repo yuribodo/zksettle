@@ -52,6 +52,21 @@ function describeError(err: unknown): string {
   return err instanceof Error ? err.message : "Unknown error";
 }
 
+function pluralize(count: number): string {
+  return count === 1 ? "" : "s";
+}
+
+function eventsStatusLabel(isLoading: boolean, isError: boolean, count: number): string {
+  if (isLoading) return "loading…";
+  if (isError) return "Unavailable";
+  return `${fmtCompact(count)} event${pluralize(count)} loaded`;
+}
+
+function eventsShowingLabel(count: number): string {
+  if (count === 0) return "";
+  return `Showing ${fmtCompact(count)} event${pluralize(count)}`;
+}
+
 export function AuditLogTable() {
   const [toast, setToast] = useState<string | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -185,11 +200,7 @@ export function AuditLogTable() {
         </div>
         <div className="flex flex-wrap items-center gap-3 font-mono text-xs text-muted">
           <span>
-            {isLoading
-              ? "loading…"
-              : isError
-                ? "Unavailable"
-                : `${fmtCompact(events.length)} event${events.length === 1 ? "" : "s"} loaded`}
+            {eventsStatusLabel(isLoading, isError, events.length)}
           </span>
           <span>· filters applied server-side via GET /v1/events</span>
         </div>
@@ -275,9 +286,7 @@ export function AuditLogTable() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-4 font-mono text-xs text-muted">
         <span>
-          {events.length > 0
-            ? `Showing ${fmtCompact(events.length)} event${events.length === 1 ? "" : "s"}`
-            : ""}
+          {eventsShowingLabel(events.length)}
         </span>
         {hasNextPage ? (
           <Button
@@ -288,7 +297,8 @@ export function AuditLogTable() {
           >
             {isFetchingNextPage ? "Loading…" : "Load more"}
           </Button>
-        ) : events.length > 0 ? (
+        ) : null}
+        {!hasNextPage && events.length > 0 ? (
           <span>End of results</span>
         ) : null}
       </div>
@@ -306,7 +316,7 @@ export function AuditLogTable() {
   );
 }
 
-function Th({ children, className }: { children: React.ReactNode; className?: string }) {
+function Th({ children, className }: Readonly<{ children: React.ReactNode; className?: string }>) {
   return (
     <th scope="col" className={cn("py-2.5 pr-3 font-medium", className)}>
       {children}
@@ -319,12 +329,12 @@ function FilterSelect({
   value,
   onChange,
   options,
-}: {
+}: Readonly<{
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: readonly { value: string; label: string }[];
-}) {
+}>) {
   return (
     <label className="flex flex-col gap-1.5 text-xs text-stone">
       <span className="font-mono tracking-[0.08em] text-muted uppercase">{label}</span>
@@ -350,14 +360,14 @@ function HexFilterInput({
   invalid,
   onChange,
   onCommit,
-}: {
+}: Readonly<{
   label: string;
   placeholder: string;
   value: string;
   invalid: boolean;
   onChange: (v: string) => void;
   onCommit: () => void;
-}) {
+}>) {
   return (
     <label className="flex flex-col gap-1.5 text-xs text-stone">
       <span className="font-mono tracking-[0.08em] text-muted uppercase">{label}</span>
