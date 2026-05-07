@@ -88,9 +88,16 @@ anchor-build:
 anchor-build-idl:
     cd backend && anchor build
 
-# Anchor deploy to devnet
+# Anchor deploy zksettle to devnet (uses RPC_URL from .env)
 anchor-deploy:
-    cd backend && anchor deploy --provider.cluster devnet --program-name zksettle
+    cd backend && anchor deploy --provider.cluster ${RPC_URL} --program-name zksettle
+
+# Anchor deploy stablecoin to devnet (uses RPC_URL from .env)
+anchor-deploy-stablecoin:
+    cd backend && anchor deploy --provider.cluster ${RPC_URL} --program-name stablecoin
+
+# Anchor deploy both programs to devnet
+anchor-deploy-all: anchor-deploy anchor-deploy-stablecoin
 
 # Anchor deploy to localnet
 anchor-deploy-local:
