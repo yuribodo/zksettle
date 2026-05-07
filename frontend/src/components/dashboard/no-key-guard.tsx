@@ -3,8 +3,7 @@
 import { Key } from "iconoir-react";
 import Link from "next/link";
 
-import { useKeyStatus } from "@/hooks/use-active-key";
-import { useSetActiveKey } from "@/hooks/use-active-key";
+import { useKeyStatus, useSetActiveKey } from "@/hooks/use-active-key";
 import { useApiKeys, lookupKeyPrefix, lookupFullKey } from "@/hooks/use-api-keys";
 import { usePathname } from "next/navigation";
 
@@ -14,7 +13,7 @@ function keyDisplayLabel(keyHash: string): string {
   return `${keyHash.slice(0, 8)}…${keyHash.slice(-4)}`;
 }
 
-export function NoKeyGuard({ children }: { children: React.ReactNode }) {
+export function NoKeyGuard({ children }: { readonly children: React.ReactNode }) {
   const { hasKey, availableKeys, isLoading } = useKeyStatus();
   const pathname = usePathname() ?? "";
 
