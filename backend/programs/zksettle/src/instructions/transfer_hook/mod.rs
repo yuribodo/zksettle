@@ -23,6 +23,14 @@ pub use types::{
 
 /// Shared by `set_hook_payload` (single-tx) and `init_hook_payload` (chunked
 /// init). Both create the payload PDA with `init`.
+///
+/// The two paths leave the payload in different initial states:
+/// - `set_hook_payload`: writes all fields and sets `finalized = true` — the
+///   payload is immediately ready for settlement and cannot be modified via
+///   `ModifyHookPayload` (which requires `!finalized`).
+/// - `init_hook_payload`: only allocates the proof buffer and sets
+///   `finalized = false` — callers must follow up with `write_hook_proof` +
+///   `finalize_hook_payload` before settlement.
 #[derive(Accounts)]
 pub struct InitHookPayload<'info> {
     #[account(mut)]
