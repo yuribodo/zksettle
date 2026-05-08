@@ -8,7 +8,7 @@ test.describe("Billing & Usage", () => {
   test("shows the billing page with tier info", async ({ page }) => {
     await expect(page.getByText("Current tier")).toBeVisible();
 
-    const tierOrState = page.getByText(/Developer|Startup|Growth|Enterprise|Unavailable|â€”/).first();
+    const tierOrState = page.getByText(/Developer|Startup|Growth|Enterprise|Unavailable|—”/).first();
     await expect(tierOrState).toBeVisible({ timeout: 10_000 });
   });
 

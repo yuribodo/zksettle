@@ -30,7 +30,7 @@ test.describe("Audit Log", () => {
 
   test("shows loading or events or error state", async ({ page }) => {
     const loadingOrContent = page.getByText(
-      /loadingâ€¦|events? loaded|Unavailable|No events match/,
+      /loading...|events? loaded|Unavailable|No events match/,
     );
     await expect(loadingOrContent).toBeVisible({ timeout: 10_000 });
   });
