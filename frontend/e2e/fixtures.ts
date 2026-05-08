@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { test as base, expect, type Route } from "@playwright/test";
+import { test as base, type Route } from "@playwright/test";
 
 const MOCK_TENANT = {
   tenant_id: "00000000-0000-0000-0000-000000000001",
@@ -11,6 +11,10 @@ const MOCK_TENANT = {
 
 const EMPTY_LEAF = "0".repeat(64);
 const SEEDED_API_KEY = "zks_seeded_e2e_key_1234567890abcdef";
+const CREDENTIAL_PATH_RE = /\/api\/proxy\/v1\/credentials\/([^/]+)$/;
+const MEMBERSHIP_PROOF_PATH_RE = /\/api\/proxy\/v1\/proofs\/membership\/([^/]+)$/;
+const SANCTIONS_PROOF_PATH_RE = /\/api\/proxy\/v1\/proofs\/sanctions\/([^/]+)$/;
+const API_KEY_PATH_RE = /\/api\/proxy\/api-keys\/([^/]+)$/;
 
 interface MockKeyRecord {
   api_key: string;
@@ -26,6 +30,35 @@ interface MockCredentialRecord {
   leaf_index: number;
   revoked: boolean;
   wallet: string;
+}
+
+interface MockState {
+  activeKey: string | null;
+  credentials: Map<string, MockCredentialRecord>;
+  events: ReturnType<typeof createEvent>[];
+  keys: MockKeyRecord[];
+  nextPublishSlot: number;
+  roots: {
+    jurisdiction_root: string;
+    last_publish_slot: number;
+    membership_root: string;
+    sanctions_root: string;
+    wallet_count: number;
+  };
+  usage: {
+    monthly_limit: number;
+    tier: "developer";
+    usage: {
+      last_request: number;
+      period_start: number;
+      request_count: number;
+    };
+  };
+  usageHistory: {
+    history: ReturnType<typeof createUsageHistory>;
+    monthly_limit: number;
+    tier: "developer";
+  };
 }
 
 function sha256Hex(value: string): string {
@@ -122,7 +155,7 @@ function createCredentialRecord(wallet: string, jurisdiction = "US"): MockCreden
   };
 }
 
-function createMockState() {
+function createMockState(): MockState {
   const seededKey: MockKeyRecord = {
     api_key: SEEDED_API_KEY,
     created_at: 1_777_000_000,
@@ -161,205 +194,296 @@ function createMockState() {
   };
 }
 
+async function handleActiveKeyStatusRoute(route: Route, state: MockState): Promise<void> {
+  if (route.request().method() !== "GET") {
+    await route.fallback();
+    return;
+  }
+
+  await json(
+    route,
+    state.activeKey ? { hasKey: true, prefix: keyPrefix(state.activeKey) } : { hasKey: false },
+  );
+}
+
+async function handleActiveKeyRoute(route: Route, state: MockState): Promise<void> {
+  const method = route.request().method();
+
+  if (method === "POST") {
+    const body = readBody(route);
+    const key = typeof body.key === "string" ? body.key : null;
+    if (!key) {
+      await json(route, { error: "invalid_key_format" }, 400);
+      return;
+    }
+
+    state.activeKey = key;
+    await json(route, { ok: true });
+    return;
+  }
+
+  if (method === "DELETE") {
+    const cleared = state.activeKey !== null;
+    state.activeKey = null;
+    await json(route, { ok: true, cleared });
+    return;
+  }
+
+  await route.fallback();
+}
+
+async function handleStaticProxyRoute(
+  pathname: string,
+  route: Route,
+  state: MockState,
+): Promise<boolean> {
+  if (pathname.endsWith("/api/proxy/auth/me")) {
+    await json(route, MOCK_TENANT);
+    return true;
+  }
+
+  if (pathname.endsWith("/api/proxy/health")) {
+    await json(route, { status: "ok", version: "test" });
+    return true;
+  }
+
+  if (pathname.endsWith("/api/proxy/usage/history")) {
+    await json(route, state.usageHistory);
+    return true;
+  }
+
+  if (pathname.endsWith("/api/proxy/usage")) {
+    await json(route, state.usage);
+    return true;
+  }
+
+  if (pathname.endsWith("/api/proxy/v1/events")) {
+    await json(route, { events: state.events, next_cursor: null });
+    return true;
+  }
+
+  return false;
+}
+
+async function handleRootsRoute(
+  pathname: string,
+  method: string,
+  route: Route,
+  state: MockState,
+): Promise<boolean> {
+  if (pathname.endsWith("/api/proxy/v1/roots") && method === "GET") {
+    await json(route, state.roots);
+    return true;
+  }
+
+  if (pathname.endsWith("/api/proxy/v1/roots/publish") && method === "POST") {
+    state.roots.last_publish_slot = state.nextPublishSlot++;
+    await json(route, { slot: state.roots.last_publish_slot, registered: true });
+    return true;
+  }
+
+  return false;
+}
+
+async function handleWalletRegistrationRoute(
+  pathname: string,
+  method: string,
+  route: Route,
+): Promise<boolean> {
+  if (!(pathname.endsWith("/api/proxy/v1/wallets") && method === "POST")) {
+    return false;
+  }
+
+  const body = readBody(route);
+  const wallet = typeof body.wallet === "string" ? body.wallet : "";
+  await json(route, { wallet, message: "registered in membership tree" });
+  return true;
+}
+
+async function handleCredentialCreateRoute(
+  pathname: string,
+  method: string,
+  route: Route,
+  state: MockState,
+): Promise<boolean> {
+  if (!(pathname.endsWith("/api/proxy/v1/credentials") && method === "POST")) {
+    return false;
+  }
+
+  const body = readBody(route);
+  const wallet = typeof body.wallet === "string" ? body.wallet : "";
+  const jurisdiction =
+    typeof body.jurisdiction === "string" && body.jurisdiction.length > 0
+      ? body.jurisdiction
+      : "US";
+
+  const existing = state.credentials.get(wallet);
+  if (existing && !existing.revoked) {
+    await json(route, { error: "wallet_already_has_credential" }, 409);
+    return true;
+  }
+
+  const created = createCredentialRecord(wallet, jurisdiction);
+  state.credentials.set(wallet, created);
+  state.roots.wallet_count += existing ? 0 : 1;
+
+  await json(route, {
+    wallet,
+    leaf_index: created.leaf_index,
+    jurisdiction: created.jurisdiction,
+  });
+  return true;
+}
+
+async function handleCredentialItemRoute(
+  pathname: string,
+  method: string,
+  route: Route,
+  state: MockState,
+): Promise<boolean> {
+  const credentialMatch = CREDENTIAL_PATH_RE.exec(pathname);
+  if (!credentialMatch) return false;
+
+  const wallet = decodeURIComponent(credentialMatch[1]!);
+  const credential = state.credentials.get(wallet);
+
+  if (method === "GET") {
+    if (!credential) {
+      await json(route, { error: "not_found" }, 404);
+      return true;
+    }
+
+    await json(route, {
+      wallet: hexToByteArray(credential.wallet),
+      leaf_index: credential.leaf_index,
+      jurisdiction: credential.jurisdiction,
+      issued_at: credential.issued_at,
+      revoked: credential.revoked,
+    });
+    return true;
+  }
+
+  if (method === "DELETE") {
+    if (!credential) {
+      await json(route, { error: "not_found" }, 404);
+      return true;
+    }
+
+    credential.revoked = true;
+    await json(route, { wallet, revoked: true });
+    return true;
+  }
+
+  return false;
+}
+
+async function handleProofRoute(
+  pathname: string,
+  route: Route,
+  state: MockState,
+): Promise<boolean> {
+  const membershipMatch = MEMBERSHIP_PROOF_PATH_RE.exec(pathname);
+  if (membershipMatch) {
+    const wallet = decodeURIComponent(membershipMatch[1]!);
+    await json(route, createMembershipProof(wallet, state.roots.membership_root));
+    return true;
+  }
+
+  const sanctionsMatch = SANCTIONS_PROOF_PATH_RE.exec(pathname);
+  if (sanctionsMatch) {
+    const wallet = decodeURIComponent(sanctionsMatch[1]!);
+    await json(route, createSanctionsProof(wallet, state.roots.sanctions_root));
+    return true;
+  }
+
+  return false;
+}
+
+function listedKeys(state: MockState) {
+  return state.keys.map(({ api_key: _apiKey, ...key }) => key);
+}
+
+async function handleApiKeysCollectionRoute(
+  pathname: string,
+  method: string,
+  route: Route,
+  state: MockState,
+): Promise<boolean> {
+  if (!pathname.endsWith("/api/proxy/api-keys")) return false;
+
+  if (method === "GET") {
+    await json(route, { keys: listedKeys(state) });
+    return true;
+  }
+
+  if (method === "POST") {
+    const body = readBody(route);
+    const owner = typeof body.owner === "string" ? body.owner : "dashboard";
+    const api_key = createApiKey(`${owner}_${state.keys.length + 1}`);
+    const key: MockKeyRecord = {
+      api_key,
+      created_at: 1_777_000_000 + state.keys.length * 60,
+      key_hash: sha256Hex(api_key),
+      owner,
+      tier: "developer",
+    };
+    state.keys.unshift(key);
+    await json(route, { api_key: key.api_key, owner: key.owner, tier: key.tier });
+    return true;
+  }
+
+  return false;
+}
+
+async function handleApiKeyDeleteRoute(
+  pathname: string,
+  method: string,
+  route: Route,
+  state: MockState,
+): Promise<boolean> {
+  if (method !== "DELETE") return false;
+
+  const deleteKeyMatch = API_KEY_PATH_RE.exec(pathname);
+  if (!deleteKeyMatch) return false;
+
+  const keyHash = decodeURIComponent(deleteKeyMatch[1]!);
+  state.keys = state.keys.filter((key) => key.key_hash !== keyHash);
+  await json(route, { key_hash: keyHash, deleted: true });
+  return true;
+}
+
+async function handleProxyRoute(route: Route, state: MockState): Promise<void> {
+  const request = route.request();
+  const { pathname } = new URL(request.url());
+  const method = request.method();
+
+  const handlers = [
+    () => handleStaticProxyRoute(pathname, route, state),
+    () => handleRootsRoute(pathname, method, route, state),
+    () => handleWalletRegistrationRoute(pathname, method, route),
+    () => handleCredentialCreateRoute(pathname, method, route, state),
+    () => handleCredentialItemRoute(pathname, method, route, state),
+    () => handleProofRoute(pathname, route, state),
+    () => handleApiKeysCollectionRoute(pathname, method, route, state),
+    () => handleApiKeyDeleteRoute(pathname, method, route, state),
+  ];
+
+  for (const handler of handlers) {
+    if (await handler()) return;
+  }
+
+  await json(route, { error: "not_found", path: pathname }, 404);
+}
+
 export const test = base.extend({
-  page: async ({ page }, use) => {
+  page: async ({ page }, apply) => {
     const state = createMockState();
 
-    await page.route("**/api/active-key/status", async (route) => {
-      if (route.request().method() !== "GET") {
-        await route.fallback();
-        return;
-      }
+    await page.route("**/api/active-key/status", (route) => handleActiveKeyStatusRoute(route, state));
+    await page.route("**/api/active-key", (route) => handleActiveKeyRoute(route, state));
+    await page.route("**/api/proxy/**", (route) => handleProxyRoute(route, state));
 
-      await json(route, state.activeKey
-        ? { hasKey: true, prefix: keyPrefix(state.activeKey) }
-        : { hasKey: false });
-    });
-
-    await page.route("**/api/active-key", async (route) => {
-      const method = route.request().method();
-
-      if (method === "POST") {
-        const body = readBody(route);
-        const key = typeof body.key === "string" ? body.key : null;
-        if (!key) {
-          await json(route, { error: "invalid_key_format" }, 400);
-          return;
-        }
-        state.activeKey = key;
-        await json(route, { ok: true });
-        return;
-      }
-
-      if (method === "DELETE") {
-        const cleared = state.activeKey !== null;
-        state.activeKey = null;
-        await json(route, { ok: true, cleared });
-        return;
-      }
-
-      await route.fallback();
-    });
-
-    await page.route("**/api/proxy/**", async (route) => {
-      const request = route.request();
-      const { pathname } = new URL(request.url());
-      const method = request.method();
-
-      if (pathname.endsWith("/api/proxy/auth/me")) {
-        await json(route, MOCK_TENANT);
-        return;
-      }
-
-      if (pathname.endsWith("/api/proxy/health")) {
-        await json(route, { status: "ok", version: "test" });
-        return;
-      }
-
-      if (pathname.endsWith("/api/proxy/usage/history")) {
-        await json(route, state.usageHistory);
-        return;
-      }
-
-      if (pathname.endsWith("/api/proxy/usage")) {
-        await json(route, state.usage);
-        return;
-      }
-
-      if (pathname.endsWith("/api/proxy/v1/events")) {
-        await json(route, { events: state.events, next_cursor: null });
-        return;
-      }
-
-      if (pathname.endsWith("/api/proxy/v1/roots") && method === "GET") {
-        await json(route, state.roots);
-        return;
-      }
-
-      if (pathname.endsWith("/api/proxy/v1/roots/publish") && method === "POST") {
-        state.roots.last_publish_slot = state.nextPublishSlot++;
-        await json(route, { slot: state.roots.last_publish_slot, registered: true });
-        return;
-      }
-
-      if (pathname.endsWith("/api/proxy/v1/wallets") && method === "POST") {
-        const body = readBody(route);
-        const wallet = typeof body.wallet === "string" ? body.wallet : "";
-        await json(route, {
-          wallet,
-          message: "registered in membership tree",
-        });
-        return;
-      }
-
-      if (pathname.endsWith("/api/proxy/v1/credentials") && method === "POST") {
-        const body = readBody(route);
-        const wallet = typeof body.wallet === "string" ? body.wallet : "";
-        const jurisdiction =
-          typeof body.jurisdiction === "string" && body.jurisdiction.length > 0
-            ? body.jurisdiction
-            : "US";
-
-        const existing = state.credentials.get(wallet);
-        if (existing && !existing.revoked) {
-          await json(route, { error: "wallet_already_has_credential" }, 409);
-          return;
-        }
-
-        const created = createCredentialRecord(wallet, jurisdiction);
-        state.credentials.set(wallet, created);
-        state.roots.wallet_count += existing ? 0 : 1;
-
-        await json(route, {
-          wallet,
-          leaf_index: created.leaf_index,
-          jurisdiction: created.jurisdiction,
-        });
-        return;
-      }
-
-      const credentialMatch = pathname.match(/\/api\/proxy\/v1\/credentials\/([^/]+)$/);
-      if (credentialMatch) {
-        const wallet = decodeURIComponent(credentialMatch[1]!);
-        const credential = state.credentials.get(wallet);
-
-        if (method === "GET") {
-          if (!credential) {
-            await json(route, { error: "not_found" }, 404);
-            return;
-          }
-
-          await json(route, {
-            wallet: hexToByteArray(credential.wallet),
-            leaf_index: credential.leaf_index,
-            jurisdiction: credential.jurisdiction,
-            issued_at: credential.issued_at,
-            revoked: credential.revoked,
-          });
-          return;
-        }
-
-        if (method === "DELETE") {
-          if (!credential) {
-            await json(route, { error: "not_found" }, 404);
-            return;
-          }
-
-          credential.revoked = true;
-          await json(route, { wallet, revoked: true });
-          return;
-        }
-      }
-
-      const membershipMatch = pathname.match(/\/api\/proxy\/v1\/proofs\/membership\/([^/]+)$/);
-      if (membershipMatch) {
-        const wallet = decodeURIComponent(membershipMatch[1]!);
-        await json(route, createMembershipProof(wallet, state.roots.membership_root));
-        return;
-      }
-
-      const sanctionsMatch = pathname.match(/\/api\/proxy\/v1\/proofs\/sanctions\/([^/]+)$/);
-      if (sanctionsMatch) {
-        const wallet = decodeURIComponent(sanctionsMatch[1]!);
-        await json(route, createSanctionsProof(wallet, state.roots.sanctions_root));
-        return;
-      }
-
-      if (pathname.endsWith("/api/proxy/api-keys") && method === "GET") {
-        await json(route, {
-          keys: state.keys.map(({ api_key: _apiKey, ...key }) => key),
-        });
-        return;
-      }
-
-      if (pathname.endsWith("/api/proxy/api-keys") && method === "POST") {
-        const body = readBody(route);
-        const owner = typeof body.owner === "string" ? body.owner : "dashboard";
-        const api_key = createApiKey(`${owner}_${state.keys.length + 1}`);
-        const key: MockKeyRecord = {
-          api_key,
-          created_at: 1_777_000_000 + state.keys.length * 60,
-          key_hash: sha256Hex(api_key),
-          owner,
-          tier: "developer",
-        };
-        state.keys.unshift(key);
-        await json(route, { api_key: key.api_key, owner: key.owner, tier: key.tier });
-        return;
-      }
-
-      const deleteKeyMatch = pathname.match(/\/api\/proxy\/api-keys\/([^/]+)$/);
-      if (deleteKeyMatch && method === "DELETE") {
-        const keyHash = decodeURIComponent(deleteKeyMatch[1]!);
-        state.keys = state.keys.filter((key) => key.key_hash !== keyHash);
-        await json(route, { key_hash: keyHash, deleted: true });
-        return;
-      }
-
-      await json(route, { error: "not_found", path: pathname }, 404);
-    });
-
-    await use(page);
+    await apply(page);
   },
 });
 
