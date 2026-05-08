@@ -67,7 +67,7 @@ export function TransactionRow({ tx, issuerName }: TransactionRowProps) {
           <span className="font-mono text-stone">{truncateWallet(tx.txHash, 4, 4)}</span>
           <button
             type="button"
-            className="inline-flex items-center gap-1 rounded-[2px] px-2 py-1 font-mono text-[11px] text-muted opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
+            className="inline-flex cursor-pointer items-center gap-1 rounded-[2px] px-2 py-1 font-mono text-[11px] text-muted opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
           >
             View proof bytes
             <NavArrowDown className="size-3" aria-hidden="true" strokeWidth={1.5} />

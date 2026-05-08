@@ -62,7 +62,7 @@ function CopyButton({ text, label }: Readonly<{ text: string; label: string }>) 
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="inline-flex items-center gap-1 rounded-[var(--radius-2)] px-1.5 py-0.5 font-mono text-[11px] text-muted transition-colors hover:bg-surface-deep hover:text-stone"
+      className="inline-flex cursor-pointer items-center gap-1 rounded-[var(--radius-2)] px-1.5 py-0.5 font-mono text-[11px] text-muted transition-colors hover:bg-surface-deep hover:text-stone"
     >
       <Copy className="size-3" strokeWidth={1.5} aria-hidden="true" />
       {copied ? "Copied" : "Copy"}
@@ -319,7 +319,7 @@ function SummaryCard({
             href={txUrl}
             target="_blank"
             rel="noreferrer noopener"
-            className="inline-flex h-8 items-center gap-2 rounded-[var(--radius-3)] bg-forest px-3 text-sm font-medium text-canvas transition-colors hover:bg-forest-hover"
+            className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-[var(--radius-3)] bg-forest px-3 text-sm font-medium text-canvas transition-colors hover:bg-forest-hover"
           >
             View on Solscan
             <ArrowUpRight className="size-3.5" strokeWidth={2} aria-hidden="true" />

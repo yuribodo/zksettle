@@ -324,7 +324,7 @@ function ProofCard({
           <button
             type="button"
             onClick={() => copyToClipboard(proof.root)}
-            className="shrink-0 text-muted hover:text-ink"
+            className="shrink-0 cursor-pointer text-muted hover:text-ink"
             aria-label="Copy root"
           >
             <Copy className="size-3.5" />
@@ -339,7 +339,7 @@ function ProofCard({
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-2 font-mono text-xs text-quill hover:text-ink"
+          className="flex cursor-pointer items-center gap-2 font-mono text-xs text-quill hover:text-ink"
         >
           <NavArrowDown
             className={cn("size-4 transition-transform", expanded && "rotate-180")}
@@ -406,7 +406,7 @@ function RecentWalletsSection({
               <button
                 type="button"
                 onClick={() => onPick(entry.wallet)}
-                className="flex flex-1 items-center gap-3 text-left font-mono text-sm text-ink hover:text-forest focus-visible:rounded-[2px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
+                className="flex flex-1 cursor-pointer items-center gap-3 text-left font-mono text-sm text-ink hover:text-forest focus-visible:rounded-[2px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
               >
                 <span>{truncateWallet(entry.wallet, 8, 8)}</span>
                 <span className="font-mono text-[11px] text-muted">
