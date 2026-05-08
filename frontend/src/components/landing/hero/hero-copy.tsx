@@ -13,7 +13,7 @@ import { cn } from "@/lib/cn";
 
 import { useCipherDecode } from "./use-cipher-decode";
 
-const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*+=?/\\|<>~^";
+const GLYPHS = String.raw`ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*+=?/\|<>~^`;
 function randomGlyph() {
   return GLYPHS[Math.floor(Math.random() * GLYPHS.length)]!; // NOSONAR — visual animation, not security
 }
@@ -86,6 +86,12 @@ function useWordScramble(text: string) {
   return { overrides, scrambleWord };
 }
 
+function getCharStyle(isDecoded: boolean, isLastWord: boolean, cipherDone: boolean) {
+  if (!isDecoded) return { filter: "blur(1.5px)" };
+  if (isLastWord && !cipherDone) return { filter: "blur(0.3px)" };
+  return undefined;
+}
+
 export function HeroCopy() {
   const { eyebrow, headline, sub, ctas } = COPY.hero;
   const heroRef = useRef<HTMLDivElement>(null);
@@ -107,8 +113,8 @@ export function HeroCopy() {
   const { overrides, scrambleWord } = useWordScramble(headline);
 
   const canHover = useMemo(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia("(hover: hover)").matches;
+    if (typeof globalThis.window === "undefined") return false;
+    return globalThis.matchMedia("(hover: hover)").matches;
   }, []);
 
   const onWordHover = useCallback(
@@ -181,7 +187,8 @@ export function HeroCopy() {
         >
           {words.map((word, wi) => (
             <span
-              key={wi}
+              key={`${word.start}-${word.end}`}
+              role="presentation"
               className={cn(
                 "inline-flex cursor-default whitespace-nowrap",
                 wi > 0 && "ml-[0.27em]",
@@ -205,13 +212,7 @@ export function HeroCopy() {
                       !isDecoded && isHoverScrambled && "text-white/40",
                       isDecoded && isLastWord && !cipher.done && "text-cyan-300",
                     )}
-                    style={
-                      !isDecoded
-                        ? { filter: "blur(1.5px)" }
-                        : isDecoded && isLastWord && !cipher.done
-                          ? { filter: "blur(0.3px)" }
-                          : undefined
-                    }
+                    style={getCharStyle(isDecoded, isLastWord, cipher.done)}
                   >
                     {displayCh}
                   </span>
