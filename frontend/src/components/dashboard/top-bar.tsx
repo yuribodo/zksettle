@@ -40,7 +40,7 @@ export function TopBar() {
               type="button"
               onClick={signOut}
               aria-label="Sign out"
-              className="relative inline-flex size-10 items-center justify-center rounded-full text-quill transition-colors hover:bg-surface hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
+              className="relative inline-flex size-10 cursor-pointer items-center justify-center rounded-full text-quill transition-colors hover:bg-surface hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
             >
               <LogOut className="size-5" aria-hidden="true" strokeWidth={1.5} />
             </button>
