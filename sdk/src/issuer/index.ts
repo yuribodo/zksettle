@@ -1,5 +1,5 @@
 import { type Connection, Keypair, SystemProgram } from "@solana/web3.js";
-import { AnchorProvider, Program, Wallet } from "@coral-xyz/anchor";
+import { loadAnchorNode } from "../anchor.js";
 import type { IssuerRoots } from "../types.js";
 import { findIssuerPda } from "../wrap/pda.js";
 import idl from "../idl/zksettle.json" with { type: "json" };
@@ -9,6 +9,7 @@ export async function registerIssuer(
   authority: Keypair,
   roots: IssuerRoots,
 ): Promise<string> {
+  const { AnchorProvider, Program, Wallet } = await loadAnchorNode();
   const wallet = new Wallet(authority);
   const provider = new AnchorProvider(connection, wallet, {
     commitment: "confirmed",
@@ -39,6 +40,7 @@ export async function updateIssuerRoot(
   authority: Keypair,
   roots: IssuerRoots,
 ): Promise<string> {
+  const { AnchorProvider, Program, Wallet } = await loadAnchorNode();
   const wallet = new Wallet(authority);
   const provider = new AnchorProvider(connection, wallet, {
     commitment: "confirmed",

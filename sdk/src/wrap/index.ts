@@ -6,7 +6,8 @@ import {
   type PublicKey,
   type TransactionInstruction,
 } from "@solana/web3.js";
-import { AnchorProvider, BN, Program } from "@coral-xyz/anchor";
+import BN from "bn.js";
+import type { BN as AnchorBN, Program } from "@coral-xyz/anchor";
 import type {
   WrapOptions,
   ZkSettleConfig,
@@ -14,6 +15,7 @@ import type {
   ChunkedUploadOptions,
   ChunkedUploadResult,
 } from "../types.js";
+import { loadAnchorBrowser } from "../anchor.js";
 import { ZKSETTLE_PROGRAM_ID } from "../constants.js";
 import { findIssuerPda, findHookPayloadPda } from "./pda.js";
 import idl from "../idl/zksettle.json" with { type: "json" };
@@ -45,6 +47,7 @@ export async function wrap(
   options: WrapOptions,
   config?: ZkSettleConfig,
 ): Promise<Transaction> {
+  const { AnchorProvider, Program } = await loadAnchorBrowser();
   const programId = config?.programId ?? ZKSETTLE_PROGRAM_ID;
 
   const [issuerPda] = findIssuerPda(options.wallet, programId);
@@ -84,7 +87,8 @@ export async function wrap(
 export const CHUNK_SIZE = 450;
 export const WRITES_PER_TX = 2;
 
-function makeProgram(connection: Connection): Program {
+async function makeProgram(connection: Connection): Promise<Program> {
+  const { AnchorProvider, Program } = await loadAnchorBrowser();
   const dummyWallet = new DummyWallet();
   const provider = new AnchorProvider(connection, dummyWallet as any, {});
   return new Program(idl as any, provider);
@@ -99,7 +103,7 @@ export async function buildInitHookPayloadIx(
 ): Promise<TransactionInstruction> {
   const [issuerPda] = findIssuerPda(wallet, programId);
   const [hookPayloadPda] = findHookPayloadPda(wallet, programId);
-  const prog = program ?? makeProgram(connection);
+  const prog = program ?? await makeProgram(connection);
 
   return prog.methods
     .initHookPayload(proofLen)
@@ -122,7 +126,7 @@ export async function buildWriteChunkIx(
 ): Promise<TransactionInstruction> {
   const [issuerPda] = findIssuerPda(wallet, programId);
   const [hookPayloadPda] = findHookPayloadPda(wallet, programId);
-  const prog = program ?? makeProgram(connection);
+  const prog = program ?? await makeProgram(connection);
 
   return prog.methods
     .writeHookProof(offset, Buffer.from(chunk))
@@ -141,7 +145,7 @@ export async function buildFinalizeHookPayloadIx(
     mint: PublicKey;
     epoch: number;
     recipient: PublicKey;
-    amount: BN;
+    amount: AnchorBN;
     lightArgs?: StagedLightArgs;
   },
   connection: Connection,
@@ -150,7 +154,7 @@ export async function buildFinalizeHookPayloadIx(
 ): Promise<TransactionInstruction> {
   const [issuerPda] = findIssuerPda(wallet, programId);
   const [hookPayloadPda] = findHookPayloadPda(wallet, programId);
-  const prog = program ?? makeProgram(connection);
+  const prog = program ?? await makeProgram(connection);
 
   const lightArgs = metadata.lightArgs ?? DEFAULT_LIGHT_ARGS;
 
@@ -179,7 +183,7 @@ export async function uploadProofChunked(
   const raw = opts.chunkSize ?? CHUNK_SIZE;
   const chunkSize = Math.max(1, Math.floor(raw));
   const proofBytes = opts.proof;
-  const program = makeProgram(opts.connection);
+  const program = await makeProgram(opts.connection);
 
   const initIx = await buildInitHookPayloadIx(
     opts.wallet,

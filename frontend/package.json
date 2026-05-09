@@ -8,8 +8,8 @@
   },
   "packageManager": "pnpm@9.12.0",
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "pnpm --filter @zksettle/sdk build && next build",
+    "dev": "next dev",
+    "build": "pnpm -C .. --filter @zksettle/sdk build && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@aztec/bb.js": "3.0.0-nightly.20260102",
+    "@coral-xyz/anchor": "^0.31.1",
     "@gsap/react": "^2.1.2",
     "@noir-lang/noir_js": "1.0.0-beta.18",
     "@solana/wallet-adapter-backpack": "^0.1.14",
@@ -69,10 +70,5 @@
     "typescript": "^5.7.3",
     "typescript-eslint": "^8",
     "vitest": "^2"
-  },
-  "pnpm": {
-    "overrides": {
-      "html-encoding-sniffer": "4.0.0"
-    }
   }
 }

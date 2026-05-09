@@ -1,0 +1,10 @@
+{
+  "name": "zksettle-workspace",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "pnpm": {
+    "overrides": {
+      "html-encoding-sniffer": "4.0.0"
+    }
+  }
+}

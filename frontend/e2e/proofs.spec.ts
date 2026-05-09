@@ -1,6 +1,20 @@
+import type { Page } from "@playwright/test";
+
 import { test, expect } from "./fixtures";
 
 const MOCK_WALLET = "b".repeat(64);
+
+function searchSection(page: Page) {
+  return page.locator("section").filter({
+    has: page.getByText("Search wallet attestation", { exact: true }),
+  });
+}
+
+function statusSection(page: Page) {
+  return page.locator("section").filter({
+    has: page.getByText("Compliance status", { exact: true }),
+  });
+}
 
 test.describe("Attestation Explorer", () => {
   test.beforeEach(async ({ page }) => {
@@ -8,30 +22,30 @@ test.describe("Attestation Explorer", () => {
   });
 
   test("shows the attestation search form", async ({ page }) => {
-    await expect(page.getByText("Search wallet attestation")).toBeVisible();
-    await expect(page.getByPlaceholder("0x… (64 hex chars)")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Search", exact: true })).toBeVisible();
+    const section = searchSection(page);
+    await expect(section).toBeVisible();
+    await expect(section.getByRole("textbox")).toBeVisible();
+    await expect(section.getByRole("button", { name: "Search", exact: true })).toBeVisible();
   });
 
   test("search button is disabled with empty input", async ({ page }) => {
-    await expect(page.getByRole("button", { name: "Search", exact: true })).toBeDisabled();
+    await expect(searchSection(page).getByRole("button", { name: "Search", exact: true })).toBeDisabled();
   });
 
   test("shows validation error for invalid wallet", async ({ page }) => {
-    await page.getByPlaceholder("0x… (64 hex chars)").fill("xyz");
-    await expect(page.getByText("Wallet must be 64 hex characters")).toBeVisible();
+    const section = searchSection(page);
+    await section.getByRole("textbox").fill("xyz");
+    await expect(section.getByText("Wallet must be 64 hex characters")).toBeVisible();
   });
 
   test("searches for a wallet and shows compliance status", async ({ page }) => {
-    await page.getByPlaceholder("0x… (64 hex chars)").fill(MOCK_WALLET);
-    await page.getByRole("button", { name: "Search", exact: true }).click();
+    const section = searchSection(page);
+    await section.getByRole("textbox").fill(MOCK_WALLET);
+    await section.getByRole("button", { name: "Search", exact: true }).click();
 
-    // Should show compliance status section
-    const statusSection = page.locator("section", { has: page.getByText("Compliance status") });
-    await expect(statusSection).toBeVisible({ timeout: 10_000 });
-
-    // The wallet should appear in the status section
-    await expect(statusSection.getByText(MOCK_WALLET, { exact: true })).toBeVisible();
+    const card = statusSection(page);
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await expect(card.getByText(MOCK_WALLET, { exact: true })).toBeVisible();
   });
 
   test("shows recent lookups section", async ({ page }) => {
@@ -45,7 +59,7 @@ test.describe("Attestation Explorer", () => {
 
     await page.goto("/dashboard/attestations");
 
-    await expect(page.getByText("Search wallet attestation")).toBeVisible({ timeout: 10_000 });
+    await expect(searchSection(page)).toBeVisible({ timeout: 10_000 });
     await rootsRequest;
   });
 
@@ -57,8 +71,9 @@ test.describe("Attestation Explorer", () => {
       (req) => req.url().includes("/v1/proofs/sanctions/"),
     );
 
-    await page.getByPlaceholder("0x… (64 hex chars)").fill(MOCK_WALLET);
-    await page.getByRole("button", { name: "Search", exact: true }).click();
+    const section = searchSection(page);
+    await section.getByRole("textbox").fill(MOCK_WALLET);
+    await section.getByRole("button", { name: "Search", exact: true }).click();
 
     await Promise.all([membershipRequest, sanctionsRequest]);
   });

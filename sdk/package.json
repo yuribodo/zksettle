@@ -27,9 +27,11 @@
     "@aztec/bb.js": "3.0.0-nightly.20260102",
     "@coral-xyz/anchor": "^0.31.1",
     "@noir-lang/noir_js": "1.0.0-beta.18",
+    "bn.js": "^5.2.2",
     "@solana/spl-token": "^0.4.0"
   },
   "devDependencies": {
+    "@types/bn.js": "^5.2.0",
     "@types/node": "^25.6.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"

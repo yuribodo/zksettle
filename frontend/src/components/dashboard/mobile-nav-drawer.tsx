@@ -27,7 +27,7 @@ export function MobileNavDrawer() {
         aria-expanded={open}
         aria-controls="mobile-nav"
         aria-label="Open navigation"
-        className="inline-flex size-10 items-center justify-center rounded-[2px] text-quill transition-colors hover:bg-surface hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest md:hidden"
+        className="inline-flex size-10 cursor-pointer items-center justify-center rounded-[2px] text-quill transition-colors hover:bg-surface hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest md:hidden"
       >
         <Menu className="size-5" aria-hidden="true" strokeWidth={1.5} />
       </button>
@@ -44,7 +44,7 @@ export function MobileNavDrawer() {
             type="button"
             aria-label="Close navigation"
             onClick={close}
-            className="absolute inset-0 bg-ink/40 backdrop-blur-[1px]"
+            className="absolute inset-0 cursor-pointer bg-ink/40 backdrop-blur-[1px]"
           />
           <div
             className="relative flex h-full w-[280px] flex-col border-r border-border-subtle bg-surface shadow-xl"
@@ -55,7 +55,7 @@ export function MobileNavDrawer() {
                 type="button"
                 onClick={close}
                 aria-label="Close navigation"
-                className="inline-flex size-9 items-center justify-center rounded-[2px] text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
+                className="inline-flex size-9 cursor-pointer items-center justify-center rounded-[2px] text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
               >
                 <Xmark className="size-4" aria-hidden="true" />
               </button>
@@ -82,7 +82,7 @@ export function MobileNavDrawer() {
                             onClick={close}
                             aria-current={isActive ? "page" : undefined}
                             className={cn(
-                              "relative flex min-h-11 items-center gap-3 rounded-[var(--radius-3)] px-3 py-2 text-sm transition-colors",
+                              "relative flex min-h-11 cursor-pointer items-center gap-3 rounded-[var(--radius-3)] px-3 py-2 text-sm transition-colors",
                               "text-quill hover:text-ink",
                               "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest",
                               isActive && "bg-surface-deep text-ink",

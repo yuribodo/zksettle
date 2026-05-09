@@ -13,6 +13,9 @@ use super::{
     CloseHookPayload, InitExtraAccountMetaList, InitHookPayload, ModifyHookPayload,
 };
 
+// PDA pays rent for MAX_HOOK_PROOF_BYTES regardless of actual proof len (Anchor `init` = fixed space).
+// realloc could reclaim waste but adds complexity for a short-lived PDA closed after settlement.
+
 /// Pure guard for `set_hook_payload`. Extracted so unit tests can cover the
 /// input validation without mocking an Anchor `Context`.
 pub(crate) fn validate_set_hook_inputs(

@@ -19,7 +19,7 @@ export function Sidebar() {
         <Link
           href="/dashboard"
           aria-label="ZKSettle dashboard home"
-          className="inline-flex items-center rounded-[2px] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-forest"
+          className="inline-flex cursor-pointer items-center rounded-[2px] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-forest"
         >
           <Logo size={22} variant="surface-forest" />
         </Link>
@@ -46,7 +46,7 @@ export function Sidebar() {
                       href={item.href}
                       aria-current={isActive ? "page" : undefined}
                       className={cn(
-                        "relative flex items-center gap-3 rounded-[var(--radius-3)] px-3 py-2 text-sm transition-colors",
+                        "relative flex cursor-pointer items-center gap-3 rounded-[var(--radius-3)] px-3 py-2 text-sm transition-colors",
                         "text-quill hover:text-ink",
                         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest",
                         isActive && "bg-surface-deep text-ink",

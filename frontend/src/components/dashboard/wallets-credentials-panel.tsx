@@ -293,7 +293,7 @@ export function WalletsCredentialsPanel() {
                 <button
                   type="button"
                   onClick={() => pickRecent(entry.wallet)}
-                  className="flex flex-1 items-center gap-3 text-left font-mono text-sm text-ink hover:text-forest focus-visible:rounded-[2px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
+                  className="flex flex-1 cursor-pointer items-center gap-3 text-left font-mono text-sm text-ink hover:text-forest focus-visible:rounded-[2px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
                 >
                   <span>{truncateWallet(entry.wallet, 8, 8)}</span>
                   <span className="font-mono text-[11px] text-muted">

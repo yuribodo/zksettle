@@ -70,12 +70,14 @@ test.describe("API Keys management", () => {
     // The key should appear in the list
     await expect(page.getByText(ownerName)).toBeVisible();
 
-    // Accept the confirm dialog when revoking
-    page.on("dialog", (d) => d.accept());
-
     // Click revoke on the row containing the owner name
     const row = page.locator("tr", { hasText: ownerName });
     await row.getByRole("button", { name: /Revoke/ }).click();
+
+    const confirmDialog = page.getByRole("dialog");
+    await expect(confirmDialog).toBeVisible({ timeout: 10_000 });
+    await expect(confirmDialog.getByText("Revoke API key?")).toBeVisible();
+    await confirmDialog.getByRole("button", { name: "Revoke key" }).click();
 
     // The key should disappear from the list
     await expect(page.getByText(ownerName)).not.toBeVisible({ timeout: 10_000 });

@@ -10,10 +10,11 @@ test.describe("Dashboard health", () => {
 
     await expect(sidebar.getByText("Wallets & credentials")).toBeVisible();
     await expect(sidebar.getByText("Attestations")).toBeVisible();
+    await expect(sidebar.getByText("Issuer status")).toBeVisible();
+    await expect(sidebar.getByText("Prove")).toBeVisible();
     await expect(sidebar.getByText("API keys")).toBeVisible();
     await expect(sidebar.getByText("Audit log")).toBeVisible();
     await expect(sidebar.getByText("Billing")).toBeVisible();
-    await expect(sidebar.getByText("Team")).toBeVisible();
   });
 
   test("displays page header on transactions page", async ({ page }) => {

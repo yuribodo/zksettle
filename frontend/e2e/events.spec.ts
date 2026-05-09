@@ -7,9 +7,7 @@ test.describe("Audit Log", () => {
 
   test("shows the audit log page with filters", async ({ page }) => {
     await expect(page.getByRole("heading", { name: "Audit log" })).toBeVisible();
-
-    // Filter controls
-    await expect(page.getByText("Range")).toBeVisible();
+    await expect(page.getByLabel("Range")).toBeVisible();
     await expect(page.getByRole("button", { name: "Apply" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Clear" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
@@ -23,7 +21,6 @@ test.describe("Audit Log", () => {
   test("shows table headers", async ({ page }) => {
     const table = page.locator("table");
     await expect(table).toBeVisible();
-
     await expect(table.getByText("Time (UTC)")).toBeVisible();
     await expect(table.getByText("Status")).toBeVisible();
     await expect(table.getByText("Recipient")).toBeVisible();
@@ -32,15 +29,14 @@ test.describe("Audit Log", () => {
   });
 
   test("shows loading or events or error state", async ({ page }) => {
-    // The page should show one of: loading, events data, error, or empty state
     const loadingOrContent = page.getByText(
-      /loading…|events? loaded|Unavailable|No events match/,
+      /loading...|events? loaded|Unavailable|No events match/,
     );
     await expect(loadingOrContent).toBeVisible({ timeout: 10_000 });
   });
 
   test("range filter has expected options", async ({ page }) => {
-    const rangeSelect = page.locator("select");
+    const rangeSelect = page.getByLabel("Range");
     await expect(rangeSelect).toBeVisible();
 
     const options = rangeSelect.locator("option");
@@ -52,7 +48,7 @@ test.describe("Audit Log", () => {
   });
 
   test("clear filters resets the range to default", async ({ page }) => {
-    const rangeSelect = page.locator("select");
+    const rangeSelect = page.getByLabel("Range");
     await rangeSelect.selectOption("24h");
     await expect(rangeSelect).toHaveValue("24h");
 

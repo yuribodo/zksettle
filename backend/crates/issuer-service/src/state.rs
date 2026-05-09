@@ -7,6 +7,9 @@ use zksettle_crypto::{MerkleTree, SparseMerkleTree, poseidon2_hash};
 
 use crate::convert::fr_to_bytes_be;
 
+/// Must match the on-chain jurisdiction leaf used by the zksettle program.
+pub const JURISDICTION_ID: u64 = 1;
+
 pub type SharedState = Arc<RwLock<IssuerState>>;
 pub type PublishLock = Arc<Mutex<()>>;
 
@@ -33,7 +36,7 @@ pub struct IssuerState {
 impl IssuerState {
     pub fn new() -> Self {
         let mut jurisdiction_tree = MerkleTree::new();
-        jurisdiction_tree.insert(poseidon2_hash(&[Fr::from(1u64)]));
+        jurisdiction_tree.insert(poseidon2_hash(&[Fr::from(JURISDICTION_ID)]));
 
         Self {
             membership_tree: MerkleTree::new(),

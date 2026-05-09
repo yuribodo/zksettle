@@ -6,13 +6,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
+import { useCanvasStage } from "@/components/landing/canvas/use-canvas-stage";
 import { COPY } from "@/content/copy";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/cn";
 
 import { useCipherDecode } from "./use-cipher-decode";
 
-const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*+=?/\\|<>~^";
+const GLYPHS = String.raw`ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*+=?/\|<>~^`;
 function randomGlyph() {
   return GLYPHS[Math.floor(Math.random() * GLYPHS.length)]!; // NOSONAR — visual animation, not security
 }
@@ -85,9 +86,16 @@ function useWordScramble(text: string) {
   return { overrides, scrambleWord };
 }
 
+function getCharStyle(isDecoded: boolean, isLastWord: boolean, cipherDone: boolean) {
+  if (!isDecoded) return { filter: "blur(1.5px)" };
+  if (isLastWord && !cipherDone) return { filter: "blur(0.3px)" };
+  return undefined;
+}
+
 export function HeroCopy() {
   const { eyebrow, headline, sub, ctas } = COPY.hero;
   const heroRef = useRef<HTMLDivElement>(null);
+  const { enabled: canvasEnabled } = useCanvasStage();
   const reduceMotion = useReducedMotion();
   const [cipherActive, setCipherActive] = useState(false);
 
@@ -105,8 +113,8 @@ export function HeroCopy() {
   const { overrides, scrambleWord } = useWordScramble(headline);
 
   const canHover = useMemo(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia("(hover: hover)").matches;
+    if (globalThis.window === undefined) return false;
+    return globalThis.matchMedia("(hover: hover)").matches;
   }, []);
 
   const onWordHover = useCallback(
@@ -161,7 +169,7 @@ export function HeroCopy() {
       id="hero"
       aria-labelledby="hero-heading"
       ref={heroRef}
-      className="relative isolate bg-ink md:bg-transparent"
+      className={cn("relative isolate", canvasEnabled ? "bg-transparent" : "bg-ink")}
     >
       <div className="relative mx-auto flex min-h-[calc(100dvh-56px)] w-full max-w-7xl flex-col items-center justify-center px-5 py-24 md:px-8">
         <p
@@ -179,7 +187,8 @@ export function HeroCopy() {
         >
           {words.map((word, wi) => (
             <span
-              key={wi}
+              key={`${word.start}-${word.end}`}
+              aria-hidden="true"
               className={cn(
                 "inline-flex cursor-default whitespace-nowrap",
                 wi > 0 && "ml-[0.27em]",
@@ -191,7 +200,7 @@ export function HeroCopy() {
                 const isLastWord = i > lastSpaceIdx;
                 const hoverCh = overrides.get(i);
                 const isHoverScrambled = hoverCh !== undefined;
-                const isDecoded = isHoverScrambled ? false : cipher.decoded[i];
+                const isDecoded = isHoverScrambled ? false : (cipher.decoded[i] ?? false);
                 const displayCh = isHoverScrambled ? hoverCh : ch;
 
                 return (
@@ -203,13 +212,7 @@ export function HeroCopy() {
                       !isDecoded && isHoverScrambled && "text-white/40",
                       isDecoded && isLastWord && !cipher.done && "text-cyan-300",
                     )}
-                    style={
-                      !isDecoded
-                        ? { filter: "blur(1.5px)" }
-                        : isDecoded && isLastWord && !cipher.done
-                          ? { filter: "blur(0.3px)" }
-                          : undefined
-                    }
+                    style={getCharStyle(isDecoded, isLastWord, cipher.done)}
                   >
                     {displayCh}
                   </span>
