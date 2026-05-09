@@ -2,8 +2,8 @@
  * Devnet transfer script for zksettle Token-2022 transfer hook.
  *
  * Loads `devnet-state.json` (created by setup.ts), then:
- *  1. set_hook_payload — stages proof + settlement args into the payload PDA
- *  2. settle_hook      — direct-call settlement path (no Token-2022 Execute)
+ *  1. init_hook_payload + write_hook_proof + finalize — chunked payload staging
+ *  2. settle_hook — direct-call settlement path (no Token-2022 Execute)
  *
  * With a dummy proof, settle_hook fails at the gnark boundary (MalformedProof)
  * which proves full wiring is correct. To run the real flow, pass a fixture:
@@ -193,8 +193,8 @@ async function main() {
     return;
   }
 
-  // --- Step 1: set_hook_payload ---
-  console.log("\n--- Staging hook payload ---");
+  // --- Step 1: chunked payload staging ---
+  console.log("\n--- Staging hook payload (chunked) ---");
 
   const nullifierHash = crypto.randomBytes(32);
   nullifierHash[0] = nullifierHash[0] || 1;
@@ -212,9 +212,32 @@ async function main() {
   };
 
   try {
-    const stageSig = await program.methods
-      .setHookPayload(
-        proofBytes,
+    // 1a. init_hook_payload — create PDA with dynamic size
+    const initSig = await program.methods
+      .initHookPayload(proofBytes.length)
+      .accounts({
+        authority: wallet.publicKey,
+        issuer: issuerPda,
+        hookPayload: hookPayloadPda,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    console.log(`Payload init: tx ${initSig}`);
+
+    // 1b. write_hook_proof — upload proof in one chunk (< 1KB fits single tx)
+    const writeSig = await program.methods
+      .writeHookProof(0, proofBytes)
+      .accounts({
+        authority: wallet.publicKey,
+        issuer: issuerPda,
+        hookPayload: hookPayloadPda,
+      })
+      .rpc();
+    console.log(`Proof written: tx ${writeSig}`);
+
+    // 1c. finalize_hook_payload — set metadata + mark finalized
+    const finalizeSig = await program.methods
+      .finalizeHookPayload(
         Array.from(nullifierHash),
         mintPk,
         new BN(epoch),
@@ -226,10 +249,9 @@ async function main() {
         authority: wallet.publicKey,
         issuer: issuerPda,
         hookPayload: hookPayloadPda,
-        systemProgram: SystemProgram.programId,
       })
       .rpc();
-    console.log(`Payload staged: tx ${stageSig}`);
+    console.log(`Payload finalized: tx ${finalizeSig}`);
     console.log(`  nullifier: 0x${nullifierHash.toString("hex").slice(0, 16)}...`);
     console.log(`  epoch:     ${epoch}`);
   } catch (err: any) {
