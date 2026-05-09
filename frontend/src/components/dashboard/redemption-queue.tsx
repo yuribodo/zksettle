@@ -33,25 +33,127 @@ interface PendingAction {
   summary: string;
 }
 
+interface RedemptionRowProps {
+  treasury: Treasury;
+  request: RedemptionRequest;
+  onApprove: () => void;
+  onCancel: () => void;
+}
+
+function RedemptionRow({
+  treasury,
+  request,
+  onApprove,
+  onCancel,
+}: Readonly<RedemptionRowProps>) {
+  const expiry = redemptionExpiry(request);
+  const amountText = formatAmount(request.amount, treasury.decimals);
+
+  let timeIndicator: ReactNode;
+  if (expiry.expired) {
+    timeIndicator = <StatusPill kind="warning" label="Expired" />;
+  } else {
+    timeIndicator = (
+      <span className="font-mono text-[11px] text-muted">
+        {formatDuration(expiry.secondsRemaining)} left
+      </span>
+    );
+  }
+
+  let actionButton: ReactNode;
+  if (expiry.expired) {
+    actionButton = (
+      <Button size="sm" variant="ghost" onClick={onCancel}>
+        Cancel (expired)
+      </Button>
+    );
+  } else {
+    actionButton = (
+      <Button size="sm" onClick={onApprove} disabled={treasury.paused}>
+        Approve
+      </Button>
+    );
+  }
+
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+      <div className="flex flex-col">
+        <span className="font-mono text-xs text-quill">
+          {formatPubkey(request.holder, 6, 6)}
+        </span>
+        <span className="text-xs text-stone">
+          {amountText} tokens · nonce {request.nonce.toString()}
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        {timeIndicator}
+        {actionButton}
+      </div>
+    </li>
+  );
+}
+
+interface RedemptionListProps {
+  treasury: Treasury;
+  isError: boolean;
+  error: unknown;
+  isLoading: boolean;
+  requests: RedemptionRequest[];
+  onApprove: (request: RedemptionRequest) => void;
+  onCancel: (request: RedemptionRequest) => void;
+}
+
+function RedemptionList({
+  treasury,
+  isError,
+  error,
+  isLoading,
+  requests,
+  onApprove,
+  onCancel,
+}: Readonly<RedemptionListProps>) {
+  if (isError) {
+    return (
+      <p role="alert" className="mt-4 font-mono text-xs text-rust">
+        Failed to load redemptions:{" "}
+        {error instanceof Error ? error.message : "unknown error"}
+      </p>
+    );
+  }
+  if (isLoading) {
+    return <p className="mt-4 font-mono text-xs text-muted">Loading…</p>;
+  }
+  if (requests.length === 0) {
+    return (
+      <p className="mt-4 font-mono text-xs text-muted">No pending redemptions.</p>
+    );
+  }
+  return (
+    <ul className="mt-4 flex flex-col divide-y divide-border-subtle">
+      {requests.map((request) => (
+        <RedemptionRow
+          key={request.pda.toBase58()}
+          treasury={treasury}
+          request={request}
+          onApprove={() => onApprove(request)}
+          onCancel={() => onCancel(request)}
+        />
+      ))}
+    </ul>
+  );
+}
+
 export function RedemptionQueue({
   treasury,
   onActionComplete,
-}: RedemptionQueueProps) {
+}: Readonly<RedemptionQueueProps>) {
   const adapter = getStablecoinAdapter();
   const { data, isLoading, isError, error } = useRedemptionRequests(
     treasury.mint,
   );
   const [pending, setPending] = useState<PendingAction | null>(null);
 
-  const mutation = useStablecoinAction({
-    mint: treasury.mint,
-    buildTransaction: ({ payer }) => {
-      if (!pending) throw new Error("No redemption selected");
-      return pending.kind === "approve"
-        ? adapter.buildApproveRedemption({ payer }, treasury.mint, pending.request)
-        : adapter.buildCancelRedemption({ payer }, treasury.mint, pending.request);
-    },
-  });
+  const mutation = useStablecoinAction({ mint: treasury.mint });
 
   const closeDialog = () => {
     if (mutation.isPending) return;
@@ -61,14 +163,47 @@ export function RedemptionQueue({
 
   const submit = async () => {
     if (!pending) return;
+    const { request, kind } = pending;
     try {
-      const result = await mutation.mutateAsync();
+      const result = await mutation.mutateAsync(({ payer }) =>
+        kind === "approve"
+          ? adapter.buildApproveRedemption({ payer }, treasury.mint, request)
+          : adapter.buildCancelRedemption({ payer }, treasury.mint, request),
+      );
       onActionComplete(result, pending.summary);
       setPending(null);
       mutation.reset();
     } catch {
       // surfaced via mutation.error
     }
+  };
+
+  const onApprove = (request: RedemptionRequest) => {
+    const amountText = formatAmount(request.amount, treasury.decimals);
+    setPending({
+      request,
+      kind: "approve",
+      title: "Approve redemption?",
+      description: (
+        <>
+          Approve redemption of <code>{amountText}</code> tokens for{" "}
+          <code>{formatPubkey(request.holder, 6, 6)}</code>? Tokens will be
+          burned.
+        </>
+      ),
+      summary: `Redemption approved for ${formatPubkey(request.holder)}`,
+    });
+  };
+
+  const onCancel = (request: RedemptionRequest) => {
+    setPending({
+      request,
+      kind: "cancel",
+      title: "Cancel redemption?",
+      description:
+        "The holder regains transfer ability and the request is closed.",
+      summary: `Redemption cancelled for ${formatPubkey(request.holder)}`,
+    });
   };
 
   const errorMessage =
@@ -85,82 +220,15 @@ export function RedemptionQueue({
         </span>
       </div>
 
-      {isError ? (
-        <p role="alert" className="mt-4 font-mono text-xs text-rust">
-          Failed to load redemptions:{" "}
-          {error instanceof Error ? error.message : "unknown error"}
-        </p>
-      ) : isLoading ? (
-        <p className="mt-4 font-mono text-xs text-muted">Loading…</p>
-      ) : requests.length === 0 ? (
-        <p className="mt-4 font-mono text-xs text-muted">
-          No pending redemptions.
-        </p>
-      ) : (
-        <ul className="mt-4 flex flex-col divide-y divide-border-subtle">
-          {requests.map((req) => {
-            const expiry = redemptionExpiry(req);
-            const amountText = formatAmount(req.amount, treasury.decimals);
-            const queueApprove = () =>
-              setPending({
-                request: req,
-                kind: "approve",
-                title: "Approve redemption?",
-                description: (
-                  <>
-                    Approve redemption of <code>{amountText}</code> tokens for{" "}
-                    <code>{formatPubkey(req.holder, 6, 6)}</code>? Tokens will be
-                    burned.
-                  </>
-                ),
-                summary: `Redemption approved for ${formatPubkey(req.holder)}`,
-              });
-            const queueCancel = () =>
-              setPending({
-                request: req,
-                kind: "cancel",
-                title: "Cancel redemption?",
-                description:
-                  "The holder regains transfer ability and the request is closed.",
-                summary: `Redemption cancelled for ${formatPubkey(req.holder)}`,
-              });
-
-            return (
-              <li
-                key={req.pda.toBase58()}
-                className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
-              >
-                <div className="flex flex-col">
-                  <span className="font-mono text-xs text-quill">
-                    {formatPubkey(req.holder, 6, 6)}
-                  </span>
-                  <span className="text-xs text-stone">
-                    {amountText} tokens · nonce {req.nonce.toString()}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {expiry.expired ? (
-                    <StatusPill kind="warning" label="Expired" />
-                  ) : (
-                    <span className="font-mono text-[11px] text-muted">
-                      {formatDuration(expiry.secondsRemaining)} left
-                    </span>
-                  )}
-                  {expiry.expired ? (
-                    <Button size="sm" variant="ghost" onClick={queueCancel}>
-                      Cancel (expired)
-                    </Button>
-                  ) : (
-                    <Button size="sm" onClick={queueApprove} disabled={treasury.paused}>
-                      Approve
-                    </Button>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <RedemptionList
+        treasury={treasury}
+        isError={isError}
+        error={error}
+        isLoading={isLoading}
+        requests={requests}
+        onApprove={onApprove}
+        onCancel={onCancel}
+      />
 
       <ConfirmActionDialog
         open={!!pending}

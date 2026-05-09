@@ -9,14 +9,17 @@ import { redemptionsQueryKey } from "@/hooks/use-redemption-requests";
 import { treasuryQueryKey } from "@/hooks/use-treasury";
 import { SOLANA_NETWORK } from "@/lib/config";
 
-interface BuildTxArgs {
+export interface BuildTxArgs {
   payer: PublicKey;
   connection: Connection;
 }
 
+export type BuildTransactionFn = (
+  args: BuildTxArgs,
+) => Promise<Transaction>;
+
 interface UseStablecoinActionArgs {
   mint: PublicKey;
-  buildTransaction: (args: BuildTxArgs) => Promise<Transaction>;
 }
 
 export interface StablecoinActionResult {
@@ -31,20 +34,35 @@ function buildSolscanUrl(signature: string): string {
   return `https://solscan.io/tx/${signature}?cluster=${SOLANA_NETWORK}`;
 }
 
-export function useStablecoinAction({
-  mint,
-  buildTransaction,
-}: UseStablecoinActionArgs) {
+async function ensureTxIsSendable(
+  tx: Transaction,
+  payer: PublicKey,
+  connection: Connection,
+): Promise<void> {
+  // Wallet adapters typically set these via prepareTransaction(), but not all
+  // wallet implementations do — set them eagerly so the tx is sendable
+  // regardless of the connected wallet's behavior.
+  if (!tx.feePayer) {
+    tx.feePayer = payer;
+  }
+  if (!tx.recentBlockhash) {
+    const { blockhash } = await connection.getLatestBlockhash("confirmed");
+    tx.recentBlockhash = blockhash;
+  }
+}
+
+export function useStablecoinAction({ mint }: Readonly<UseStablecoinActionArgs>) {
   const { publicKey, sendTransaction } = useWallet();
   const { connection } = useConnection();
   const queryClient = useQueryClient();
 
-  return useMutation<StablecoinActionResult>({
-    mutationFn: async () => {
+  return useMutation<StablecoinActionResult, Error, BuildTransactionFn>({
+    mutationFn: async (buildTransaction) => {
       if (!publicKey) {
         throw new Error("Connect a wallet to submit this action.");
       }
       const tx = await buildTransaction({ payer: publicKey, connection });
+      await ensureTxIsSendable(tx, publicKey, connection);
       const signature = await sendTransaction(tx, connection);
       return { signature, solscanUrl: buildSolscanUrl(signature) };
     },

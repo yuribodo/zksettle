@@ -28,6 +28,7 @@ export {
   redemptionExpiry,
   formatDuration,
   parseAmountToUnits,
+  isValidPubkey,
   type MintCapProgress,
   type RedemptionExpiry,
 } from "./format";

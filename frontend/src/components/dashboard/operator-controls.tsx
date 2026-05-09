@@ -14,6 +14,7 @@ import {
   formatAmount,
   formatPubkey,
   getStablecoinAdapter,
+  isValidPubkey,
   mintCapProgress,
   parseAmountToUnits,
   type Treasury,
@@ -24,26 +25,17 @@ interface OperatorControlsProps {
   onActionComplete: (result: StablecoinActionResult, summary: string) => void;
 }
 
-function isValidPubkey(value: string): boolean {
-  try {
-    new PublicKey(value.trim());
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export function OperatorControls({
   treasury,
   onActionComplete,
-}: OperatorControlsProps) {
+}: Readonly<OperatorControlsProps>) {
   const adapter = getStablecoinAdapter();
   const [destination, setDestination] = useState("");
   const [amount, setAmount] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const decimals = treasury.decimals;
-  const destValid = destination.trim().length > 0 && isValidPubkey(destination);
+  const destValid = isValidPubkey(destination);
   const amountUnits = parseAmountToUnits(amount.trim(), decimals);
   const amountValid = amountUnits !== null && !amountUnits.isZero();
   const wouldExceedCap =
@@ -51,20 +43,7 @@ export function OperatorControls({
     amountUnits !== null &&
     treasury.totalMinted.add(amountUnits).gt(treasury.mintCap);
 
-  const mutation = useStablecoinAction({
-    mint: treasury.mint,
-    buildTransaction: ({ payer }) => {
-      if (!destValid || !amountUnits) {
-        throw new Error("Invalid mint inputs");
-      }
-      return adapter.buildMintTokens(
-        { payer },
-        treasury.mint,
-        new PublicKey(destination.trim()),
-        amountUnits,
-      );
-    },
-  });
+  const mutation = useStablecoinAction({ mint: treasury.mint });
 
   const closeDialog = () => {
     if (mutation.isPending) return;
@@ -73,9 +52,12 @@ export function OperatorControls({
   };
 
   const submit = async () => {
+    if (!destValid || !amountUnits) return;
+    const dest = new PublicKey(destination.trim());
     try {
-      const result = await mutation.mutateAsync();
-      const dest = new PublicKey(destination.trim());
+      const result = await mutation.mutateAsync(({ payer }) =>
+        adapter.buildMintTokens({ payer }, treasury.mint, dest, amountUnits),
+      );
       onActionComplete(result, `Minted ${amount} to ${formatPubkey(dest)}`);
       setConfirmOpen(false);
       setAmount("");
@@ -90,15 +72,22 @@ export function OperatorControls({
     mutation.error instanceof Error ? mutation.error.message : null;
   const progress = mintCapProgress(treasury);
 
+  const supplyText = progress.capped
+    ? `${formatAmount(treasury.totalMinted, decimals)} / ${formatAmount(treasury.mintCap, decimals)}`
+    : `${formatAmount(treasury.totalMinted, decimals)} (uncapped)`;
+
+  const destFormatted = destValid
+    ? formatPubkey(new PublicKey(destination.trim()), 6, 6)
+    : "—";
+  const capSuffix = progress.capped
+    ? ` / ${formatAmount(treasury.mintCap, decimals)}`
+    : "";
+
   return (
     <section className="rounded-[var(--radius-6)] border border-border-subtle bg-surface p-5">
       <div className="flex items-baseline justify-between">
         <h3 className="font-display text-base text-ink">Mint tokens</h3>
-        <span className="font-mono text-[11px] text-stone">
-          {progress.capped
-            ? `${formatAmount(treasury.totalMinted, decimals)} / ${formatAmount(treasury.mintCap, decimals)}`
-            : `${formatAmount(treasury.totalMinted, decimals)} (uncapped)`}
-        </span>
+        <span className="font-mono text-[11px] text-stone">{supplyText}</span>
       </div>
 
       {progress.capped ? (
@@ -123,7 +112,7 @@ export function OperatorControls({
         <Input
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          placeholder={`Amount (e.g. 1000)`}
+          placeholder="Amount (e.g. 1000)"
           inputMode="decimal"
           className="font-mono text-xs"
         />
@@ -135,7 +124,9 @@ export function OperatorControls({
         <div>
           <Button
             size="sm"
-            disabled={!destValid || !amountValid || wouldExceedCap || treasury.paused}
+            disabled={
+              !destValid || !amountValid || wouldExceedCap || treasury.paused
+            }
             onClick={() => setConfirmOpen(true)}
           >
             {treasury.paused ? "Paused" : "Mint"}
@@ -148,10 +139,9 @@ export function OperatorControls({
         title="Mint tokens?"
         description={
           <>
-            Mint <code>{amount}</code> tokens to{" "}
-            <code>{destValid ? formatPubkey(new PublicKey(destination.trim()), 6, 6) : "—"}</code>
-            ? Current supply: {formatAmount(treasury.totalMinted, decimals)}
-            {progress.capped ? ` / ${formatAmount(treasury.mintCap, decimals)}` : ""}.
+            Mint <code>{amount}</code> tokens to <code>{destFormatted}</code>?
+            Current supply: {formatAmount(treasury.totalMinted, decimals)}
+            {capSuffix}.
           </>
         }
         confirmLabel="Mint"

@@ -7,6 +7,7 @@ import {
   formatAmount,
   formatDuration,
   formatPubkey,
+  isValidPubkey,
   mintCapProgress,
   parseAmountToUnits,
   pubkeysEqual,
@@ -150,8 +151,9 @@ describe("parseAmountToUnits", () => {
 });
 
 describe("formatDuration", () => {
-  it("returns expired for negative input", () => {
+  it("returns expired for zero or negative input", () => {
     expect(formatDuration(-1)).toBe("expired");
+    expect(formatDuration(0)).toBe("expired");
   });
   it("formats days and hours", () => {
     expect(formatDuration(86_400 + 3_600 * 2)).toBe("1d 2h");
@@ -161,5 +163,26 @@ describe("formatDuration", () => {
   });
   it("formats minutes", () => {
     expect(formatDuration(60 * 5)).toBe("5m");
+  });
+  it("formats sub-minute durations in seconds", () => {
+    expect(formatDuration(45)).toBe("45s");
+  });
+});
+
+describe("isValidPubkey", () => {
+  const realKey = mint.toBase58();
+
+  it("accepts a real base58 pubkey", () => {
+    expect(isValidPubkey(realKey)).toBe(true);
+  });
+  it("trims surrounding whitespace", () => {
+    expect(isValidPubkey(`  ${realKey}  `)).toBe(true);
+  });
+  it("rejects empty input", () => {
+    expect(isValidPubkey("")).toBe(false);
+    expect(isValidPubkey("   ")).toBe(false);
+  });
+  it("rejects non-base58 input", () => {
+    expect(isValidPubkey("not-a-key")).toBe(false);
   });
 });

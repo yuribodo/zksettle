@@ -1,8 +1,19 @@
 import { BN } from "@coral-xyz/anchor";
-import type { PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 
 import { REDEMPTION_EXPIRY_SECS } from "./program";
 import type { RedemptionRequest, Treasury } from "./types";
+
+export function isValidPubkey(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return false;
+  try {
+    void new PublicKey(trimmed);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const DECIMAL_BASE = 10n;
 const ZERO_CHAR = "0";
@@ -112,5 +123,6 @@ export function formatDuration(secs: number): string {
   if (days > 0) return `${days}d ${hours}h`;
   const minutes = Math.floor((secs % 3_600) / 60);
   if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${secs}s`;
 }
