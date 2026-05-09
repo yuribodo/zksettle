@@ -3,7 +3,7 @@
 import { useGSAP } from "@gsap/react";
 import { gsap } from "gsap";
 import Link from "next/link";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
 import DecryptedText from "@/components/ui/decrypted-text";
@@ -15,36 +15,49 @@ import { cn } from "@/lib/cn";
 export function HeroCopy() {
   const { eyebrow, headline, sub, ctas } = COPY.hero;
   const heroRef = useRef<HTMLDivElement>(null);
-  const { enabled: canvasEnabled } = useCanvasStage();
+  const { enabled: canvasEnabled, ready: stageReady } = useCanvasStage();
   const reduceMotion = useReducedMotion();
+  const [cipherActive, setCipherActive] = useState(false);
 
   useGSAP(
     () => {
+      if (!stageReady) return;
+
       const root = heroRef.current;
       if (!root) return;
 
       const eyebrowEl = root.querySelector("[data-hero-eyebrow]");
+      const headlineEl = root.querySelector("[data-hero-headline]");
       const subEl = root.querySelector("[data-hero-sub]");
       const ctaEls = root.querySelectorAll("[data-hero-cta]");
 
       if (reduceMotion) {
         gsap.set(
-          [eyebrowEl, subEl, ...Array.from(ctaEls)],
+          [eyebrowEl, headlineEl, subEl, ...Array.from(ctaEls)],
           { opacity: 1, y: 0 },
         );
+        setCipherActive(true);
         return;
       }
 
       gsap.set(eyebrowEl, { opacity: 0, y: 8 });
+      gsap.set(headlineEl, { opacity: 0, y: 20 });
       gsap.set(subEl, { opacity: 0, y: 8 });
       gsap.set(ctaEls, { opacity: 0, y: 6 });
 
       const tl = gsap.timeline({ defaults: { ease: "power2.out" } });
       tl.to(eyebrowEl, { opacity: 1, y: 0, duration: 0.4 }, 0)
+        .to(headlineEl, {
+          opacity: 1,
+          y: 0,
+          duration: 0.6,
+          ease: "expo.out",
+          onStart: () => setCipherActive(true),
+        }, 0.15)
         .to(subEl, { opacity: 1, y: 0, duration: 0.5 }, 1.2)
         .to(ctaEls, { opacity: 1, y: 0, duration: 0.4, stagger: 0.08 }, 1.4);
     },
-    { scope: heroRef, dependencies: [reduceMotion, headline] },
+    { scope: heroRef, dependencies: [reduceMotion, headline, stageReady] },
   );
 
   return (
@@ -68,18 +81,22 @@ export function HeroCopy() {
           className="font-display font-normal text-white text-center text-[clamp(52px,9.5vw,144px)] leading-[0.93] tracking-[-0.04em]"
           aria-label={headline}
         >
-          <DecryptedText
-            text={headline}
-            speed={50}
-            maxIterations={20}
-            sequential
-            revealDirection="start"
-            animateOn="view"
-            characters="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*+=?/\|<>~^"
-            parentClassName="font-display"
-            className="text-white"
-            encryptedClassName="text-white/40 font-mono"
-          />
+          {cipherActive ? (
+            <DecryptedText
+              text={headline}
+              speed={50}
+              maxIterations={20}
+              sequential
+              revealDirection="start"
+              animateOn="view"
+              characters="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*+=?/\|<>~^"
+              parentClassName="font-display"
+              className="text-white"
+              encryptedClassName="text-white/40 font-mono"
+            />
+          ) : (
+            <span className="invisible">{headline}</span>
+          )}
         </h1>
 
         <p

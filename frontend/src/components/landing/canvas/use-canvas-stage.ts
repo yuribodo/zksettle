@@ -7,6 +7,7 @@ import { type ScrollState } from "./types";
 export type CanvasStageValue = {
   scrollStateRef: MutableRefObject<ScrollState>;
   enabled: boolean;
+  ready: boolean;
   onCanvasReady: () => void;
 };
 

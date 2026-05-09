@@ -65,9 +65,11 @@ export function CanvasStageProvider({ children }: { children: ReactNode }) {
 
   const ready = canvasReady && minTimeElapsed;
 
+  const stageReady = !enabled || ready;
+
   const value = useMemo<CanvasStageValue>(
-    () => ({ scrollStateRef, enabled, onCanvasReady }),
-    [enabled, onCanvasReady],
+    () => ({ scrollStateRef, enabled, ready: stageReady, onCanvasReady }),
+    [enabled, stageReady, onCanvasReady],
   );
 
   return (

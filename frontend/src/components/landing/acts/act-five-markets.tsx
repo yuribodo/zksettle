@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 
 import { useGSAP } from "@gsap/react";
 import { gsap } from "gsap";
@@ -57,8 +57,6 @@ export function ActFiveMarkets() {
     { scope: containerRef },
   );
 
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-
   const { markets, closer } = COPY.move;
 
   return (
@@ -75,22 +73,13 @@ export function ActFiveMarkets() {
           One primitive. Six markets.
         </p>
 
-        <div
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-3"
-          data-markets-grid
-          onMouseLeave={() => setHoveredIndex(null)}
-        >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-3" data-markets-grid>
           {markets.map((m, i) => (
             <MarketCell
               key={m.name}
               market={m}
               index={i}
               total={markets.length}
-              isDimmed={hoveredIndex !== null && hoveredIndex !== i}
-              onHoverChange={(hovering) => {
-                if (hovering) setHoveredIndex(i);
-                else setHoveredIndex((prev) => (prev === i ? null : prev));
-              }}
             />
           ))}
         </div>
