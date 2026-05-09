@@ -97,29 +97,6 @@ pub mod zksettle {
         )
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn set_hook_payload(
-        ctx: Context<InitHookPayload>,
-        proof_and_witness: Vec<u8>,
-        nullifier_hash: [u8; 32],
-        mint: Pubkey,
-        epoch: u64,
-        recipient: Pubkey,
-        amount: u64,
-        light_args: instructions::transfer_hook::StagedLightArgs,
-    ) -> Result<()> {
-        instructions::transfer_hook::set_hook_payload_handler(
-            ctx,
-            proof_and_witness,
-            nullifier_hash,
-            mint,
-            epoch,
-            recipient,
-            amount,
-            light_args,
-        )
-    }
-
     pub fn init_hook_payload(
         ctx: Context<InitHookPayload>,
         expected_proof_len: u32,
@@ -185,7 +162,7 @@ pub mod zksettle {
     /// payload PDA is NOT closed here — SPL passes `owner` as read-only
     /// (`AccountMeta::new_readonly`), blocking `close = owner`. Authority
     /// calls `close_hook_payload` after the transfer to reclaim rent and
-    /// unblock the next `set_hook_payload`.
+    /// unblock the next `init_hook_payload`.
     #[instruction(discriminator = &[105, 37, 101, 197, 75, 251, 102, 26])]
     pub fn transfer_hook<'info>(
         ctx: Context<'_, '_, '_, 'info, ExecuteHook<'info>>,

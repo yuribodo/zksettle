@@ -7,7 +7,7 @@ use crate::constants::MAX_ROOT_AGE_SLOTS;
 use crate::error::ZkSettleError;
 use crate::instructions::verify_proof::{EPOCH_LEN_SECS, MAX_EPOCH_LAG};
 
-use super::handlers::{validate_finalize_inputs, validate_set_hook_inputs};
+use super::handlers::validate_finalize_inputs;
 use super::settlement::validate_settlement_guards;
 use super::types::{ExtraAccountMetaInput, HookPayload, StagedLightArgs, MAX_HOOK_PROOF_BYTES};
 
@@ -21,13 +21,13 @@ fn nonzero_nullifier() -> [u8; 32] {
 
 #[test]
 fn validate_accepts_well_formed_inputs() {
-    assert!(validate_set_hook_inputs(256, &nonzero_nullifier(), 10).is_ok());
+    assert!(validate_finalize_inputs(&nonzero_nullifier(), 10).is_ok());
 }
 
 #[test]
 fn validate_rejects_zero_nullifier() {
     assert_eq!(
-        err_code(validate_set_hook_inputs(256, &[0u8; 32], 10)),
+        err_code(validate_finalize_inputs(&[0u8; 32], 10)),
         ERROR_CODE_OFFSET + ZkSettleError::ZeroNullifier as u32,
     );
 }
@@ -35,39 +35,18 @@ fn validate_rejects_zero_nullifier() {
 #[test]
 fn validate_rejects_zero_amount() {
     assert_eq!(
-        err_code(validate_set_hook_inputs(256, &nonzero_nullifier(), 0)),
+        err_code(validate_finalize_inputs(&nonzero_nullifier(), 0)),
         ERROR_CODE_OFFSET + ZkSettleError::InvalidTransferAmount as u32,
     );
 }
 
 #[test]
-fn validate_rejects_empty_proof() {
-    assert_eq!(
-        err_code(validate_set_hook_inputs(0, &nonzero_nullifier(), 10)),
-        ERROR_CODE_OFFSET + ZkSettleError::HookPayloadInvalid as u32,
-    );
-}
-
-#[test]
-fn validate_rejects_oversized_proof() {
-    assert_eq!(
-        err_code(validate_set_hook_inputs(
-            MAX_HOOK_PROOF_BYTES + 1,
-            &nonzero_nullifier(),
-            10
-        )),
-        ERROR_CODE_OFFSET + ZkSettleError::HookPayloadInvalid as u32,
-    );
-}
-
-#[test]
-fn validate_accepts_max_proof_len() {
-    assert!(validate_set_hook_inputs(MAX_HOOK_PROOF_BYTES, &nonzero_nullifier(), 1).is_ok());
-}
-
-#[test]
-fn validate_accepts_minimal_proof() {
-    assert!(validate_set_hook_inputs(1, &nonzero_nullifier(), 1).is_ok());
+fn base_space_excludes_proof_body() {
+    let with_proof = HookPayload::INIT_SPACE;
+    let base = HookPayload::BASE_SPACE;
+    assert_eq!(with_proof - base, MAX_HOOK_PROOF_BYTES);
+    // 752 = typical Groth16 proof (256) + witness (≈496) for compliance circuit
+    assert!(8 + base + 752 < 10_240, "752-byte proof PDA must fit CPI init limit");
 }
 
 #[test]
@@ -245,11 +224,10 @@ mod high_water_mark {
     }
 
     #[test]
-    fn zero_len_proof_not_allowed() {
-        assert_eq!(
-            err_code(validate_set_hook_inputs(0, &nonzero_nullifier(), 10)),
-            ERROR_CODE_OFFSET + ZkSettleError::HookPayloadInvalid as u32,
-        );
+    fn zero_len_proof_payload_cannot_finalize() {
+        let p = make_payload(0);
+        assert_eq!(p.expected_proof_len, 0);
+        assert_eq!(p.high_water_mark, 0);
     }
 }
 

@@ -13,7 +13,7 @@ use crate::state::{BubblegumTreeRegistry, Issuer, BUBBLEGUM_REGISTRY_SEED, BUBBL
 
 pub use handlers::{
     close_hook_payload_handler, finalize_hook_payload_handler, init_extra_account_meta_list_handler,
-    init_hook_payload_handler, set_hook_payload_handler, write_hook_proof_handler,
+    init_hook_payload_handler, write_hook_proof_handler,
 };
 pub use settlement::{execute_hook_handler, settle_hook_handler};
 pub use types::{
@@ -21,17 +21,12 @@ pub use types::{
     HOOK_PAYLOAD_SEED, MAX_HOOK_PROOF_BYTES,
 };
 
-/// Shared by `set_hook_payload` (single-tx) and `init_hook_payload` (chunked
-/// init). Both create the payload PDA with `init`.
-///
-/// The two paths leave the payload in different initial states:
-/// - `set_hook_payload`: writes all fields and sets `finalized = true` — the
-///   payload is immediately ready for settlement and cannot be modified via
-///   `ModifyHookPayload` (which requires `!finalized`).
-/// - `init_hook_payload`: only allocates the proof buffer and sets
-///   `finalized = false` — callers must follow up with `write_hook_proof` +
-///   `finalize_hook_payload` before settlement.
+/// Creates the payload PDA with dynamic space based on the actual proof
+/// length. Uses `#[instruction]` to peel `expected_proof_len` from the
+/// `init_hook_payload` instruction data, keeping the PDA under the 10KB
+/// CPI init limit.
 #[derive(Accounts)]
+#[instruction(expected_proof_len: u32)]
 pub struct InitHookPayload<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -52,7 +47,7 @@ pub struct InitHookPayload<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + HookPayload::INIT_SPACE,
+        space = 8 + HookPayload::BASE_SPACE + expected_proof_len as usize,
         seeds = [HOOK_PAYLOAD_SEED, authority.key().as_ref()],
         bump,
     )]

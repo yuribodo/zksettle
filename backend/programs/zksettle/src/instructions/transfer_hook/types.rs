@@ -17,8 +17,9 @@ pub const MAX_HOOK_PROOF_BYTES: usize = 16_384;
 
 /// Pre-staged Light CPI arguments stored in the hook payload so the Token-2022
 /// Execute entry — which only receives `amount: u64` as instruction data — can
-/// still drive a Light CPI. Clients must include `set_hook_payload` and the
-/// Token-2022 transfer in a single atomic transaction (same-tx staging),
+/// still drive a Light CPI. Clients stage via the chunked path
+/// (`init_hook_payload` → `write_hook_proof` → `finalize_hook_payload`) and
+/// include `finalize` + Token-2022 transfer in a single atomic transaction,
 /// otherwise the tree-root index and validity proof go stale.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, InitSpace)]
 pub struct StagedLightArgs {
@@ -75,6 +76,10 @@ pub struct HookPayload {
     #[max_len(MAX_HOOK_PROOF_BYTES)]
     pub proof_and_witness: Vec<u8>,
     pub bump: u8,
+}
+
+impl HookPayload {
+    pub const BASE_SPACE: usize = Self::INIT_SPACE - MAX_HOOK_PROOF_BYTES;
 }
 
 /// Anchor-serializable mirror of `ExtraAccountMeta` (which lacks Anchor derives).

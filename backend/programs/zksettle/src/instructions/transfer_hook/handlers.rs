@@ -13,54 +13,6 @@ use super::{
     CloseHookPayload, InitExtraAccountMetaList, InitHookPayload, ModifyHookPayload,
 };
 
-// PDA pays rent for MAX_HOOK_PROOF_BYTES regardless of actual proof len (Anchor `init` = fixed space).
-// realloc could reclaim waste but adds complexity for a short-lived PDA closed after settlement.
-
-/// Pure guard for `set_hook_payload`. Extracted so unit tests can cover the
-/// input validation without mocking an Anchor `Context`.
-pub(crate) fn validate_set_hook_inputs(
-    proof_len: usize,
-    nullifier_hash: &[u8; 32],
-    amount: u64,
-) -> Result<()> {
-    require!(*nullifier_hash != [0u8; 32], ZkSettleError::ZeroNullifier);
-    require!(amount > 0, ZkSettleError::InvalidTransferAmount);
-    require!(
-        proof_len > 0 && proof_len <= MAX_HOOK_PROOF_BYTES,
-        ZkSettleError::HookPayloadInvalid
-    );
-    Ok(())
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn set_hook_payload_handler(
-    ctx: Context<InitHookPayload>,
-    proof_and_witness: Vec<u8>,
-    nullifier_hash: [u8; 32],
-    mint: Pubkey,
-    epoch: u64,
-    recipient: Pubkey,
-    amount: u64,
-    light_args: StagedLightArgs,
-) -> Result<()> {
-    validate_set_hook_inputs(proof_and_witness.len(), &nullifier_hash, amount)?;
-
-    let payload = &mut ctx.accounts.hook_payload;
-    payload.issuer = ctx.accounts.issuer.key();
-    payload.nullifier_hash = nullifier_hash;
-    payload.mint = mint;
-    payload.recipient = recipient;
-    payload.amount = amount;
-    payload.epoch = epoch;
-    payload.light_args = light_args;
-    payload.expected_proof_len = proof_and_witness.len() as u32;
-    payload.high_water_mark = proof_and_witness.len() as u32;
-    payload.finalized = true;
-    payload.proof_and_witness = proof_and_witness;
-    payload.bump = ctx.bumps.hook_payload;
-    Ok(())
-}
-
 pub fn init_hook_payload_handler(
     ctx: Context<InitHookPayload>,
     expected_proof_len: u32,
