@@ -31,6 +31,7 @@ import {
   createMintToInstruction,
   createTransferCheckedInstruction,
   getAssociatedTokenAddress,
+  getOrCreateAssociatedTokenAccount,
   TOKEN_2022_PROGRAM_ID,
 } from "@solana/spl-token";
 import * as fs from "fs";
@@ -219,15 +220,19 @@ async function main() {
     process.exit(1);
   }
 
-  // Create sender ATA
-  const senderAta = await getAssociatedTokenAddress(
+  const senderAtaAccount = await getOrCreateAssociatedTokenAccount(
+    connection,
+    wallet,
     mint,
     wallet.publicKey,
     false,
+    "confirmed",
+    undefined,
     TOKEN_2022_PROGRAM_ID
   );
+  const senderAta = senderAtaAccount.address;
 
-  // Create recipient keypairs and ATAs
+  // Derive-only + batch-create: avoids N serial RPC round-trips that getOrCreateAssociatedTokenAccount would need
   console.error("Setting up recipient accounts...");
   const recipients: Array<{ keypair: Keypair; ata: PublicKey }> = [];
 
