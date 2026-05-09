@@ -69,8 +69,10 @@ export const FIXTURE_RECIPIENT = new PublicKey(FIXTURE_RECIPIENT_BYTES);
 // Constants
 // ---------------------------------------------------------------------------
 
+// ~450 bytes keeps each writeHookProof ix under the 1232-byte tx limit with 2 writes batched
 export const CHUNK_SIZE = 450;
 export const WRITES_PER_TX = 2;
+// micro-lamports per CU
 export const PRIORITY_FEE_MICRO_LAMPORTS = 5000;
 export const BASE_FEE_LAMPORTS = 5000;
 export const LAMPORTS_PER_SOL = 1_000_000_000;
@@ -103,6 +105,7 @@ export function loadWallet(): Keypair {
   return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(p, "utf-8"))));
 }
 
+// Expects zksettle_slice.proof (raw proof) + zksettle_slice.pw (public witness), concatenated
 export function loadProofAndWitness(circuitsBase: string): Buffer {
   const proofPath = path.join(circuitsBase, "zksettle_slice.proof");
   const witnessPath = path.join(circuitsBase, "zksettle_slice.pw");
