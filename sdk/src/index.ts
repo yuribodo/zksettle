@@ -6,6 +6,8 @@ export {
   uploadProofChunked,
   checkIssuerExists,
   buildRegisterIssuerIx,
+  checkHookPayloadExists,
+  buildCloseHookPayloadIx,
   CHUNK_SIZE,
 } from "./wrap/index.js";
 export { findIssuerPda, findHookPayloadPda, findRegistryPda, findTreeCreatorPda, findTreeConfigPda } from "./wrap/pda.js";

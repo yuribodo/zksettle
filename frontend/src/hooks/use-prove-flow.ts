@@ -216,15 +216,21 @@ async function runStepSubmit(
   dispatch({ type: "STEP_RUNNING", step: 4 });
 
   const start = performance.now();
-  const [{ uploadProofChunked, checkIssuerExists, buildRegisterIssuerIx }, { BN }, { PublicKey: SolPublicKey, Transaction }] = await Promise.all([
+  const [sdk, { BN }, { PublicKey: SolPublicKey, Transaction }] = await Promise.all([
     import("@zksettle/sdk"),
     import("@coral-xyz/anchor"),
     import("@solana/web3.js"),
   ]);
+  const { uploadProofChunked, checkIssuerExists, buildRegisterIssuerIx, checkHookPayloadExists, buildCloseHookPayloadIx } = sdk;
 
   const hexToBytes = (hex: string): Uint8Array => {
     const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
     return new Uint8Array(clean.match(/.{1,2}/g)?.map((b) => Number.parseInt(b, 16)) ?? []);
+  };
+
+  const confirmTx = async (sig: string) => {
+    const bh = await connection.getLatestBlockhash("confirmed");
+    await connection.confirmTransaction({ signature: sig, ...bh }, "confirmed");
   };
 
   const issuerExists = await checkIssuerExists(publicKey, connection);
@@ -239,7 +245,15 @@ async function runStepSubmit(
       },
       connection,
     );
-    await sendTransaction(new Transaction().add(ix), connection);
+    const sig = await sendTransaction(new Transaction().add(ix), connection);
+    await confirmTx(sig);
+  }
+
+  const stalePayload = await checkHookPayloadExists(publicKey, connection);
+  if (stalePayload) {
+    const closeIx = await buildCloseHookPayloadIx(publicKey, connection);
+    const sig = await sendTransaction(new Transaction().add(closeIx), connection);
+    await confirmTx(sig);
   }
 
   const nullifierHex = proofResult.publicInputs[1] ?? "";

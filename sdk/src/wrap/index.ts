@@ -81,6 +81,34 @@ export async function buildRegisterIssuerIx(
     .instruction();
 }
 
+export async function checkHookPayloadExists(
+  wallet: PublicKey,
+  connection: Connection,
+  programId = ZKSETTLE_PROGRAM_ID,
+): Promise<boolean> {
+  const [hookPayloadPda] = findHookPayloadPda(wallet, programId);
+  const info = await connection.getAccountInfo(hookPayloadPda);
+  return info !== null;
+}
+
+export async function buildCloseHookPayloadIx(
+  wallet: PublicKey,
+  connection: Connection,
+  programId = ZKSETTLE_PROGRAM_ID,
+  program?: Program,
+): Promise<TransactionInstruction> {
+  const [hookPayloadPda] = findHookPayloadPda(wallet, programId);
+  const prog = program ?? await makeProgram(connection);
+
+  return prog.methods
+    .closeHookPayload()
+    .accounts({
+      authority: wallet,
+      hookPayload: hookPayloadPda,
+    })
+    .instruction();
+}
+
 async function makeProgram(connection: Connection): Promise<Program> {
   const { AnchorProvider, Program } = await loadAnchorBrowser();
   const dummyWallet = new DummyWallet();
