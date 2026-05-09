@@ -69,27 +69,25 @@ The Groth16 proof is the one submitted on-chain. Total native pipeline (compile 
 
 ## 3. On-chain verification cost
 
-> **Status: not yet measured on devnet.**
+> **Status: ready to measure.**
 >
-> Attempted on 2026-05-08. Blockers found:
+> The chunked upload flow (`init_hook_payload` → `write_hook_proof` → `finalize_hook_payload` → `settle_hook`) is deployed and available in both the program and SDK. The benchmark script uploads the proof in chunks, then simulates (or executes) `settle_hook` to measure CU consumed by gnark Groth16 verification.
 >
-> 1. **Transaction size**: `verify_proof` and `set_hook_payload` exceed the 1232-byte tx limit (proof+witness = 752B + accounts + headers). The chunked upload path (`init_hook_payload` → `write_hook_proof` → `finalize_hook_payload` → `settle_hook`) exists in the codebase but is **not deployed** — the current devnet binary predates that feature.
-> 2. **Bubblegum tree init**: `init_attestation_tree` creates a depth-14 buffer-64 concurrent Merkle tree (~262KB) via CPI, which hits the 10KB inner-instruction realloc limit. The tree account must be pre-created at top level.
-> 3. **Light Protocol**: `settle_core` requires initialized Light Protocol state/address trees and a validity proof for compressed account creation.
->
-> **To unblock**: redeploy the program with chunked upload instructions, pre-create the Bubblegum tree account, and initialize Light Protocol state trees on devnet.
+> **Previous blockers (resolved):**
+> 1. ~~Transaction size~~ — chunked upload bypasses the 1232-byte limit
+> 2. ~~Bubblegum tree init~~ — handled by `setup.ts` (top-level account creation)
+> 3. **Light Protocol** — `settle_hook` still requires initialized Light state trees for full execution; simulation measures gnark CU before the Light CPI boundary
 >
 > The `hook-cu-probe` feature flag is in place (`cu_probe.rs`) with probes at:
 > - `pre-verify_bundle` / `post-verify_bundle`
 > - `post-light-cpi`
 > - `pre-bubblegum-mint` / `post-bubblegum-mint`
 >
-> VK match confirmed: `default.vk` = `circuits/target/zksettle_slice.vk` (byte-identical). The local Sunspot proof verifies successfully against the deployed VK.
+> VK match confirmed: `default.vk` = `circuits/target/zksettle_slice.vk` (byte-identical).
 
 | Metric | Estimated (ADR-022) | Measured | Target |
 |--------|---------------------|----------|--------|
-| CU consumed (verify_proof) | 219,000 | TBD | < 250,000 |
-| CU consumed (settle_hook) | 219,000 | TBD | < 250,000 |
+| CU consumed (settle_hook: verify + light + bubblegum) | ~219,000 | TBD | < 250,000 |
 | SOL cost per verification | < 0.001 | TBD | < 0.001 |
 
 ### CU estimation basis
@@ -99,6 +97,16 @@ ADR-022 estimates 219K CU based on:
 - `alt_bn128_addition` + `alt_bn128_multiplication`: ~10K CU
 - Light Protocol CPI (nullifier): ~10K CU
 - Bubblegum CPI (attestation): ~9K CU
+
+### SOL cost methodology
+
+SOL cost per verification = base fee + priority fee:
+- **Base fee**: 5,000 lamports (fixed per signature)
+- **Priority fee**: CU × priority rate (µ-lamports/CU)
+- **Rate used**: 5,000 µ-lamports/CU (conservative devnet upper bound)
+- **Formula**: `(5000 + CU × 5000 / 1e6) / 1e9` SOL
+
+At the estimated 219K CU: `(5000 + 1095) / 1e9 ≈ 0.000006 SOL` — well within < 0.001 target.
 
 ---
 
@@ -158,19 +166,20 @@ sunspot verify \
   target/zksettle_slice.pw
 ```
 
-### On-chain CU measurement (when deployed)
+### On-chain CU measurement
 
 ```bash
-cd backend
+# Standalone (registers issuer, uploads proof, simulates settle_hook)
+ANCHOR_WALLET=~/.config/solana/id.json npx ts-node scripts/benchmark-cu.ts
 
-# build with CU probes
-anchor build -- --features hook-cu-probe
+# With devnet-state.json (uses setup.ts accounts)
+cd scripts/devnet-hook
+ANCHOR_WALLET=~/.config/solana/id.json npx ts-node benchmark-cu.ts
 
-# deploy to devnet
-anchor deploy --provider.cluster devnet
-
-# submit proof and read CU from logs
-# (use scripts/stress-test.ts or manual devnet-hook/setup.ts flow)
+# Options:
+#   --runs 10       Number of benchmark iterations (default: 5)
+#   --live          Execute on-chain instead of simulating
+#   --rpc <url>     Custom RPC endpoint
 ```
 
 ### Stress test (when SDK is ready)

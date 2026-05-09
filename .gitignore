@@ -12,6 +12,7 @@ backend/programs/zksettle/src/generated_vk.rs
 !.env.example
 .superpowers/
 scripts/devnet-hook/devnet-state.json
+docs/benchmark-cu-results.json
 backend/tests/fixtures/
 sdk/dist/
 sdk/node_modules/
