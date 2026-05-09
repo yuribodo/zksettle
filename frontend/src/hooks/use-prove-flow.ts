@@ -25,9 +25,15 @@ import {
 } from "@/lib/prove-flow";
 import type { ProofInputs, ProofResult } from "@/types/proof";
 
+export interface TransferParams {
+  mint: string;
+  recipient: string;
+  amount: number;
+}
+
 export interface UseProveFlowReturn {
   state: FlowState;
-  startFlow: () => Promise<void>;
+  startFlow: (params: TransferParams) => Promise<void>;
   startDemo: () => Promise<void>;
   reset: () => void;
   canStart: boolean;
@@ -133,17 +139,21 @@ async function runStepProofGeneration(
   paths: Awaited<ReturnType<typeof runStepMerklePaths>>,
   ensureApi: () => Promise<import("@aztec/bb.js").Barretenberg>,
   generate: (inputs: ProofInputs) => Promise<ProofResult>,
+  transferParams: TransferParams,
 ) {
   dispatch({ type: "STEP_RUNNING", step: 3 });
   const { membership, sanctions, roots, jurisdictionProof, zkPrivateKey } = paths;
-  const mintBytes = publicKey.toBytes();
-  const recipientBytes = publicKey.toBytes();
+  const { PublicKey: SolPublicKey } = await import("@solana/web3.js");
+  const mintPubkey = new SolPublicKey(transferParams.mint);
+  const recipientPubkey = new SolPublicKey(transferParams.recipient);
+  const mintBytes = mintPubkey.toBytes();
+  const recipientBytes = recipientPubkey.toBytes();
   const mintLo = toHex(mintBytes.slice(0, 16));
   const mintHi = toHex(mintBytes.slice(16, 32));
   const recipientLo = toHex(recipientBytes.slice(0, 16));
   const recipientHi = toHex(recipientBytes.slice(16, 32));
   const epoch = String(Math.floor(Date.now() / 1000 / 86400));
-  const amount = "1000";
+  const amount = String(transferParams.amount);
   const timestamp = String(Math.floor(Date.now() / 1000));
   const credentialExpiry = String(credential.issued_at + CREDENTIAL_VALIDITY_SECS);
 
@@ -195,21 +205,48 @@ async function runStepSubmit(
   publicKey: PublicKey,
   connection: Connection,
   sendTransaction: (tx: Transaction, conn: Connection) => Promise<string>,
-  submitCtx: { zkPrivateKey: string; credentialExpiry: string; jurisdictionProof: { path: string[]; path_indices: number[] } },
+  submitCtx: {
+    zkPrivateKey: string;
+    credentialExpiry: string;
+    jurisdictionProof: { path: string[]; path_indices: number[] };
+    roots: import("@/lib/api/schemas").Roots;
+  },
+  transferParams: TransferParams,
 ): Promise<string | undefined> {
   dispatch({ type: "STEP_RUNNING", step: 4 });
 
   const start = performance.now();
-  const [{ uploadProofChunked }, { BN }] = await Promise.all([
+  const [{ uploadProofChunked, checkIssuerExists, buildRegisterIssuerIx }, { BN }, { PublicKey: SolPublicKey, Transaction }] = await Promise.all([
     import("@zksettle/sdk"),
     import("@coral-xyz/anchor"),
+    import("@solana/web3.js"),
   ]);
 
+  const hexToBytes = (hex: string): Uint8Array => {
+    const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+    return new Uint8Array(clean.match(/.{1,2}/g)?.map((b) => Number.parseInt(b, 16)) ?? []);
+  };
+
+  const issuerExists = await checkIssuerExists(publicKey, connection);
+  if (!issuerExists) {
+    const roots = submitCtx.roots;
+    const ix = await buildRegisterIssuerIx(
+      publicKey,
+      {
+        merkleRoot: hexToBytes(roots.membership_root),
+        sanctionsRoot: hexToBytes(roots.sanctions_root),
+        jurisdictionRoot: hexToBytes(roots.jurisdiction_root),
+      },
+      connection,
+    );
+    await sendTransaction(new Transaction().add(ix), connection);
+  }
+
   const nullifierHex = proofResult.publicInputs[1] ?? "";
-  const cleanHex = nullifierHex.startsWith("0x") ? nullifierHex.slice(2) : nullifierHex;
-  const nullifierBytes = new Uint8Array(
-    cleanHex.match(/.{1,2}/g)?.map((b) => Number.parseInt(b, 16)) ?? [],
-  );
+  const nullifierBytes = hexToBytes(nullifierHex);
+
+  const mintPubkey = new SolPublicKey(transferParams.mint);
+  const recipientPubkey = new SolPublicKey(transferParams.recipient);
 
   const result = await uploadProofChunked(
     {
@@ -218,9 +255,9 @@ async function runStepSubmit(
       proof: proofResult.proof,
       nullifierHash: nullifierBytes,
       transferContext: {
-        mint: publicKey,
-        recipient: publicKey,
-        amount: new BN(1000),
+        mint: mintPubkey,
+        recipient: recipientPubkey,
+        amount: new BN(transferParams.amount),
         epoch: Math.floor(Date.now() / 1000 / 86400),
         privateKey: submitCtx.zkPrivateKey,
         credentialExpiry: submitCtx.credentialExpiry,
@@ -277,10 +314,11 @@ interface LiveFlowContext {
   generate: (inputs: ProofInputs) => Promise<ProofResult>;
   ensureApi: () => Promise<import("@aztec/bb.js").Barretenberg>;
   derivePrivateKey: () => Promise<string>;
+  transferParams: TransferParams;
 }
 
 async function runLiveFlow(ctx: LiveFlowContext): Promise<void> {
-  const { dispatch, walletHex, publicKey, connection, sendTransaction, generate, ensureApi, derivePrivateKey } = ctx;
+  const { dispatch, walletHex, publicKey, connection, sendTransaction, generate, ensureApi, derivePrivateKey, transferParams } = ctx;
   let credential;
   try { credential = await runStepCredential(dispatch, walletHex); }
   catch (err) {
@@ -296,12 +334,12 @@ async function runLiveFlow(ctx: LiveFlowContext): Promise<void> {
   catch (err) { stepError(dispatch, 2, err, "Failed to fetch Merkle paths"); return; }
 
   let step3Result;
-  try { step3Result = await runStepProofGeneration(dispatch, publicKey, credential, paths, ensureApi, generate); }
+  try { step3Result = await runStepProofGeneration(dispatch, publicKey, credential, paths, ensureApi, generate, transferParams); }
   catch (err) { stepError(dispatch, 3, err, "Proof generation failed"); return; }
 
   let txSignature: string | undefined;
   try {
-    txSignature = await runStepSubmit(dispatch, step3Result.proofResult, publicKey, connection, sendTransaction, step3Result);
+    txSignature = await runStepSubmit(dispatch, step3Result.proofResult, publicKey, connection, sendTransaction, { ...step3Result, roots: paths.roots }, transferParams);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Transaction failed";
     const isRejected = message.includes("rejected") || message.includes("User rejected");
@@ -337,7 +375,7 @@ export function useProveFlow(): UseProveFlowReturn {
     : null;
 
   const runFlow = useCallback(
-    async (mode: "live" | "demo") => {
+    async (mode: "live" | "demo", params?: TransferParams) => {
       dispatch({ type: "START_FLOW", mode });
 
       dispatch({ type: "STEP_RUNNING", step: 0 });
@@ -353,17 +391,17 @@ export function useProveFlow(): UseProveFlowReturn {
         return;
       }
 
-      if (!walletHex) {
+      if (!walletHex || !params) {
         dispatch({ type: "STEP_ERROR", step: 1, error: "Wallet not resolved." });
         return;
       }
 
-      await runLiveFlow({ dispatch, walletHex, publicKey, connection, sendTransaction, generate, ensureApi, derivePrivateKey });
+      await runLiveFlow({ dispatch, walletHex, publicKey, connection, sendTransaction, generate, ensureApi, derivePrivateKey, transferParams: params });
     },
     [connected, publicKey, walletHex, connection, sendTransaction, generate, ensureApi, derivePrivateKey],
   );
 
-  const startFlow = useCallback(() => runFlow("live"), [runFlow]);
+  const startFlow = useCallback((params: TransferParams) => runFlow("live", params), [runFlow]);
   const startDemo = useCallback(() => runFlow("demo"), [runFlow]);
   const reset = useCallback(() => dispatch({ type: "RESET" }), []);
 
