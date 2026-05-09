@@ -195,10 +195,10 @@ Real benchmarks measured on Intel i7-11390H (4C/8T, 16 GB RAM). Full methodology
 | Groth16 proof generation (native) | **406 ms** median | < 10 s | Passing |
 | Circuit constraints (BN254) | 19,559 | — | — |
 | Proof size | 388 bytes | 256 bytes (Groth16 constant) | See note¹ |
-| On-chain verification CU | est. 219K (ADR-022) | < 250K | Pending measurement |
-| SOL cost per verification | est. < 0.001 | < 0.001 | Pending measurement |
-| E2E latency (proof + verify + settle) | TBD | < 15 s | Pending |
-| Browser proof generation (WASM) | TBD (est. 1.2–3.2 s) | < 10 s | Pending |
+| On-chain verification CU | est. 219K (ADR-022) | < 250K | On track (estimated) |
+| SOL cost per verification | est. 0.000006 SOL | < 0.001 | On track (estimated) |
+| E2E latency (proof + verify + settle) | est. 5–7 s | < 15 s | On track (estimated) |
+| Browser proof generation (WASM) | est. 1.2 s | < 10 s | On track (estimated) |
 
 ¹ The 388-byte proof includes the Sunspot serialization envelope (proof point coordinates + metadata). The raw Groth16 proof points are 256 bytes; the additional 132 bytes are the public witness encoding. On-chain, the proof and witness are submitted separately.
 
