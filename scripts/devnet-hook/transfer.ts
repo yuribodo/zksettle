@@ -23,13 +23,13 @@ import {
 } from "@solana/web3.js";
 import * as crypto from "crypto";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 
 import idlJson from "../../sdk/src/idl/zksettle.json";
+import { loadWallet } from "../lib/benchmark-utils";
 
 const ZKSETTLE_PROGRAM_ID = new PublicKey(
-  "AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo"
+  "2HexcvYg6zvQo6kf1ompmvG78GUKMTW292kp1wDdKzFk"
 );
 
 const MPL_BUBBLEGUM_ID = new PublicKey(
@@ -64,13 +64,7 @@ interface DevnetState {
   merkleTreeSecret: number[];
 }
 
-function loadWallet(): Keypair {
-  const walletPath =
-    process.env.ANCHOR_WALLET ||
-    path.join(os.homedir(), ".config/solana/id.json");
-  const raw = JSON.parse(fs.readFileSync(walletPath, "utf-8"));
-  return Keypair.fromSecretKey(Uint8Array.from(raw));
-}
+// loadWallet imported from shared util — single source of truth.
 
 function findPda(seeds: Buffer[], programId: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(seeds, programId);

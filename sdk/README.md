@@ -113,5 +113,5 @@ When updating, always bump all three simultaneously and run the proof test suite
 ## Program ID
 
 ```text
-AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo
+2HexcvYg6zvQo6kf1ompmvG78GUKMTW292kp1wDdKzFk
 ```

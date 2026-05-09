@@ -12,7 +12,7 @@ pub use instructions::*;
 
 pub const EVENT_VERSION: u8 = 1;
 
-declare_id!("2CdXRSPo6QLfLBJTikmrqmBiWwa1HpuuYJ2Qu6Yy3Liv");
+declare_id!("8UCELgX3D64aWPJcJre7AtuoSre5eWjHdAFsRUkeqCMe");
 
 #[program]
 pub mod stablecoin {

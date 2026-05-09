@@ -35,8 +35,8 @@ import {
   TOKEN_2022_PROGRAM_ID,
 } from "@solana/spl-token";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
+import { loadWallet } from "./lib/benchmark-utils";
 
 interface TransferResult {
   index: number;
@@ -105,13 +105,7 @@ function parseArgs(): {
   };
 }
 
-function loadWallet(): Keypair {
-  const walletPath =
-    process.env.ANCHOR_WALLET ||
-    path.join(os.homedir(), ".config/solana/id.json");
-  const raw = JSON.parse(fs.readFileSync(walletPath, "utf-8"));
-  return Keypair.fromSecretKey(Uint8Array.from(raw));
-}
+// loadWallet imported from shared util — single source of truth.
 
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;

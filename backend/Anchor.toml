@@ -7,12 +7,12 @@ skip-lint = true
 
 
 [programs.devnet]
-zksettle = "AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo"
-stablecoin = "2CdXRSPo6QLfLBJTikmrqmBiWwa1HpuuYJ2Qu6Yy3Liv"
+zksettle = "2HexcvYg6zvQo6kf1ompmvG78GUKMTW292kp1wDdKzFk"
+stablecoin = "8UCELgX3D64aWPJcJre7AtuoSre5eWjHdAFsRUkeqCMe"
 
 [programs.localnet]
-zksettle = "AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo"
-stablecoin = "2CdXRSPo6QLfLBJTikmrqmBiWwa1HpuuYJ2Qu6Yy3Liv"
+zksettle = "2HexcvYg6zvQo6kf1ompmvG78GUKMTW292kp1wDdKzFk"
+stablecoin = "8UCELgX3D64aWPJcJre7AtuoSre5eWjHdAFsRUkeqCMe"
 
 [provider]
 cluster = "devnet"

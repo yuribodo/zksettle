@@ -37,13 +37,13 @@ import {
   sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 
 import idlJson from "../../sdk/src/idl/zksettle.json";
+import { loadWallet } from "../lib/benchmark-utils";
 
 const ZKSETTLE_PROGRAM_ID = new PublicKey(
-  "AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo"
+  "2HexcvYg6zvQo6kf1ompmvG78GUKMTW292kp1wDdKzFk"
 );
 
 const MPL_BUBBLEGUM_ID = new PublicKey(
@@ -79,13 +79,6 @@ interface DevnetState {
   merkleTreeSecret: number[];
 }
 
-function loadWallet(): Keypair {
-  const walletPath =
-    process.env.ANCHOR_WALLET ||
-    path.join(os.homedir(), ".config/solana/id.json");
-  const raw = JSON.parse(fs.readFileSync(walletPath, "utf-8"));
-  return Keypair.fromSecretKey(Uint8Array.from(raw));
-}
 
 function findPda(seeds: Buffer[], programId: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(seeds, programId);
@@ -189,20 +182,25 @@ async function main() {
   const testSanctionsRoot = Buffer.alloc(32, 10);
   const testJurisdictionRoot = Buffer.alloc(32, 11);
 
-  const registerSig = await program.methods
-    .registerIssuer(
-      Array.from(testMerkleRoot),
-      Array.from(testSanctionsRoot),
-      Array.from(testJurisdictionRoot)
-    )
-    .accounts({
-      authority: wallet.publicKey,
-      issuer: issuerPda,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc();
-  console.log(`Issuer registered: ${issuerPda.toBase58()}`);
-  console.log(`  tx: ${registerSig}`);
+  const issuerInfo = await connection.getAccountInfo(issuerPda);
+  if (issuerInfo) {
+    console.log(`Issuer PDA already exists: ${issuerPda.toBase58()} — skipping register`);
+  } else {
+    const registerSig = await program.methods
+      .registerIssuer(
+        Array.from(testMerkleRoot),
+        Array.from(testSanctionsRoot),
+        Array.from(testJurisdictionRoot)
+      )
+      .accounts({
+        authority: wallet.publicKey,
+        issuer: issuerPda,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    console.log(`Issuer registered: ${issuerPda.toBase58()}`);
+    console.log(`  tx: ${registerSig}`);
+  }
 
   // --- Step 4: init_extra_account_meta_list ---
   const [extraMetaPda] = findPda(
@@ -217,43 +215,87 @@ async function main() {
   //   [8] bubblegum_program: literal BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY
   const extras = buildExtraAccountMetas(wallet.publicKey);
 
-  const initMetaSig = await program.methods
-    .initExtraAccountMetaList(extras)
-    .accounts({
-      authority: wallet.publicKey,
-      issuer: issuerPda,
-      mint: mintKeypair.publicKey,
-      extraAccountMetaList: extraMetaPda,
-      systemProgram: SystemProgram.programId,
-    })
-    .rpc();
-  console.log(`Extra account meta list initialized: ${extraMetaPda.toBase58()}`);
-  console.log(`  tx: ${initMetaSig}`);
+  const extraMetaInfo = await connection.getAccountInfo(extraMetaPda);
+  if (extraMetaInfo) {
+    console.log(`Extra account meta list already exists: ${extraMetaPda.toBase58()} — skipping init`);
+  } else {
+    const initMetaSig = await program.methods
+      .initExtraAccountMetaList(extras)
+      .accounts({
+        authority: wallet.publicKey,
+        issuer: issuerPda,
+        mint: mintKeypair.publicKey,
+        extraAccountMetaList: extraMetaPda,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+    console.log(`Extra account meta list initialized: ${extraMetaPda.toBase58()}`);
+    console.log(`  tx: ${initMetaSig}`);
+  }
 
   // --- Step 5: init_attestation_tree ---
-  const merkleTreeKp = Keypair.generate();
   const [registryPda] = findPda([BUBBLEGUM_REGISTRY_SEED], ZKSETTLE_PROGRAM_ID);
-  const [treeCreatorPda] = findPda([BUBBLEGUM_TREE_CREATOR_SEED], ZKSETTLE_PROGRAM_ID);
-  const [treeConfigKey] = treeConfigPda(merkleTreeKp.publicKey);
+  const registryInfo = await connection.getAccountInfo(registryPda);
+  let merkleTreeKp: Keypair;
+  if (registryInfo) {
+    // Registry already on-chain — load keypair from previous state file.
+    const prev = loadState();
+    if (!prev) throw new Error("Registry PDA exists but no devnet-state.json found to recover merkle tree keypair");
+    merkleTreeKp = Keypair.fromSecretKey(Uint8Array.from(prev.merkleTreeSecret));
+    console.log(`Attestation tree registry already exists: ${registryPda.toBase58()} — skipping init`);
+  } else {
+    // Pre-allocate the merkle tree account client-side (>10KB exceeds the
+    // inner-instruction realloc limit on mainnet/devnet).
+    merkleTreeKp = Keypair.generate();
+    const [treeCreatorPda] = findPda([BUBBLEGUM_TREE_CREATOR_SEED], ZKSETTLE_PROGRAM_ID);
+    const [treeConfigKey] = treeConfigPda(merkleTreeKp.publicKey);
 
-  const initTreeSig = await program.methods
-    .initAttestationTree()
-    .accounts({
-      authority: wallet.publicKey,
-      issuer: issuerPda,
-      registry: registryPda,
-      merkleTree: merkleTreeKp.publicKey,
-      treeConfig: treeConfigKey,
-      treeCreator: treeCreatorPda,
-      bubblegumProgram: MPL_BUBBLEGUM_ID,
-      compressionProgram: SPL_ACCOUNT_COMPRESSION_ID,
-      logWrapper: SPL_NOOP_ID,
-      systemProgram: SystemProgram.programId,
-    })
-    .signers([merkleTreeKp])
-    .rpc();
-  console.log(`Attestation tree initialized: ${merkleTreeKp.publicKey.toBase58()}`);
-  console.log(`  tx: ${initTreeSig}`);
+    // HEADER_SIZE_V1 (2 + 54) + size_of::<ConcurrentMerkleTree<14, 64>>()
+    // = 56 + (8 + 8 + 4 + 32 + 32*14 + (32+32)*64*14 + 32*64)
+    // = 31800 bytes. Must match bubblegum_merkle_tree_account_size() in Rust.
+    // If BUBBLEGUM_MAX_DEPTH (14) or BUBBLEGUM_MAX_BUFFER_SIZE (64) change,
+    // recompute this value.
+    const MERKLE_TREE_ACCOUNT_SIZE = 31800;
+    const treeRent = await connection.getMinimumBalanceForRentExemption(
+      MERKLE_TREE_ACCOUNT_SIZE
+    );
+    const createTreeAccTx = new Transaction().add(
+      SystemProgram.createAccount({
+        fromPubkey: wallet.publicKey,
+        newAccountPubkey: merkleTreeKp.publicKey,
+        space: MERKLE_TREE_ACCOUNT_SIZE,
+        lamports: treeRent,
+        programId: SPL_ACCOUNT_COMPRESSION_ID,
+      })
+    );
+    const createTreeSig = await sendAndConfirmTransaction(
+      connection,
+      createTreeAccTx,
+      [wallet, merkleTreeKp],
+      { commitment: "confirmed" }
+    );
+    console.log(`Merkle tree account created: ${merkleTreeKp.publicKey.toBase58()}`);
+    console.log(`  tx: ${createTreeSig}`);
+
+    const initTreeSig = await program.methods
+      .initAttestationTree()
+      .accounts({
+        authority: wallet.publicKey,
+        issuer: issuerPda,
+        registry: registryPda,
+        merkleTree: merkleTreeKp.publicKey,
+        treeConfig: treeConfigKey,
+        treeCreator: treeCreatorPda,
+        bubblegumProgram: MPL_BUBBLEGUM_ID,
+        compressionProgram: SPL_ACCOUNT_COMPRESSION_ID,
+        logWrapper: SPL_NOOP_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([merkleTreeKp])
+      .rpc();
+    console.log(`Attestation tree initialized: ${merkleTreeKp.publicKey.toBase58()}`);
+    console.log(`  tx: ${initTreeSig}`);
+  }
 
   // --- Step 6: Create ATAs ---
   const recipient = Keypair.generate();

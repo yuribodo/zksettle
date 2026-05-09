@@ -17,7 +17,7 @@ use light_sdk::derive_light_cpi_signer;
 
 pub use instructions::*;
 
-declare_id!("AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo");
+declare_id!("2HexcvYg6zvQo6kf1ompmvG78GUKMTW292kp1wDdKzFk");
 
 /// Light Protocol CPI signer derived from the program ID.
 ///
@@ -26,7 +26,7 @@ declare_id!("AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo");
 /// that require a string literal, so the value cannot be extracted into a
 /// shared `const`. Update both sites together.
 pub const LIGHT_CPI_SIGNER: CpiSigner =
-    derive_light_cpi_signer!("AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo");
+    derive_light_cpi_signer!("2HexcvYg6zvQo6kf1ompmvG78GUKMTW292kp1wDdKzFk");
 
 #[program]
 pub mod zksettle {

@@ -1,7 +1,6 @@
 //! One-time Bubblegum + concurrent merkle tree setup for ADR-019 attestation cNFTs.
 
 use anchor_lang::prelude::*;
-use anchor_lang::system_program::{self, CreateAccount};
 
 use crate::constants::{BUBBLEGUM_MAX_BUFFER_SIZE, BUBBLEGUM_MAX_DEPTH};
 use crate::error::ZkSettleError;
@@ -69,21 +68,18 @@ pub fn init_handler(ctx: Context<InitAttestationTree>) -> Result<()> {
         ZkSettleError::BubblegumCpiFailed
     );
 
-    let space = bubblegum_merkle_tree_account_size();
-    let lamports = Rent::get()?.minimum_balance(space);
-
-    system_program::create_account(
-        CpiContext::new(
-            ctx.accounts.system_program.to_account_info(),
-            CreateAccount {
-                from: ctx.accounts.authority.to_account_info(),
-                to: ctx.accounts.merkle_tree.to_account_info(),
-            },
-        ),
-        lamports,
-        space as u64,
-        &SPL_ACCOUNT_COMPRESSION_ID,
-    )?;
+    // Merkle tree account must be pre-allocated client-side (>10KB exceeds
+    // inner-instruction realloc limit).
+    let tree_info = ctx.accounts.merkle_tree.to_account_info();
+    let expected_space = bubblegum_merkle_tree_account_size();
+    require!(
+        tree_info.data_len() >= expected_space,
+        ZkSettleError::MerkleTreeTooSmall
+    );
+    require!(
+        *tree_info.owner == SPL_ACCOUNT_COMPRESSION_ID,
+        ZkSettleError::MerkleTreeWrongOwner
+    );
 
     let bump = ctx.bumps.tree_creator;
     let seeds: &[&[u8]] = &[BUBBLEGUM_TREE_CREATOR_SEED, &[bump]];
