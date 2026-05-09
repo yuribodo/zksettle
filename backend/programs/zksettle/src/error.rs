@@ -73,6 +73,10 @@ pub enum ZkSettleError {
     BubblegumTreeMismatch,
     #[msg("Bubblegum create_tree_config or mint CPI failed")]
     BubblegumCpiFailed,
+    #[msg("Pre-allocated merkle tree account is too small for configured depth/buffer")]
+    MerkleTreeTooSmall,
+    #[msg("Pre-allocated merkle tree account is not owned by SPL account compression")]
+    MerkleTreeWrongOwner,
     #[msg("Trailing Bubblegum account count is invalid for remaining_accounts split")]
     BubblegumTailInvalid,
     #[msg("Bubblegum leaf owner does not match settlement recipient")]
@@ -163,6 +167,8 @@ mod tests {
             ZkSettleError::BubblegumTreeNotConfigured as u32,
             ZkSettleError::BubblegumTreeMismatch as u32,
             ZkSettleError::BubblegumCpiFailed as u32,
+            ZkSettleError::MerkleTreeTooSmall as u32,
+            ZkSettleError::MerkleTreeWrongOwner as u32,
             ZkSettleError::BubblegumTailInvalid as u32,
             ZkSettleError::BubblegumLeafOwnerMismatch as u32,
             ZkSettleError::MintHookMismatch as u32,
