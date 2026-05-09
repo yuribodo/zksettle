@@ -47,6 +47,40 @@ const DEFAULT_LIGHT_ARGS: StagedLightArgs = {
 export const CHUNK_SIZE = 450;
 export const WRITES_PER_TX = 2;
 
+export async function checkIssuerExists(
+  wallet: PublicKey,
+  connection: Connection,
+  programId = ZKSETTLE_PROGRAM_ID,
+): Promise<boolean> {
+  const [issuerPda] = findIssuerPda(wallet, programId);
+  const info = await connection.getAccountInfo(issuerPda);
+  return info !== null;
+}
+
+export async function buildRegisterIssuerIx(
+  wallet: PublicKey,
+  roots: { merkleRoot: Uint8Array; sanctionsRoot: Uint8Array; jurisdictionRoot: Uint8Array },
+  connection: Connection,
+  programId = ZKSETTLE_PROGRAM_ID,
+  program?: Program,
+): Promise<TransactionInstruction> {
+  const [issuerPda] = findIssuerPda(wallet, programId);
+  const prog = program ?? await makeProgram(connection);
+
+  return prog.methods
+    .registerIssuer(
+      Array.from(roots.merkleRoot),
+      Array.from(roots.sanctionsRoot),
+      Array.from(roots.jurisdictionRoot),
+    )
+    .accounts({
+      authority: wallet,
+      issuer: issuerPda,
+      systemProgram: SystemProgram.programId,
+    })
+    .instruction();
+}
+
 async function makeProgram(connection: Connection): Promise<Program> {
   const { AnchorProvider, Program } = await loadAnchorBrowser();
   const dummyWallet = new DummyWallet();
