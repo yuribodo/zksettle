@@ -1,7 +1,8 @@
 "use client";
 
-import { Refresh, WarningTriangle } from "iconoir-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Refresh } from "iconoir-react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { StatusPill } from "@/components/dashboard/status-pill";
 import { Button } from "@/components/ui/button";
@@ -67,15 +68,6 @@ function describeError(err: unknown): string {
 }
 
 export function AuditLogTable() {
-  const [toast, setToast] = useState<string | null>(null);
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    };
-  }, []);
-
   const [range, setRange] = useState<RangeValue>("30d");
   const [issuerInput, setIssuerInput] = useState("");
   const [recipientInput, setRecipientInput] = useState("");
@@ -127,18 +119,13 @@ export function AuditLogTable() {
     setRange("30d");
   };
 
-  const showToast = useCallback((message: string) => {
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToast(message);
-    toastTimerRef.current = setTimeout(() => {
-      setToast(null);
-      toastTimerRef.current = null;
-    }, 3_000);
-  }, []);
+  useEffect(() => {
+    if (isError) toast.error(describeError(error));
+  }, [isError, error]);
 
   const handleExportCsv = () => {
     if (events.length === 0) {
-      showToast("No events to export");
+      toast("No events to export");
       return;
     }
     exportToCsv(events, "zksettle-audit-log.csv");
@@ -146,7 +133,7 @@ export function AuditLogTable() {
 
   const handleExportJson = () => {
     if (events.length === 0) {
-      showToast("No events to export");
+      toast("No events to export");
       return;
     }
     exportToJson(events, "zksettle-audit-log.json");
@@ -199,19 +186,8 @@ export function AuditLogTable() {
         </div>
         <div className="flex flex-wrap items-center gap-3 font-mono text-xs text-muted">
           <span>{eventCountStatus(isLoading, isError, events.length)}</span>
-          <span>· filters applied server-side via GET /v1/events</span>
         </div>
       </div>
-
-      {isError ? (
-        <p
-          role="alert"
-          className="flex items-start gap-2 rounded-[var(--radius-3)] border border-rust/30 bg-danger-bg px-4 py-3 font-mono text-xs text-rust"
-        >
-          <WarningTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          {describeError(error)}
-        </p>
-      ) : null}
 
       <div className="overflow-x-auto rounded-[var(--radius-6)] border border-border-subtle bg-surface">
         <table className="w-full min-w-[960px] border-collapse text-left">
@@ -296,15 +272,6 @@ export function AuditLogTable() {
         {!hasNextPage && events.length > 0 && <span>End of results</span>}
       </div>
 
-      {toast ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed right-6 bottom-6 z-50 rounded-[var(--radius-6)] border border-border-subtle bg-surface-deep px-4 py-3 text-sm text-quill shadow-sm"
-        >
-          {toast}
-        </div>
-      ) : null}
     </div>
   );
 }

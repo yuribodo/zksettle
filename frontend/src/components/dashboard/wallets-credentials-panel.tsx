@@ -1,7 +1,8 @@
 "use client";
 
-import { Check, Plus, Search, Trash, WarningTriangle, Xmark } from "iconoir-react";
-import { useState, type SyntheticEvent } from "react";
+import { Plus, Search, Trash, Xmark } from "iconoir-react";
+import { useEffect, useState, type SyntheticEvent } from "react";
+import { toast } from "sonner";
 
 import { StatusPill } from "@/components/dashboard/status-pill";
 import { Button } from "@/components/ui/button";
@@ -75,11 +76,12 @@ export function WalletsCredentialsPanel() {
   const runRegister = async (normalized: string): Promise<void> => {
     register.reset();
     try {
-      await register.mutateAsync(normalized);
+      const res = await register.mutateAsync(normalized);
       recordWallet(normalized);
       setRegisterInput("");
-    } catch {
-      // error surfaced via register.error
+      toast.success(`Wallet registered — ${res.message}`);
+    } catch (err) {
+      toast.error(describeRegisterError(err));
     }
   };
 
@@ -112,9 +114,10 @@ export function WalletsCredentialsPanel() {
     issue.reset();
     try {
       await issue.mutateAsync({ wallet: activeWallet, jurisdiction: issueJurisdiction || undefined });
+      toast.success("Credential issued");
       credentialQuery.refetch();
-    } catch {
-      // surfaced via issue.error
+    } catch (err) {
+      toast.error(describeError(err).message);
     }
   };
 
@@ -123,9 +126,10 @@ export function WalletsCredentialsPanel() {
     revoke.reset();
     try {
       await revoke.mutateAsync(activeWallet);
+      toast.success("Credential revoked");
       credentialQuery.refetch();
-    } catch {
-      // surfaced via revoke.error
+    } catch (err) {
+      toast.error(describeError(err).message);
     }
   };
 
@@ -179,32 +183,6 @@ export function WalletsCredentialsPanel() {
           <p id="register-help" className="mt-2 font-mono text-xs text-rust">
             Wallet must be 64 hex characters.
           </p>
-        ) : (
-          <p id="register-help" className="mt-2 font-mono text-xs text-muted">
-            Calls <span className="text-quill">POST /v1/wallets</span>.
-          </p>
-        )}
-
-        {register.isSuccess ? (
-          <output
-            className="mt-3 flex items-start gap-2 font-mono text-xs text-forest"
-          >
-            <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-            Wallet registered — {register.data.message}
-          </output>
-        ) : null}
-
-        {register.isError ? (
-          <p
-            role="alert"
-            className="mt-3 flex items-start gap-2 font-mono text-xs text-rust"
-          >
-            <WarningTriangle
-              aria-hidden="true"
-              className="mt-0.5 size-4 shrink-0"
-            />
-            {describeRegisterError(register.error)}
-          </p>
         ) : null}
       </section>
 
@@ -243,11 +221,7 @@ export function WalletsCredentialsPanel() {
           <p id="wallet-help" className="mt-2 font-mono text-xs text-rust">
             Wallet must be 64 hex characters.
           </p>
-        ) : (
-          <p id="wallet-help" className="mt-2 font-mono text-xs text-muted">
-            Calls <span className="text-quill">GET /v1/credentials/&#123;wallet&#125;</span>.
-          </p>
-        )}
+        ) : null}
       </section>
 
       {activeWallet ? (
@@ -260,8 +234,6 @@ export function WalletsCredentialsPanel() {
           onRevoke={onRevoke}
           issuePending={issue.isPending}
           revokePending={revoke.isPending}
-          issueError={issue.error}
-          revokeError={revoke.error}
         />
       ) : null}
 
@@ -331,8 +303,6 @@ interface CredentialCardProps {
   onRevoke: () => void;
   issuePending: boolean;
   revokePending: boolean;
-  issueError: unknown;
-  revokeError: unknown;
 }
 
 function CredentialCard({
@@ -344,11 +314,15 @@ function CredentialCard({
   onRevoke,
   issuePending,
   revokePending,
-  issueError,
-  revokeError,
 }: Readonly<CredentialCardProps>) {
   const { data: credential, isLoading, isError, error } = query;
   const errorInfo = isError ? describeError(error) : null;
+
+  useEffect(() => {
+    if (errorInfo && errorInfo.kind !== "not-found") {
+      toast.error(errorInfo.message);
+    }
+  }, [errorInfo]);
 
   return (
     <section
@@ -376,16 +350,6 @@ function CredentialCard({
 
       {isLoading ? (
         <p className="mt-4 font-mono text-xs text-stone">Loading credential…</p>
-      ) : null}
-
-      {errorInfo && errorInfo.kind !== "not-found" ? (
-        <p
-          role="alert"
-          className="mt-4 flex items-start gap-2 font-mono text-xs text-rust"
-        >
-          <WarningTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          {errorInfo.message}
-        </p>
       ) : null}
 
       {credential ? (
@@ -442,24 +406,6 @@ function CredentialCard({
           </div>
         ) : null}
 
-        {issueError ? (
-          <p
-            role="alert"
-            className="mt-3 flex items-start gap-2 font-mono text-xs text-rust"
-          >
-            <WarningTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-            {describeError(issueError).message}
-          </p>
-        ) : null}
-        {revokeError ? (
-          <p
-            role="alert"
-            className="mt-3 flex items-start gap-2 font-mono text-xs text-rust"
-          >
-            <WarningTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-            {describeError(revokeError).message}
-          </p>
-        ) : null}
       </div>
     </section>
   );

@@ -1,7 +1,8 @@
 "use client";
 
-import { Copy, Refresh, WarningTriangle } from "iconoir-react";
-import { useState } from "react";
+import { Copy, Refresh } from "iconoir-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { StatCard } from "@/components/dashboard/stat-card";
 import { StatusPill } from "@/components/dashboard/status-pill";
@@ -67,7 +68,10 @@ export function IssuerStatusPanel() {
   const { data: roots, isLoading, isError, error, refetch, isFetching } = useRoots();
   const publish = usePublishRoots();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [publishToast, setPublishToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isError) toast.error(describeError(error));
+  }, [isError, error]);
 
   const copy = async (text: string, key: string) => {
     try {
@@ -80,17 +84,15 @@ export function IssuerStatusPanel() {
   };
 
   const onPublish = async () => {
-    setPublishToast(null);
     try {
       const res = await publish.mutateAsync();
-      setPublishToast(
+      toast.success(
         res.registered
           ? `Published at slot ${res.slot.toLocaleString("en-US")}`
           : `Submitted at slot ${res.slot.toLocaleString("en-US")} (issuer not yet registered)`,
       );
-      setTimeout(() => setPublishToast(null), 4_000);
-    } catch {
-      // surfaced via publish.error below
+    } catch (err) {
+      toast.error(describeError(err));
     }
   };
 
@@ -132,16 +134,6 @@ export function IssuerStatusPanel() {
         </div>
       </section>
 
-      {publish.error ? (
-        <p
-          role="alert"
-          className="flex items-start gap-2 rounded-[var(--radius-3)] border border-rust/30 bg-danger-bg px-4 py-3 font-mono text-xs text-rust"
-        >
-          <WarningTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          {describeError(publish.error)}
-        </p>
-      ) : null}
-
       <div className="grid gap-4 sm:grid-cols-2">
         <StatCard
           label="Wallet count"
@@ -166,18 +158,10 @@ export function IssuerStatusPanel() {
           >
             Merkle roots
           </span>
-          <span className="font-mono text-xs text-muted">From GET /v1/roots</span>
+          <span className="font-mono text-xs text-muted">Current state</span>
         </div>
 
-        {isError ? (
-          <p
-            role="alert"
-            className="mt-4 flex items-start gap-2 font-mono text-xs text-rust"
-          >
-            <WarningTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-            {describeError(error)}
-          </p>
-        ) : (
+        {!isError ? (
           <ul className="mt-4 flex flex-col divide-y divide-border-subtle">
             {ROOT_FIELDS.map((field) => {
               const value = roots?.[field.key];
@@ -208,18 +192,9 @@ export function IssuerStatusPanel() {
               );
             })}
           </ul>
-        )}
+        ) : null}
       </section>
 
-      {publishToast ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed right-6 bottom-6 z-50 rounded-[var(--radius-6)] border border-border-subtle bg-surface-deep px-4 py-3 text-sm text-quill shadow-sm"
-        >
-          {publishToast}
-        </div>
-      ) : null}
     </div>
   );
 }

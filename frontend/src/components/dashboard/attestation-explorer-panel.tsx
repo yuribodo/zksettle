@@ -1,7 +1,8 @@
 "use client";
 
-import { Copy, NavArrowDown, Search, WarningTriangle, Xmark } from "iconoir-react";
-import { useState, type ReactNode, type SyntheticEvent } from "react";
+import { Copy, NavArrowDown, Search, Xmark } from "iconoir-react";
+import { useEffect, useState, type ReactNode, type SyntheticEvent } from "react";
+import { toast } from "sonner";
 
 import { StatusPill, type StatusKind } from "@/components/dashboard/status-pill";
 import { Button } from "@/components/ui/button";
@@ -142,19 +143,7 @@ export function AttestationExplorerPanel() {
           <p id="wallet-help" className="mt-2 font-mono text-xs text-rust">
             Wallet must be 64 hex characters.
           </p>
-        ) : (
-          <p id="wallet-help" className="mt-2 font-mono text-xs text-muted">
-            Calls{" "}
-            <span className="text-quill">
-              GET /v1/proofs/membership/&#123;wallet&#125;
-            </span>{" "}
-            and{" "}
-            <span className="text-quill">
-              GET /v1/proofs/sanctions/&#123;wallet&#125;
-            </span>{" "}
-            .
-          </p>
-        )}
+        ) : null}
       </section>
 
       {/* Compliance status */}
@@ -241,6 +230,24 @@ function AttestationStatusSection({
   const membershipError = membershipQuery.isError ? describeProofError(membershipQuery.error) : null;
   const sanctionsError = sanctionsQuery.isError ? describeProofError(sanctionsQuery.error) : null;
 
+  useEffect(() => {
+    if (membershipError && membershipError.kind !== "not-found") {
+      toast.error(`Membership: ${membershipError.message}`);
+    }
+  }, [membershipError]);
+
+  useEffect(() => {
+    if (sanctionsError && sanctionsError.kind !== "not-found") {
+      toast.error(`Sanctions: ${sanctionsError.message}`);
+    }
+  }, [sanctionsError]);
+
+  useEffect(() => {
+    if (membershipRootMatch === false || sanctionsRootMatch === false) {
+      toast.warning(rootMismatchMessage(membershipRootMatch, sanctionsRootMatch));
+    }
+  }, [membershipRootMatch, sanctionsRootMatch]);
+
   return (
     <section
       aria-labelledby="status-heading"
@@ -261,27 +268,6 @@ function AttestationStatusSection({
 
       {status === "loading" ? (
         <p className="mt-4 font-mono text-xs text-stone">Loading proofs…</p>
-      ) : null}
-
-      {membershipError && membershipError.kind !== "not-found" ? (
-        <p role="alert" className="mt-4 flex items-start gap-2 font-mono text-xs text-rust">
-          <WarningTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          Membership: {membershipError.message}
-        </p>
-      ) : null}
-
-      {sanctionsError && sanctionsError.kind !== "not-found" ? (
-        <p role="alert" className="mt-4 flex items-start gap-2 font-mono text-xs text-rust">
-          <WarningTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          Sanctions: {sanctionsError.message}
-        </p>
-      ) : null}
-
-      {(membershipRootMatch === false || sanctionsRootMatch === false) ? (
-        <p className="mt-4 flex items-start gap-2 font-mono text-xs text-warning-text">
-          <WarningTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          {rootMismatchMessage(membershipRootMatch, sanctionsRootMatch)}
-        </p>
       ) : null}
     </section>
   );

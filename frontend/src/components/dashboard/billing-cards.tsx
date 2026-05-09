@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
+import { toast } from "sonner";
+
 import { BillingUsageChart } from "@/components/dashboard/billing-usage-chart";
 import { useUsage, useUsageHistory } from "@/hooks/use-usage";
 import { TIER_PRICE_CENTS, type Tier } from "@/lib/api/schemas";
@@ -21,7 +24,7 @@ function tierPriceLabel(tier: Tier, monthlyLimit: number): string {
 
 export function BillingCards() {
   const { data: usage, isLoading, isError, error } = useUsage();
-  const { data: history, isLoading: historyLoading, isError: historyError } =
+  const { data: history, isLoading: historyLoading, isError: historyError, error: historyErrorObj } =
     useUsageHistory(30);
 
   const tier: Tier = usage?.tier ?? "developer";
@@ -31,6 +34,18 @@ export function BillingCards() {
     monthlyLimit > 0 ? Math.min(100, Math.round((usedThisMonth / monthlyLimit) * 100)) : 0;
   const historyData = history?.history ?? [];
   const historyPeak = historyData.reduce((max, d) => Math.max(max, d.count), 0);
+
+  useEffect(() => {
+    if (isError) {
+      toast.error(error instanceof Error ? error.message : "Failed to load usage");
+    }
+  }, [isError, error]);
+
+  useEffect(() => {
+    if (historyError) {
+      toast.error(historyErrorObj instanceof Error ? historyErrorObj.message : "Failed to load usage history");
+    }
+  }, [historyError, historyErrorObj]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -56,11 +71,6 @@ export function BillingCards() {
                 {isLoading || isError ? "" : tierPriceLabel(tier, monthlyLimit)}
               </span>
             </div>
-            {isError ? (
-              <p className="mt-2 font-mono text-xs text-rust">
-                {error instanceof Error ? error.message : "Failed to load usage"}
-              </p>
-            ) : null}
           </div>
         </div>
 
@@ -100,7 +110,7 @@ export function BillingCards() {
           <span className="font-mono text-xs text-stone">
             {historyLoading && "loading…"}
             {!historyLoading && historyError && "Unavailable"}
-            {!historyLoading && !historyError && `Peak ${fmtCompact(historyPeak)} · GET /usage/history`}
+            {!historyLoading && !historyError && `Peak ${fmtCompact(historyPeak)}`}
           </span>
         </div>
         <div className="mt-4">

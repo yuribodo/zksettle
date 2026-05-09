@@ -2,6 +2,7 @@
 
 import { Copy, Trash, WarningTriangle } from "iconoir-react";
 import { useEffect, useRef, useState, type SyntheticEvent } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,6 +74,10 @@ export function ApiKeysPanel() {
   const [activePrefix, setActivePrefix] = useState<string | null>(null);
 
   useEffect(() => {
+    if (isError) toast.error(describeError(error));
+  }, [isError, error]);
+
+  useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
       const fallback: ActiveKeyStatus = { hasKey: false };
@@ -93,8 +98,8 @@ export function ApiKeysPanel() {
       setRevealed(created);
       setOwner("");
       setCopied(false);
-    } catch {
-      // surfaced via createKey.error
+    } catch (err) {
+      toast.error(describeError(err));
     }
   };
 
@@ -141,11 +146,12 @@ export function ApiKeysPanel() {
     setPendingRevoke(null);
     try {
       await deleteKey.mutateAsync(target.key_hash);
+      toast.success("API key revoked");
       if (targetPrefix && activePrefix && targetPrefix === activePrefix) {
         await clearActiveApiKey();
       }
-    } catch {
-      // surfaced via deleteKey.error
+    } catch (err) {
+      toast.error(describeError(err));
     }
   };
 
@@ -195,15 +201,6 @@ export function ApiKeysPanel() {
           </Button>
         </form>
 
-        {createKey.error ? (
-          <p
-            role="alert"
-            className="mt-3 flex items-start gap-2 font-mono text-xs text-rust"
-          >
-            <WarningTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-            {describeError(createKey.error)}
-          </p>
-        ) : null}
       </section>
 
       <section
@@ -227,30 +224,9 @@ export function ApiKeysPanel() {
           </div>
         </div>
         <p className="mt-2 text-xs text-stone">
-          Lives on the gateway via <span className="font-mono text-quill">GET /api-keys</span>. The
-          full key is shown only at creation time; we cache the prefix locally so you can
+          The full key is shown only at creation time; we cache the prefix locally so you can
           recognise it later.
         </p>
-
-        {isError ? (
-          <p
-            role="alert"
-            className="mt-4 flex items-start gap-2 font-mono text-xs text-rust"
-          >
-            <WarningTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-            {describeError(error)}
-          </p>
-        ) : null}
-
-        {deleteKey.error ? (
-          <p
-            role="alert"
-            className="mt-3 flex items-start gap-2 font-mono text-xs text-rust"
-          >
-            <WarningTriangle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-            {describeError(deleteKey.error)}
-          </p>
-        ) : null}
 
         {!isError && keys.length === 0 && !isLoading ? (
           <p className="mt-6 font-mono text-xs text-muted">
