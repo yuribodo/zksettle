@@ -63,7 +63,8 @@ export {
 export {
   decodeTreasury,
   decodeRedemptionRequest,
-  TREASURY_DATA_LEN,
+  TREASURY_ACCOUNT_SIZE,
+  TREASURY_MIN_DATA_LEN,
   REDEMPTION_REQUEST_DATA_LEN,
 } from "./stablecoin/accounts.js";
 export type { Treasury, RedemptionRequest } from "./stablecoin/accounts.js";

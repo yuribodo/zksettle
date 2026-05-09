@@ -29,12 +29,15 @@ export interface RedemptionRequest {
   bump: number;
 }
 
-export const TREASURY_DATA_LEN = 8 + 167;
+// Borsh Option<Pubkey> is variable: None=1 byte, Some=33 bytes.
+// Account is allocated at max size (8+167=175), but minimum valid payload is 8+135=143.
+export const TREASURY_ACCOUNT_SIZE = 8 + 167;
+export const TREASURY_MIN_DATA_LEN = 8 + 135;
 export const REDEMPTION_REQUEST_DATA_LEN = 8 + 153;
 
 export function decodeTreasury(data: Buffer): Treasury {
-  if (data.length < TREASURY_DATA_LEN) {
-    throw new Error(`Treasury data too short: ${data.length} < ${TREASURY_DATA_LEN}`);
+  if (data.length < TREASURY_MIN_DATA_LEN) {
+    throw new Error(`Treasury data too short: ${data.length} < ${TREASURY_MIN_DATA_LEN}`);
   }
 
   const disc = data.subarray(0, 8);
@@ -58,8 +61,8 @@ export function decodeTreasury(data: Buffer): Treasury {
   let pendingAdmin: PublicKey | null = null;
   if (pendingAdminTag === 1) {
     pendingAdmin = new PublicKey(data.subarray(offset, offset + 32));
+    offset += 32;
   }
-  offset += 32;
 
   const mintCap = data.readBigUInt64LE(offset); offset += 8;
   const redemptionNonce = data.readBigUInt64LE(offset); offset += 8;
