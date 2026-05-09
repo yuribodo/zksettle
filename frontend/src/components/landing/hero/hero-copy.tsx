@@ -5,8 +5,8 @@ import { gsap } from "gsap";
 import Link from "next/link";
 import { useRef, useState } from "react";
 
-import { ASCIIText } from "@/components/ui/ascii-text";
 import { buttonVariants } from "@/components/ui/button";
+import { GlitchText } from "@/components/ui/glitch-text";
 import { useCanvasStage } from "@/components/landing/canvas/use-canvas-stage";
 import { COPY } from "@/content/copy";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
@@ -78,29 +78,19 @@ export function HeroCopy() {
         <div data-hero-headline className="relative w-full">
           <h1
             id="hero-heading"
-            className="font-display font-normal text-white text-center text-[clamp(52px,9.5vw,144px)] leading-[0.93] tracking-[-0.04em] invisible"
             aria-label={headline}
+            className="font-display font-normal text-white text-center text-[clamp(52px,9.5vw,144px)] leading-[0.93] tracking-[-0.04em]"
           >
-            {headline}
+            {reduceMotion ? (
+              headline
+            ) : (
+              <>
+                <GlitchText text="Prove without" active={cipherActive} />
+                <br />
+                <GlitchText text="showing." active={cipherActive} />
+              </>
+            )}
           </h1>
-          {canvasEnabled && cipherActive ? (
-            <div className="absolute inset-0 ascii-text-host">
-              <ASCIIText
-                text={headline}
-                asciiFontSize={8}
-                textFontSize={200}
-                textColor="#ffffff"
-                planeBaseHeight={8}
-                enableWaves
-              />
-            </div>
-          ) : !canvasEnabled ? (
-            <h1
-              className="absolute inset-0 font-display font-normal text-white text-center text-[clamp(52px,9.5vw,144px)] leading-[0.93] tracking-[-0.04em]"
-            >
-              {headline}
-            </h1>
-          ) : null}
         </div>
 
         <p

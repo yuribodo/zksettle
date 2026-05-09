@@ -3,18 +3,6 @@
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
-function mapRange(
-  n: number,
-  start: number,
-  stop: number,
-  start2: number,
-  stop2: number,
-): number {
-  return ((n - start) / (stop - start)) * (stop2 - start2) + start2;
-}
-
-const PX_RATIO = typeof window !== "undefined" ? window.devicePixelRatio : 1;
-
 const VERTEX_SHADER = `
 varying vec2 vUv;
 uniform float uTime;
@@ -25,9 +13,9 @@ void main() {
   float time = uTime * 5.0;
   float waveFactor = uEnableWaves;
   vec3 transformed = position;
-  transformed.x += sin(time + position.y) * 0.5 * waveFactor;
-  transformed.y += cos(time + position.z) * 0.15 * waveFactor;
-  transformed.z += sin(time + position.x) * waveFactor;
+  transformed.x += sin(time + position.y) * 0.12 * waveFactor;
+  transformed.y += cos(time + position.z) * 0.04 * waveFactor;
+  transformed.z += sin(time + position.x) * 0.2 * waveFactor;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(transformed, 1.0);
 }
 `;
@@ -40,7 +28,7 @@ uniform sampler2D uTexture;
 void main() {
   float time = uTime;
   vec2 pos = vUv;
-  vec4 texel = texture2D(uTexture, pos + cos(time * 2.0 + pos.x) * 0.005);
+  vec4 texel = texture2D(uTexture, pos + cos(time * 2.0 + pos.x) * 0.001);
   float luma = dot(texel.rgb, vec3(0.299, 0.587, 0.114));
   gl_FragColor = vec4(vec3(luma), texel.a);
 }
@@ -73,9 +61,7 @@ class AsciiFilter {
     this.renderer = renderer;
     this.fontSize = opts.fontSize ?? 12;
     this.fontFamily = opts.fontFamily ?? "'Courier New', monospace";
-    this.charset =
-      opts.charset ??
-      " .'`^\",:;Il!i~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
+    this.charset = opts.charset ?? " .:-=+*#%@";
     this.invert = opts.invert ?? true;
 
     this.domElement = document.createElement("div");
@@ -121,7 +107,9 @@ class AsciiFilter {
     this.pre.style.top = "0";
     this.pre.style.zIndex = "9";
     this.pre.style.userSelect = "none";
-    this.pre.style.color = "rgba(255, 255, 255, 0.85)";
+    this.pre.style.fontWeight = "bold";
+    this.pre.style.color = "#ffffff";
+    this.pre.style.textShadow = "0 0 8px rgba(255,255,255,0.3)";
   }
 
   render(scene: THREE.Scene, camera: THREE.Camera) {
@@ -217,7 +205,6 @@ class CanvAscii {
   private container: HTMLElement;
   private width: number;
   private height: number;
-  private mouse: { x: number; y: number };
   private animationFrameId = 0;
   private textString: string;
   private asciiFontSize: number;
@@ -260,7 +247,6 @@ class CanvAscii {
     );
     this.camera.position.z = 30;
     this.scene = new THREE.Scene();
-    this.mouse = { x: width / 2, y: height / 2 };
   }
 
   async init() {
@@ -317,13 +303,7 @@ class CanvAscii {
 
     this.container.appendChild(this.filter.domElement);
     this.filter.setSize(this.width, this.height);
-
-    this.boundMouseMove = this.onMouseMove.bind(this);
-    this.container.addEventListener("mousemove", this.boundMouseMove);
-    this.container.addEventListener("touchmove", this.boundMouseMove);
   }
-
-  private boundMouseMove: ((e: Event) => void) | null = null;
 
   setSize(w: number, h: number) {
     this.width = w;
@@ -341,25 +321,11 @@ class CanvAscii {
     tick();
   }
 
-  private onMouseMove(evt: Event) {
-    const e = (evt as TouchEvent).touches
-      ? (evt as TouchEvent).touches[0]!
-      : (evt as MouseEvent);
-    const bounds = this.container.getBoundingClientRect();
-    this.mouse = { x: e.clientX - bounds.left, y: e.clientY - bounds.top };
-  }
-
   private step() {
     const time = performance.now() * 0.001;
     this.textCanvas.render();
     this.texture.needsUpdate = true;
     this.material.uniforms.uTime!.value = Math.sin(time);
-
-    const x = mapRange(this.mouse.y, 0, this.height, 0.5, -0.5);
-    const y = mapRange(this.mouse.x, 0, this.width, -0.5, 0.5);
-    this.mesh.rotation.x += (x - this.mesh.rotation.x) * 0.05;
-    this.mesh.rotation.y += (y - this.mesh.rotation.y) * 0.05;
-
     this.filter.render(this.scene, this.camera);
   }
 
@@ -370,10 +336,6 @@ class CanvAscii {
       if (this.filter.domElement.parentNode) {
         this.container.removeChild(this.filter.domElement);
       }
-    }
-    if (this.boundMouseMove) {
-      this.container.removeEventListener("mousemove", this.boundMouseMove);
-      this.container.removeEventListener("touchmove", this.boundMouseMove);
     }
     this.scene.traverse((obj) => {
       if ((obj as THREE.Mesh).isMesh) {

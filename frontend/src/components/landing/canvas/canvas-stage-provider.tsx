@@ -87,7 +87,7 @@ export function CanvasStageProvider({ children }: { children: ReactNode }) {
   return (
     <CanvasStageContext.Provider value={value}>
       {enabled ? <PersistentCanvasLazy /> : null}
-      {enabled ? <CanvasLoadingOverlay visible={!ready} /> : null}
+      {(enabled || !determined) ? <CanvasLoadingOverlay visible={!stageReady} /> : null}
       {children}
     </CanvasStageContext.Provider>
   );
