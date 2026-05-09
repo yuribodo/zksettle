@@ -7,18 +7,18 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 
-if (typeof window !== "undefined") {
+if (globalThis.window !== undefined) {
   gsap.registerPlugin(ScrollTrigger);
 }
 
-export function SmoothScrollProvider({ children }: { children: ReactNode }) {
+export function SmoothScrollProvider({ children }: Readonly<{ children: ReactNode }>) {
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     if (reduceMotion) return;
 
     const lenis = new Lenis({
-      duration: 1.1,
+      duration: 0.9,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
     });
 

@@ -15,7 +15,7 @@ import { useCanvasStage } from "@/components/landing/canvas/use-canvas-stage";
 
 import { useActPin } from "./use-act-pin";
 
-if (typeof window !== "undefined") {
+if (globalThis.window !== undefined) {
   gsap.registerPlugin(ScrollTrigger, useGSAP);
 }
 
@@ -53,7 +53,6 @@ export function ActThreeEngine() {
   const containerRef = useRef<HTMLDivElement>(null);
   const curtainRef = useRef<HTMLDivElement>(null);
   const [scrollStep, setScrollStep] = useState(0);
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -161,6 +160,10 @@ export function ActThreeEngine() {
 
   const { eyebrow, headline, chapters, demoCta } = COPY.engine;
 
+  let buttonLabel = demoCta;
+  if (running) buttonLabel = "Generating proof...";
+  else if (done) buttonLabel = "Generate again →";
+
   return (
     <section
       ref={containerRef}
@@ -185,30 +188,15 @@ export function ActThreeEngine() {
         </p>
 
         {/* Step cards grid */}
-        <div
-          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-3"
-          onMouseLeave={() => setHoveredIndex(null)}
-        >
-          {chapters.map((chapter, i) => {
-            const isRevealed =
-              hoveredIndex === i ||
-              (hoveredIndex === null && scrollStep === i);
-
-            return (
-              <EngineStepCell
-                key={chapter.title}
-                chapter={chapter}
-                index={i}
-                isRevealed={isRevealed}
-                isDimmed={hoveredIndex !== null && hoveredIndex !== i}
-                onHoverChange={(hovering) => {
-                  if (hovering) setHoveredIndex(i);
-                  else
-                    setHoveredIndex((prev) => (prev === i ? null : prev));
-                }}
-              />
-            );
-          })}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-3">
+          {chapters.map((chapter, i) => (
+            <EngineStepCell
+              key={chapter.title}
+              chapter={chapter}
+              index={i}
+              isRevealed={scrollStep >= i}
+            />
+          ))}
         </div>
 
         {/* Dashed divider */}
@@ -223,7 +211,7 @@ export function ActThreeEngine() {
 
         {/* Closer */}
         <div
-          className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-end lg:gap-10"
+          className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-10"
           data-engine-closer
         >
           <DisplayHeading
@@ -241,11 +229,7 @@ export function ActThreeEngine() {
               disabled={running}
               className="inline-flex items-center justify-center rounded-[var(--radius-3)] bg-forest px-4 py-2.5 text-base font-medium text-canvas transition-colors duration-150 ease-[var(--ease-brand)] hover:bg-forest-hover disabled:pointer-events-none disabled:opacity-50"
             >
-              {running
-                ? "Generating proof..."
-                : done
-                  ? "Generate again →"
-                  : demoCta}
+              {buttonLabel}
             </button>
           </div>
         </div>
@@ -270,24 +254,15 @@ function EngineStepCell({
   chapter,
   index,
   isRevealed,
-  isDimmed,
-  onHoverChange,
-}: {
+}: Readonly<{
   chapter: EngineChapter;
   index: number;
   isRevealed: boolean;
-  isDimmed: boolean;
-  onHoverChange: (hovering: boolean) => void;
-}) {
+}>) {
   return (
     <div
       data-engine-cell
-      onMouseEnter={() => onHoverChange(true)}
-      onMouseLeave={() => onHoverChange(false)}
-      className={cn(
-        "group relative isolate overflow-hidden rounded-[8px] bg-surface/45 p-5 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] hover:-translate-y-px active:translate-y-0",
-        isDimmed ? "opacity-60" : "opacity-100",
-      )}
+      className="group relative isolate overflow-hidden rounded-[8px] bg-surface/45 p-5 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]"
     >
       {/* Tint layer */}
       <div
@@ -398,10 +373,10 @@ function EngineStepCell({
 function CornerBracket({
   position,
   active,
-}: {
+}: Readonly<{
   position: CornerPosition;
   active: boolean;
-}) {
+}>) {
   return (
     <svg
       aria-hidden

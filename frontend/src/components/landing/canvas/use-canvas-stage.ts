@@ -1,12 +1,13 @@
 "use client";
 
-import { createContext, useContext, type MutableRefObject } from "react";
+import { createContext, useContext, type RefObject } from "react";
 
 import { type ScrollState } from "./types";
 
 export type CanvasStageValue = {
-  scrollStateRef: MutableRefObject<ScrollState>;
+  scrollStateRef: RefObject<ScrollState>;
   enabled: boolean;
+  ready: boolean;
   onCanvasReady: () => void;
 };
 

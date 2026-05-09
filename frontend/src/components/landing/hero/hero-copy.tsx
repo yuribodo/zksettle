@@ -3,130 +3,26 @@
 import { useGSAP } from "@gsap/react";
 import { gsap } from "gsap";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
+import { GlitchText } from "@/components/ui/glitch-text";
 import { useCanvasStage } from "@/components/landing/canvas/use-canvas-stage";
 import { COPY } from "@/content/copy";
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 import { cn } from "@/lib/cn";
 
-import { useCipherDecode } from "./use-cipher-decode";
-
-const GLYPHS = String.raw`ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&*+=?/\|<>~^`;
-function randomGlyph() {
-  return GLYPHS[Math.floor(Math.random() * GLYPHS.length)]!; // NOSONAR — visual animation, not security
-}
-
-function splitWords(text: string): { start: number; end: number }[] {
-  const result: { start: number; end: number }[] = [];
-  let wordStart = 0;
-  for (let i = 0; i <= text.length; i++) {
-    if (i === text.length || text[i] === " ") {
-      if (i > wordStart) result.push({ start: wordStart, end: i });
-      wordStart = i + 1;
-    }
-  }
-  return result;
-}
-
-function useWordScramble(text: string) {
-  const [overrides, setOverrides] = useState<Map<number, string>>(new Map());
-  const rafRef = useRef(0);
-
-  const scrambleWord = useCallback(
-    (start: number, end: number) => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-
-      const charDelay = 30;
-      const scrambleDuration = 300;
-      const t0 = performance.now();
-
-      const tick = () => {
-        const elapsed = performance.now() - t0;
-        const next = new Map<number, string>();
-        let running = false;
-
-        for (let i = start; i < end; i++) {
-          if (text[i] === " ") continue;
-          const local = i - start;
-          const charEnd = local * charDelay + scrambleDuration;
-
-          if (elapsed < charEnd) {
-            next.set(i, randomGlyph());
-            running = true;
-          }
-        }
-
-        setOverrides(next);
-
-        if (running) {
-          rafRef.current = requestAnimationFrame(tick);
-        } else {
-          rafRef.current = 0;
-        }
-      };
-
-      const initial = new Map<number, string>();
-      for (let i = start; i < end; i++) {
-        if (text[i] !== " ") initial.set(i, randomGlyph());
-      }
-      setOverrides(initial);
-      rafRef.current = requestAnimationFrame(tick);
-    },
-    [text],
-  );
-
-  useEffect(() => {
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, []);
-
-  return { overrides, scrambleWord };
-}
-
-function getCharStyle(isDecoded: boolean, isLastWord: boolean, cipherDone: boolean) {
-  if (!isDecoded) return { filter: "blur(1.5px)" };
-  if (isLastWord && !cipherDone) return { filter: "blur(0.3px)" };
-  return undefined;
-}
-
 export function HeroCopy() {
   const { eyebrow, headline, sub, ctas } = COPY.hero;
   const heroRef = useRef<HTMLDivElement>(null);
-  const { enabled: canvasEnabled } = useCanvasStage();
+  const { enabled: canvasEnabled, ready: stageReady } = useCanvasStage();
   const reduceMotion = useReducedMotion();
   const [cipherActive, setCipherActive] = useState(false);
 
-  const lastSpaceIdx = headline.lastIndexOf(" ");
-  const words = splitWords(headline);
-
-  const cipher = useCipherDecode(headline, {
-    startDelay: 500,
-    charDelay: 35,
-    scrambleDuration: 350,
-    lastWordExtraDelay: 600,
-    active: cipherActive && !reduceMotion,
-  });
-
-  const { overrides, scrambleWord } = useWordScramble(headline);
-
-  const canHover = useMemo(() => {
-    if (globalThis.window === undefined) return false;
-    return globalThis.matchMedia("(hover: hover)").matches;
-  }, []);
-
-  const onWordHover = useCallback(
-    (word: { start: number; end: number }) => {
-      if (!canHover || !cipher.done || reduceMotion) return;
-      scrambleWord(word.start, word.end);
-    },
-    [canHover, cipher.done, reduceMotion, scrambleWord],
-  );
-
   useGSAP(
     () => {
+      if (!stageReady) return;
+
       const root = heroRef.current;
       if (!root) return;
 
@@ -140,7 +36,7 @@ export function HeroCopy() {
           [eyebrowEl, headlineEl, subEl, ...Array.from(ctaEls)],
           { opacity: 1, y: 0 },
         );
-        setCipherActive(false);
+        setCipherActive(true);
         return;
       }
 
@@ -161,7 +57,7 @@ export function HeroCopy() {
         .to(subEl, { opacity: 1, y: 0, duration: 0.5 }, 1.2)
         .to(ctaEls, { opacity: 1, y: 0, duration: 0.4, stagger: 0.08 }, 1.4);
     },
-    { scope: heroRef, dependencies: [reduceMotion, headline] },
+    { scope: heroRef, dependencies: [reduceMotion, headline, stageReady] },
   );
 
   return (
@@ -179,48 +75,23 @@ export function HeroCopy() {
           {eyebrow}
         </p>
 
-        <h1
-          id="hero-heading"
-          data-hero-headline
-          className="font-display font-normal text-white text-center text-[clamp(52px,9.5vw,144px)] leading-[0.93] tracking-[-0.04em]"
-          aria-label={headline}
-        >
-          {words.map((word, wi) => (
-            <span
-              key={`${word.start}-${word.end}`}
-              aria-hidden="true"
-              className={cn(
-                "inline-flex cursor-default whitespace-nowrap",
-                wi > 0 && "ml-[0.27em]",
-              )}
-              onMouseEnter={() => onWordHover(word)}
-            >
-              {cipher.display.slice(word.start, word.end).map((ch, ci) => {
-                const i = word.start + ci;
-                const isLastWord = i > lastSpaceIdx;
-                const hoverCh = overrides.get(i);
-                const isHoverScrambled = hoverCh !== undefined;
-                const isDecoded = isHoverScrambled ? false : (cipher.decoded[i] ?? false);
-                const displayCh = isHoverScrambled ? hoverCh : ch;
-
-                return (
-                  <span
-                    key={i}
-                    className={cn(
-                      "inline-block transition-[color,filter,opacity] duration-300",
-                      !isDecoded && !isHoverScrambled && "font-mono text-white/40",
-                      !isDecoded && isHoverScrambled && "text-white/40",
-                      isDecoded && isLastWord && !cipher.done && "text-cyan-300",
-                    )}
-                    style={getCharStyle(isDecoded, isLastWord, cipher.done)}
-                  >
-                    {displayCh}
-                  </span>
-                );
-              })}
-            </span>
-          ))}
-        </h1>
+        <div data-hero-headline className="relative w-full">
+          <h1
+            id="hero-heading"
+            aria-label={headline}
+            className="font-display font-normal text-white text-center text-[clamp(52px,9.5vw,144px)] leading-[0.93] tracking-[-0.04em]"
+          >
+            {reduceMotion ? (
+              headline
+            ) : (
+              <>
+                <GlitchText text="Prove without" active={cipherActive} />
+                <br />
+                <GlitchText text="showing." active={cipherActive} />
+              </>
+            )}
+          </h1>
+        </div>
 
         <p
           data-hero-sub

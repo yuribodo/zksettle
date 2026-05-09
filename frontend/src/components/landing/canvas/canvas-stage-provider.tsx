@@ -17,13 +17,14 @@ import { createScrollState } from "./types";
 
 const DESKTOP_MIN_WIDTH = 768;
 const MIN_LOADING_MS = 2200;
+const MAX_LOADING_MS = 10_000;
 
 function probeWebGL(): boolean {
   try {
     const test = document.createElement("canvas");
     const gl = test.getContext("webgl2") ?? test.getContext("webgl");
     if (!gl) return false;
-    const lose = (gl as WebGLRenderingContext).getExtension(
+    const lose = gl.getExtension(
       "WEBGL_lose_context",
     );
     lose?.loseContext();
@@ -33,8 +34,9 @@ function probeWebGL(): boolean {
   }
 }
 
-export function CanvasStageProvider({ children }: { children: ReactNode }) {
+export function CanvasStageProvider({ children }: Readonly<{ children: ReactNode }>) {
   const reduceMotion = useReducedMotion();
+  const [determined, setDetermined] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [canvasReady, setCanvasReady] = useState(false);
   const [minTimeElapsed, setMinTimeElapsed] = useState(false);
@@ -43,43 +45,55 @@ export function CanvasStageProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (reduceMotion) {
       setEnabled(false);
+      setDetermined(true);
       return;
     }
-    const isMobile = window.matchMedia(
+    const isMobile = globalThis.matchMedia(
       `(max-width: ${DESKTOP_MIN_WIDTH - 1}px)`,
     ).matches;
     if (isMobile) {
       setEnabled(false);
+      setDetermined(true);
       return;
     }
     if (!probeWebGL()) {
       setEnabled(false);
+      setDetermined(true);
       return;
     }
     setEnabled(true);
+    setDetermined(true);
     const timer = setTimeout(() => setMinTimeElapsed(true), MIN_LOADING_MS);
     return () => clearTimeout(timer);
   }, [reduceMotion]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const fallback = setTimeout(() => setCanvasReady(true), MAX_LOADING_MS);
+    return () => clearTimeout(fallback);
+  }, [enabled]);
 
   const onCanvasReady = useCallback(() => setCanvasReady(true), []);
 
   const ready = canvasReady && minTimeElapsed;
 
+  const stageReady = determined && (!enabled || ready);
+
   const value = useMemo<CanvasStageValue>(
-    () => ({ scrollStateRef, enabled, onCanvasReady }),
-    [enabled, onCanvasReady],
+    () => ({ scrollStateRef, enabled, ready: stageReady, onCanvasReady }),
+    [enabled, stageReady, onCanvasReady],
   );
 
   return (
     <CanvasStageContext.Provider value={value}>
       {enabled ? <PersistentCanvasLazy /> : null}
-      {enabled ? <CanvasLoadingOverlay visible={!ready} /> : null}
+      {(enabled || !determined) ? <CanvasLoadingOverlay visible={!stageReady} /> : null}
       {children}
     </CanvasStageContext.Provider>
   );
 }
 
-function CanvasLoadingOverlay({ visible }: { visible: boolean }) {
+function CanvasLoadingOverlay({ visible }: Readonly<{ visible: boolean }>) {
   const [mounted, setMounted] = useState(true);
 
   useEffect(() => {
@@ -191,7 +205,7 @@ function CanvasLoadingOverlay({ visible }: { visible: boolean }) {
       </div>
 
       <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/30">
-        compiling proof
+        {"compiling proof "}
         <span className="ml-2 inline-block animate-veil-cursor">▍</span>
       </p>
     </div>
