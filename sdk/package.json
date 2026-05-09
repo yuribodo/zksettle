@@ -34,6 +34,10 @@
     "./wrap": {
       "types": "./dist/wrap/index.d.ts",
       "default": "./dist/wrap/index.js"
+    },
+    "./stablecoin": {
+      "types": "./dist/stablecoin/index.d.ts",
+      "default": "./dist/stablecoin/index.js"
     }
   },
   "main": "dist/index.js",

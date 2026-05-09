@@ -23,3 +23,5 @@ export const BUBBLEGUM_REGISTRY_SEED = Buffer.from("bubblegum-registry");
 export const BUBBLEGUM_TREE_CREATOR_SEED = Buffer.from("bubblegum-tree-creator");
 
 export const PROOF_SETTLED_DISCRIMINATOR = new Uint8Array([108, 6, 201, 20, 0, 169, 42, 135]);
+
+export { STABLECOIN_PROGRAM_ID } from "./stablecoin/constants.js";

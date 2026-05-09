@@ -35,3 +35,36 @@ export type { Roots, MembershipProof, SanctionsProof, Credential } from "./issue
 import idl from "./idl/zksettle.json" with { type: "json" };
 export { idl };
 export type { Zksettle } from "./idl/zksettle.js";
+
+export { StablecoinClient } from "./stablecoin/client.js";
+export {
+  findTreasuryPda,
+  findMintAuthorityPda,
+  findFreezeAuthorityPda,
+  findEscrowAuthorityPda,
+  findRedemptionPda,
+} from "./stablecoin/pda.js";
+export {
+  buildInitializeMintIx,
+  buildMintTokensIx,
+  buildRequestRedemptionIx,
+  buildApproveRedemptionIx,
+  buildCancelRedemptionIx,
+  buildFreezeAccountIx,
+  buildThawAccountIx,
+  buildPauseIx,
+  buildUnpauseIx,
+  buildProposeAdminIx,
+  buildAcceptAdminIx,
+  buildCancelPendingAdminIx,
+  buildSetOperatorIx,
+  buildUpdateMintCapIx,
+} from "./stablecoin/instructions.js";
+export {
+  decodeTreasury,
+  decodeRedemptionRequest,
+  TREASURY_ACCOUNT_SIZE,
+  TREASURY_MIN_DATA_LEN,
+  REDEMPTION_REQUEST_DATA_LEN,
+} from "./stablecoin/accounts.js";
+export type { Treasury, RedemptionRequest } from "./stablecoin/accounts.js";
