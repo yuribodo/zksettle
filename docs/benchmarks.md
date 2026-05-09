@@ -76,7 +76,7 @@ The Groth16 proof is the one submitted on-chain. Total native pipeline (compile 
 > **Previous blockers (resolved):**
 > 1. ~~Transaction size~~ — chunked upload bypasses the 1232-byte limit
 > 2. ~~Bubblegum tree init~~ — handled by `setup.ts` (top-level account creation)
-> 3. **Light Protocol** — `settle_hook` still requires initialized Light state trees for full execution; simulation measures gnark CU before the Light CPI boundary
+> 3. **Light Protocol** — `settle_hook` still requires Light state trees to be initialized for full execution; simulation measures gnark CU before the Light CPI boundary
 >
 > The `hook-cu-probe` feature flag is in place (`cu_probe.rs`) with probes at:
 > - `pre-verify_bundle` / `post-verify_bundle`
