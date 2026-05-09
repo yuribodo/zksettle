@@ -9,8 +9,6 @@ import {
 import BN from "bn.js";
 import type { BN as AnchorBN, Program } from "@coral-xyz/anchor";
 import type {
-  WrapOptions,
-  ZkSettleConfig,
   StagedLightArgs,
   ChunkedUploadOptions,
   ChunkedUploadResult,
@@ -42,44 +40,6 @@ const DEFAULT_LIGHT_ARGS: StagedLightArgs = {
   addressRootIndex: 0,
   outputStateTreeIndex: 0,
 };
-
-export async function wrap(
-  options: WrapOptions,
-  config?: ZkSettleConfig,
-): Promise<Transaction> {
-  const { AnchorProvider, Program } = await loadAnchorBrowser();
-  const programId = config?.programId ?? ZKSETTLE_PROGRAM_ID;
-
-  const [issuerPda] = findIssuerPda(options.wallet, programId);
-  const [hookPayloadPda] = findHookPayloadPda(options.wallet, programId);
-
-  const dummyWallet = new DummyWallet();
-  const provider = new AnchorProvider(options.connection, dummyWallet as any, {});
-  const program = new Program(idl as any, provider);
-
-  const lightArgs = options.lightArgs ?? DEFAULT_LIGHT_ARGS;
-  const epoch = options.transferContext.epoch ?? Math.floor(Date.now() / 1000 / 86400);
-
-  const instruction = await program.methods
-    .setHookPayload(
-      Buffer.from(options.proof),
-      Array.from(options.nullifierHash),
-      options.transferContext.mint,
-      new BN(epoch),
-      options.transferContext.recipient,
-      options.transferContext.amount,
-      lightArgs,
-    )
-    .accounts({
-      authority: options.wallet,
-      issuer: issuerPda,
-      hookPayload: hookPayloadPda,
-      systemProgram: SystemProgram.programId,
-    })
-    .instruction();
-
-  return new Transaction().add(instruction);
-}
 
 // Solana txn limit ~1232 bytes. Per writeHookProof IX: 8 (discriminator) +
 // 4 (offset) + 4 (vec prefix) + CHUNK_SIZE + ~228 (accounts/header). Two

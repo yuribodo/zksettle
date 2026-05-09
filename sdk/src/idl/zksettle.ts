@@ -2,10 +2,10 @@
  * Program IDL in camelCase format in order to be used in JS/TS.
  *
  * Note that this is only a type helper and is not the actual IDL. The original
- * IDL can be found at `sdk/src/idl/zksettle.json`.
+ * IDL can be found at `target/idl/zksettle.json`.
  */
 export type Zksettle = {
-  "address": "AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo",
+  "address": "2HexcvYg6zvQo6kf1ompmvG78GUKMTW292kp1wDdKzFk",
   "metadata": {
     "name": "zksettle",
     "version": "0.1.0",
@@ -140,6 +140,114 @@ export type Zksettle = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "finalizeHookPayload",
+      "discriminator": [
+        49,
+        120,
+        116,
+        7,
+        20,
+        41,
+        239,
+        107
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "issuer"
+          ]
+        },
+        {
+          "name": "issuer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "hookPayload",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  111,
+                  107,
+                  45,
+                  112,
+                  97,
+                  121,
+                  108,
+                  111,
+                  97,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "nullifierHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "epoch",
+          "type": "u64"
+        },
+        {
+          "name": "recipient",
+          "type": "pubkey"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "lightArgs",
+          "type": {
+            "defined": {
+              "name": "stagedLightArgs"
+            }
+          }
+        }
+      ]
     },
     {
       "name": "initAttestationTree",
@@ -383,6 +491,90 @@ export type Zksettle = {
               }
             }
           }
+        }
+      ]
+    },
+    {
+      "name": "initHookPayload",
+      "discriminator": [
+        103,
+        68,
+        111,
+        17,
+        4,
+        137,
+        159,
+        172
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "issuer"
+          ]
+        },
+        {
+          "name": "issuer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "hookPayload",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  111,
+                  107,
+                  45,
+                  112,
+                  97,
+                  121,
+                  108,
+                  111,
+                  97,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "expectedProofLen",
+          "type": "u32"
         }
       ]
     },
@@ -1149,6 +1341,89 @@ export type Zksettle = {
           "type": "u8"
         }
       ]
+    },
+    {
+      "name": "writeHookProof",
+      "discriminator": [
+        245,
+        58,
+        118,
+        142,
+        68,
+        183,
+        252,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "issuer"
+          ]
+        },
+        {
+          "name": "issuer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "hookPayload",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  111,
+                  107,
+                  45,
+                  112,
+                  97,
+                  121,
+                  108,
+                  111,
+                  97,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "offset",
+          "type": "u32"
+        },
+        {
+          "name": "chunk",
+          "type": "bytes"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -1410,6 +1685,31 @@ export type Zksettle = {
       "code": 6037,
       "name": "mintHookMismatch",
       "msg": "Mint's TransferHook extension does not point to this program"
+    },
+    {
+      "code": 6038,
+      "name": "chunkOutOfBounds",
+      "msg": "Chunk write exceeds expected_proof_len"
+    },
+    {
+      "code": 6039,
+      "name": "chunkNotSequential",
+      "msg": "Chunk offset does not match high_water_mark (sequential writes required)"
+    },
+    {
+      "code": 6040,
+      "name": "payloadAlreadyFinalized",
+      "msg": "Cannot write to a finalized payload"
+    },
+    {
+      "code": 6041,
+      "name": "payloadNotReady",
+      "msg": "Payload must be finalized before settlement"
+    },
+    {
+      "code": 6042,
+      "name": "proofIncomplete",
+      "msg": "Proof length does not match expected_proof_len at finalize"
     }
   ],
   "types": [
@@ -1418,6 +1718,10 @@ export type Zksettle = {
       "type": {
         "kind": "struct",
         "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
           {
             "name": "issuer",
             "type": "pubkey"
@@ -1697,6 +2001,18 @@ export type Zksettle = {
             }
           },
           {
+            "name": "expectedProofLen",
+            "type": "u32"
+          },
+          {
+            "name": "highWaterMark",
+            "type": "u32"
+          },
+          {
+            "name": "finalized",
+            "type": "bool"
+          },
+          {
             "name": "proofAndWitness",
             "type": "bytes"
           },
@@ -1814,6 +2130,10 @@ export type Zksettle = {
       "type": {
         "kind": "struct",
         "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
           {
             "name": "issuer",
             "type": "pubkey"

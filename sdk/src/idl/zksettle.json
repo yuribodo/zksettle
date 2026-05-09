@@ -1,5 +1,5 @@
 {
-  "address": "AyZk4CYFAFFJiFC2WqqXY2oq2pgN6vvrWwYbbWz7z7Jo",
+  "address": "2HexcvYg6zvQo6kf1ompmvG78GUKMTW292kp1wDdKzFk",
   "metadata": {
     "name": "zksettle",
     "version": "0.1.0",
@@ -134,6 +134,114 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "finalize_hook_payload",
+      "discriminator": [
+        49,
+        120,
+        116,
+        7,
+        20,
+        41,
+        239,
+        107
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "issuer"
+          ]
+        },
+        {
+          "name": "issuer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "hook_payload",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  111,
+                  107,
+                  45,
+                  112,
+                  97,
+                  121,
+                  108,
+                  111,
+                  97,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "nullifier_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "type": "pubkey"
+        },
+        {
+          "name": "epoch",
+          "type": "u64"
+        },
+        {
+          "name": "recipient",
+          "type": "pubkey"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        },
+        {
+          "name": "light_args",
+          "type": {
+            "defined": {
+              "name": "StagedLightArgs"
+            }
+          }
+        }
+      ]
     },
     {
       "name": "init_attestation_tree",
@@ -381,6 +489,90 @@
       ]
     },
     {
+      "name": "init_hook_payload",
+      "discriminator": [
+        103,
+        68,
+        111,
+        17,
+        4,
+        137,
+        159,
+        172
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "issuer"
+          ]
+        },
+        {
+          "name": "issuer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "hook_payload",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  111,
+                  107,
+                  45,
+                  112,
+                  97,
+                  121,
+                  108,
+                  111,
+                  97,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "expected_proof_len",
+          "type": "u32"
+        }
+      ]
+    },
+    {
       "name": "register_issuer",
       "discriminator": [
         145,
@@ -452,123 +644,6 @@
               "u8",
               32
             ]
-          }
-        }
-      ]
-    },
-    {
-      "name": "set_hook_payload",
-      "discriminator": [
-        139,
-        145,
-        21,
-        87,
-        155,
-        138,
-        100,
-        137
-      ],
-      "accounts": [
-        {
-          "name": "authority",
-          "writable": true,
-          "signer": true,
-          "relations": [
-            "issuer"
-          ]
-        },
-        {
-          "name": "issuer",
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  105,
-                  115,
-                  115,
-                  117,
-                  101,
-                  114
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "authority"
-              }
-            ]
-          }
-        },
-        {
-          "name": "hook_payload",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  104,
-                  111,
-                  111,
-                  107,
-                  45,
-                  112,
-                  97,
-                  121,
-                  108,
-                  111,
-                  97,
-                  100
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "authority"
-              }
-            ]
-          }
-        },
-        {
-          "name": "system_program",
-          "address": "11111111111111111111111111111111"
-        }
-      ],
-      "args": [
-        {
-          "name": "proof_and_witness",
-          "type": "bytes"
-        },
-        {
-          "name": "nullifier_hash",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
-          }
-        },
-        {
-          "name": "mint",
-          "type": "pubkey"
-        },
-        {
-          "name": "epoch",
-          "type": "u64"
-        },
-        {
-          "name": "recipient",
-          "type": "pubkey"
-        },
-        {
-          "name": "amount",
-          "type": "u64"
-        },
-        {
-          "name": "light_args",
-          "type": {
-            "defined": {
-              "name": "StagedLightArgs"
-            }
           }
         }
       ]
@@ -748,7 +823,7 @@
         "payload PDA is NOT closed here — SPL passes `owner` as read-only",
         "(`AccountMeta::new_readonly`), blocking `close = owner`. Authority",
         "calls `close_hook_payload` after the transfer to reclaim rent and",
-        "unblock the next `set_hook_payload`."
+        "unblock the next payload staging cycle."
       ],
       "discriminator": [
         105,
@@ -1143,6 +1218,89 @@
           "type": "u8"
         }
       ]
+    },
+    {
+      "name": "write_hook_proof",
+      "discriminator": [
+        245,
+        58,
+        118,
+        142,
+        68,
+        183,
+        252,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true,
+          "relations": [
+            "issuer"
+          ]
+        },
+        {
+          "name": "issuer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "hook_payload",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  111,
+                  107,
+                  45,
+                  112,
+                  97,
+                  121,
+                  108,
+                  111,
+                  97,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "offset",
+          "type": "u32"
+        },
+        {
+          "name": "chunk",
+          "type": "bytes"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -1404,6 +1562,31 @@
       "code": 6037,
       "name": "MintHookMismatch",
       "msg": "Mint's TransferHook extension does not point to this program"
+    },
+    {
+      "code": 6038,
+      "name": "ChunkOutOfBounds",
+      "msg": "Chunk write exceeds expected_proof_len"
+    },
+    {
+      "code": 6039,
+      "name": "ChunkNotSequential",
+      "msg": "Chunk offset does not match high_water_mark (sequential writes required)"
+    },
+    {
+      "code": 6040,
+      "name": "PayloadAlreadyFinalized",
+      "msg": "Cannot write to a finalized payload"
+    },
+    {
+      "code": 6041,
+      "name": "PayloadNotReady",
+      "msg": "Payload must be finalized before settlement"
+    },
+    {
+      "code": 6042,
+      "name": "ProofIncomplete",
+      "msg": "Proof length does not match expected_proof_len at finalize"
     }
   ],
   "types": [
@@ -1412,6 +1595,10 @@
       "type": {
         "kind": "struct",
         "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
           {
             "name": "issuer",
             "type": "pubkey"
@@ -1691,6 +1878,18 @@
             }
           },
           {
+            "name": "expected_proof_len",
+            "type": "u32"
+          },
+          {
+            "name": "high_water_mark",
+            "type": "u32"
+          },
+          {
+            "name": "finalized",
+            "type": "bool"
+          },
+          {
             "name": "proof_and_witness",
             "type": "bytes"
           },
@@ -1809,6 +2008,10 @@
         "kind": "struct",
         "fields": [
           {
+            "name": "version",
+            "type": "u8"
+          },
+          {
             "name": "issuer",
             "type": "pubkey"
           },
@@ -1884,9 +2087,9 @@
       "docs": [
         "Pre-staged Light CPI arguments stored in the hook payload so the Token-2022",
         "Execute entry — which only receives `amount: u64` as instruction data — can",
-        "still drive a Light CPI. Clients must include `set_hook_payload` and the",
-        "Token-2022 transfer in a single atomic transaction (same-tx staging),",
-        "otherwise the tree-root index and validity proof go stale."
+        "still drive a Light CPI. Clients must stage the payload via the chunked flow",
+        "(`init_hook_payload` → `write_hook_proof` → `finalize_hook_payload`) before the",
+        "Token-2022 transfer, otherwise the tree-root index and validity proof go stale."
       ],
       "type": {
         "kind": "struct",

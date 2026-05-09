@@ -1,6 +1,5 @@
 export { prove, loadCircuit, Prover, computeNullifier, type NullifierInputs } from "./prove/index.js";
 export {
-  wrap,
   buildInitHookPayloadIx,
   buildWriteChunkIx,
   buildFinalizeHookPayloadIx,
@@ -24,7 +23,6 @@ export type {
   ProofInputs,
   ProofResult,
   TransferContext,
-  WrapOptions,
   AuditTrail,
   IssuerRoots,
   ZkSettleConfig,
