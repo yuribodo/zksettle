@@ -24,6 +24,9 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build SDK
+        working-directory: frontend
+        run: pnpm --filter @zksettle/sdk build
       - name: Run frontend coverage
         working-directory: frontend
         run: pnpm test:coverage
