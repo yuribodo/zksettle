@@ -1,6 +1,30 @@
 {
   "name": "@zksettle/sdk",
   "version": "0.1.0",
+  "description": "Zero-knowledge compliance SDK for Solana stablecoins",
+  "license": "MIT",
+  "author": "ZKSettle Contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yuribodo/zksettle.git",
+    "directory": "sdk"
+  },
+  "homepage": "https://github.com/yuribodo/zksettle#readme",
+  "bugs": "https://github.com/yuribodo/zksettle/issues",
+  "keywords": [
+    "solana",
+    "zero-knowledge",
+    "zk",
+    "compliance",
+    "travel-rule",
+    "groth16",
+    "token-2022",
+    "stablecoin",
+    "noir"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -19,6 +43,7 @@
     "node": ">=20.10.0"
   },
   "scripts": {
+    "prepublishOnly": "pnpm run build",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
