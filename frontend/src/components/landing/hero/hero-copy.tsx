@@ -24,31 +24,23 @@ export function HeroCopy() {
       if (!root) return;
 
       const eyebrowEl = root.querySelector("[data-hero-eyebrow]");
-      const headlineEl = root.querySelector("[data-hero-headline]");
       const subEl = root.querySelector("[data-hero-sub]");
       const ctaEls = root.querySelectorAll("[data-hero-cta]");
 
       if (reduceMotion) {
         gsap.set(
-          [eyebrowEl, headlineEl, subEl, ...Array.from(ctaEls)],
+          [eyebrowEl, subEl, ...Array.from(ctaEls)],
           { opacity: 1, y: 0 },
         );
         return;
       }
 
       gsap.set(eyebrowEl, { opacity: 0, y: 8 });
-      gsap.set(headlineEl, { opacity: 0, y: 20 });
       gsap.set(subEl, { opacity: 0, y: 8 });
       gsap.set(ctaEls, { opacity: 0, y: 6 });
 
       const tl = gsap.timeline({ defaults: { ease: "power2.out" } });
       tl.to(eyebrowEl, { opacity: 1, y: 0, duration: 0.4 }, 0)
-        .to(headlineEl, {
-          opacity: 1,
-          y: 0,
-          duration: 0.6,
-          ease: "expo.out",
-        }, 0.15)
         .to(subEl, { opacity: 1, y: 0, duration: 0.5 }, 1.2)
         .to(ctaEls, { opacity: 1, y: 0, duration: 0.4, stagger: 0.08 }, 1.4);
     },

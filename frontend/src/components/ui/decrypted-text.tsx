@@ -353,7 +353,7 @@ export default function DecryptedText({
   }, [animateOn, hasAnimated, triggerDecrypt]);
 
   useEffect(() => {
-    if (animateOn === "click") {
+    if (animateOn === "click" || animateOn === "view") {
       encryptInstantly();
     } else {
       setDisplayText(text);
