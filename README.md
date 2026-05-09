@@ -12,6 +12,7 @@ ZKSettle is a compliance API that lets fintechs prove regulatory conformance (tr
 
 - [The problem](#the-problem)
 - [The solution](#the-solution)
+- [Quick start](#quick-start)
 - [Architecture](#architecture)
 - [Technology stack](#technology-stack)
 - [Performance](#performance)
@@ -51,6 +52,73 @@ ZKSettle provides a production-ready compliance primitive on Solana:
 5. The Transfer Hook intercepts the transfer, verifies the Groth16 proof via `alt_bn128` syscalls (<250K compute units, <$0.001; see ADR-022). The thin-slice program uses Reilabs' [`gnark-verifier-solana`](https://github.com/reilabs/sunspot) (Sunspot) crate, which wraps those syscalls — we do not call them directly.
 6. Valid proof → transfer settles atomically. Invalid proof → transfer reverts.
 7. A `ComplianceAttestation` is emitted on-chain as an immutable audit record.
+
+---
+
+## Quick start
+
+### Install
+
+```bash
+npm install @zksettle/sdk @solana/web3.js
+```
+
+### Usage
+
+```typescript
+import { prove, uploadProofChunked, audit } from "@zksettle/sdk";
+import { Connection, PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
+
+// 1. Generate a ZK compliance proof (client-side, no PII leaves the device)
+const { proof, publicInputs, durationMs } = await prove(
+  walletAddress,
+  {
+    mint: new PublicKey("..."),
+    recipient: new PublicKey("..."),
+    amount: new BN(1_000_000),
+    privateKey: "0x...",
+    credentialExpiry: "1750000000",
+    jurisdictionPath: ["0x...", "0x..."],
+    jurisdictionPathIndices: [0, 1],
+  },
+  {
+    issuerServiceUrl: "http://localhost:3000",
+    circuitSource: "/path/to/compliance.json",
+  },
+);
+
+// 2. Upload proof on-chain via chunked Transfer Hook payload
+const result = await uploadProofChunked(
+  { connection, wallet, proof, nullifierHash, transferContext },
+  signAndSend,
+);
+
+// 3. Retrieve the audit trail after the transfer settles
+const trail = await audit(connection, txSignature);
+```
+
+### API overview
+
+| Function | Purpose |
+|---|---|
+| `prove(wallet, context, config)` | Generate a Groth16 compliance proof client-side |
+| `prove(inputs, config)` | Low-level: proof from pre-assembled inputs |
+| `uploadProofChunked(opts, signAndSend)` | Stage proof on-chain via Transfer Hook payload |
+| `audit(connection, txSignature)` | Retrieve compliance attestation from a settled transfer |
+| `registerIssuer(connection, authority, roots)` | Register a new issuer with Merkle roots |
+| `updateIssuerRoot(connection, authority, roots)` | Update an existing issuer's Merkle roots |
+| `IssuerClient` | HTTP client for the issuer service REST API |
+
+### Subpath exports
+
+```typescript
+// Main — prove, audit, issuer functions
+import { prove, audit } from "@zksettle/sdk";
+
+// Wrap — instruction builders for Transfer Hook payload
+import { buildInitHookPayloadIx, buildWriteChunkIx } from "@zksettle/sdk/wrap";
+```
 
 ---
 
@@ -329,7 +397,7 @@ pnpm --filter e2e test                    # End-to-end (Playwright)
 
 ## License
 
-TBD — likely Apache 2.0 or MIT for the SDK, Business Source License for the on-chain program pre-mainnet.
+MIT for the SDK (`@zksettle/sdk`). On-chain program license TBD (likely Business Source License pre-mainnet).
 
 ---
 

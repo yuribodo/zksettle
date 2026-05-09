@@ -7,12 +7,17 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ["iconoir-react"],
   },
-  webpack: (config) => {
+  webpack: (config, { isServer, webpack }) => {
     config.experiments = {
       ...config.experiments,
       asyncWebAssembly: true,
       layers: true,
     };
+    if (!isServer) {
+      config.plugins.push(
+        new webpack.IgnorePlugin({ resourceRegExp: /^node:(os|fs\/promises)$/ }),
+      );
+    }
     return config;
   },
   // bb.js spawns its own worker pool that needs SharedArrayBuffer, which
