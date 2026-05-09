@@ -4,10 +4,11 @@ use solana_instruction::{AccountMeta, Instruction};
 use spl_discriminator::SplDiscriminate;
 
 use zksettle::instruction::{
-    CloseHookPayload as ClosePayloadIx, InitAttestationTree as InitTreeIx,
-    InitExtraAccountMetaList as InitMetaIx, RegisterIssuer as RegisterIssuerIx,
-    SetHookPayload as SetPayloadIx, SettleHook as SettleHookIx,
-    UpdateIssuerRoot as UpdateIssuerRootIx,
+    CloseHookPayload as ClosePayloadIx, FinalizeHookPayload as FinalizePayloadIx,
+    InitAttestationTree as InitTreeIx, InitExtraAccountMetaList as InitMetaIx,
+    InitHookPayload as InitPayloadIx, RegisterIssuer as RegisterIssuerIx,
+    SettleHook as SettleHookIx, UpdateIssuerRoot as UpdateIssuerRootIx,
+    WriteHookProof as WriteProofIx,
 };
 use zksettle::instructions::bubblegum_mint::{MPL_BUBBLEGUM_ID, NOOP_PROGRAM_ID};
 use zksettle::instructions::transfer_hook::{
@@ -85,11 +86,42 @@ pub fn update_ix_full(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn set_hook_payload_ix(
+pub fn init_hook_payload_ix(owner: &Pubkey, issuer_key: &Pubkey, proof_len: u32) -> Instruction {
+    let (payload_pda, _) = hook_payload_pda(owner);
+    Instruction {
+        program_id: zksettle::ID,
+        accounts: vec![
+            AccountMeta::new(*owner, true),
+            AccountMeta::new_readonly(*issuer_key, false),
+            AccountMeta::new(payload_pda, false),
+            AccountMeta::new_readonly(system_program::ID, false),
+        ],
+        data: InitPayloadIx { expected_proof_len: proof_len }.data(),
+    }
+}
+
+pub fn write_hook_proof_ix(
     owner: &Pubkey,
     issuer_key: &Pubkey,
-    proof_and_witness: Vec<u8>,
+    offset: u32,
+    chunk: Vec<u8>,
+) -> Instruction {
+    let (payload_pda, _) = hook_payload_pda(owner);
+    Instruction {
+        program_id: zksettle::ID,
+        accounts: vec![
+            AccountMeta::new_readonly(*owner, true),
+            AccountMeta::new_readonly(*issuer_key, false),
+            AccountMeta::new(payload_pda, false),
+        ],
+        data: WriteProofIx { offset, chunk }.data(),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn finalize_hook_payload_ix(
+    owner: &Pubkey,
+    issuer_key: &Pubkey,
     nullifier_hash: [u8; 32],
     mint: Pubkey,
     epoch: u64,
@@ -101,13 +133,11 @@ pub fn set_hook_payload_ix(
     Instruction {
         program_id: zksettle::ID,
         accounts: vec![
-            AccountMeta::new(*owner, true),
+            AccountMeta::new_readonly(*owner, true),
             AccountMeta::new_readonly(*issuer_key, false),
             AccountMeta::new(payload_pda, false),
-            AccountMeta::new_readonly(system_program::ID, false),
         ],
-        data: SetPayloadIx {
-            proof_and_witness,
+        data: FinalizePayloadIx {
             nullifier_hash,
             mint,
             epoch,
@@ -117,6 +147,28 @@ pub fn set_hook_payload_ix(
         }
         .data(),
     }
+}
+
+/// Build `init_hook_payload` → `write_hook_proof` (single chunk) → `finalize_hook_payload`
+/// instructions. Convenience for tests with small proofs that fit in one write.
+#[allow(clippy::too_many_arguments)]
+pub fn stage_payload_ixs(
+    owner: &Pubkey,
+    issuer_key: &Pubkey,
+    proof_and_witness: Vec<u8>,
+    nullifier_hash: [u8; 32],
+    mint: Pubkey,
+    epoch: u64,
+    recipient: Pubkey,
+    amount: u64,
+    light_args: StagedLightArgs,
+) -> Vec<Instruction> {
+    let proof_len = proof_and_witness.len() as u32;
+    vec![
+        init_hook_payload_ix(owner, issuer_key, proof_len),
+        write_hook_proof_ix(owner, issuer_key, 0, proof_and_witness),
+        finalize_hook_payload_ix(owner, issuer_key, nullifier_hash, mint, epoch, recipient, amount, light_args),
+    ]
 }
 
 pub fn init_extra_meta_ix(

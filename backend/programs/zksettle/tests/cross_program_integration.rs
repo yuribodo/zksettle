@@ -12,7 +12,7 @@ use zksettle::error::ZkSettleError;
 
 use helpers::{
     boot_cross_program_harness, default_light_args, funded_authority, init_attestation_tree_ix,
-    init_extra_meta_ix, issuer_pda, nonzero_nullifier, register_ix, set_hook_payload_ix,
+    init_extra_meta_ix, issuer_pda, nonzero_nullifier, register_ix, stage_payload_ixs,
     settle_hook_ix, settle_pda_keys, ANCHOR_ERROR_CODE_OFFSET,
 };
 use helpers::stablecoin_ixs::{
@@ -51,23 +51,20 @@ impl SettleScenario {
         recipient: Pubkey,
         amount: u64,
     ) {
-        rpc.create_and_send_transaction(
-            &[set_hook_payload_ix(
-                &self.admin.pubkey(),
-                &self.issuer_key,
-                vec![0xaa; 256],
-                nonzero_nullifier(),
-                self.mint,
-                10,
-                recipient,
-                amount,
-                default_light_args(),
-            )],
+        let ixs = stage_payload_ixs(
             &self.admin.pubkey(),
-            &[&self.admin],
-        )
-        .await
-        .expect("set_hook_payload");
+            &self.issuer_key,
+            vec![0xaa; 256],
+            nonzero_nullifier(),
+            self.mint,
+            10,
+            recipient,
+            amount,
+            default_light_args(),
+        );
+        rpc.create_and_send_transaction(&ixs, &self.admin.pubkey(), &[&self.admin])
+            .await
+            .expect("stage payload");
     }
 
     async fn attempt_settle(

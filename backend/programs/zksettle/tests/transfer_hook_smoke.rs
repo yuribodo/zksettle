@@ -1,8 +1,9 @@
 #![cfg(all(feature = "light-tests", unix))]
 //! Smoke tests for the Token-2022 transfer-hook path.
 //!
-//! Tests here exercise `set_hook_payload` and `init_extra_account_meta_list`
-//! which don't need gnark fixtures. The full settle path (`transfer_hook` /
+//! Tests exercise the chunked payload flow (`init_hook_payload` →
+//! `write_hook_proof` → `finalize_hook_payload`) and
+//! `init_extra_account_meta_list`. The full settle path (`transfer_hook` /
 //! `settle_hook`) stays `#[ignore]` until gnark proof + Token-2022 mint
 //! fixtures exist (see ADR-006 follow-up).
 //!
@@ -26,8 +27,9 @@ use zksettle::instructions::transfer_hook::MAX_HOOK_PROOF_BYTES;
 
 use helpers::{
     boot_harness, close_hook_payload_ix, close_hook_payload_ix_with_pda, default_light_args,
-    execute_hook_ix, extra_meta_pda, hook_payload_pda, initialized_tree, mint_with_extra_meta,
-    nonzero_nullifier, registered_issuer, set_hook_payload_ix, settle_pda_keys,
+    execute_hook_ix, extra_meta_pda, finalize_hook_payload_ix, hook_payload_pda,
+    init_hook_payload_ix, initialized_tree, mint_with_extra_meta, nonzero_nullifier,
+    registered_issuer, settle_pda_keys, stage_payload_ixs, write_hook_proof_ix,
     ANCHOR_ERROR_CODE_OFFSET, CONSTRAINT_SEEDS,
 };
 
@@ -39,27 +41,89 @@ async fn stage_default_payload(
     proof_len: usize,
     amount: u64,
 ) {
+    let ixs = stage_payload_ixs(
+        &authority.pubkey(),
+        issuer_key,
+        vec![proof_byte; proof_len],
+        nonzero_nullifier(),
+        Pubkey::new_unique(),
+        10,
+        Pubkey::new_unique(),
+        amount,
+        default_light_args(),
+    );
+    rpc.create_and_send_transaction(&ixs, &authority.pubkey(), &[authority])
+        .await
+        .expect("stage_default_payload");
+}
+
+async fn init_and_write_proof(
+    rpc: &mut light_program_test::LightProgramTest,
+    authority: &solana_keypair::Keypair,
+    issuer_key: &Pubkey,
+    proof_len: usize,
+) {
     rpc.create_and_send_transaction(
-        &[set_hook_payload_ix(
+        &[init_hook_payload_ix(&authority.pubkey(), issuer_key, proof_len as u32)],
+        &authority.pubkey(),
+        &[authority],
+    )
+    .await
+    .expect("init");
+
+    rpc.create_and_send_transaction(
+        &[write_hook_proof_ix(&authority.pubkey(), issuer_key, 0, vec![0xaa; proof_len])],
+        &authority.pubkey(),
+        &[authority],
+    )
+    .await
+    .expect("write");
+}
+
+async fn close_payload(
+    rpc: &mut light_program_test::LightProgramTest,
+    authority: &solana_keypair::Keypair,
+) {
+    rpc.create_and_send_transaction(
+        &[close_hook_payload_ix(&authority.pubkey())],
+        &authority.pubkey(),
+        &[authority],
+    )
+    .await
+    .expect("close_hook_payload");
+}
+
+async fn settle(
+    rpc: &mut light_program_test::LightProgramTest,
+    authority: &solana_keypair::Keypair,
+    mint: &Pubkey,
+    recipient: &Pubkey,
+    issuer_key: &Pubkey,
+    merkle_tree: &Pubkey,
+    amount: u64,
+) -> Result<(), light_program_test::RpcError> {
+    let (registry_key, tree_creator_key, tree_config_key) = settle_pda_keys(merkle_tree);
+    rpc.create_and_send_transaction(
+        &[helpers::settle_hook_ix(
             &authority.pubkey(),
+            mint,
+            recipient,
             issuer_key,
-            vec![proof_byte; proof_len],
-            nonzero_nullifier(),
-            Pubkey::new_unique(),
-            10,
-            Pubkey::new_unique(),
+            &registry_key,
+            merkle_tree,
+            &tree_config_key,
+            &tree_creator_key,
             amount,
-            default_light_args(),
         )],
         &authority.pubkey(),
         &[authority],
     )
     .await
-    .expect("stage_default_payload");
+    .map(|_| ())
 }
 
 #[tokio::test]
-async fn set_hook_payload_stores_fields() {
+async fn chunked_payload_stores_fields() {
     let mut rpc = boot_harness().await;
     let (authority, issuer_key) = registered_issuer(&mut rpc).await;
 
@@ -67,23 +131,20 @@ async fn set_hook_payload_stores_fields() {
     let recipient = Pubkey::new_unique();
     let nullifier = nonzero_nullifier();
 
-    rpc.create_and_send_transaction(
-        &[set_hook_payload_ix(
-            &authority.pubkey(),
-            &issuer_key,
-            vec![0xaa; 256],
-            nullifier,
-            mint,
-            10,
-            recipient,
-            500,
-            default_light_args(),
-        )],
+    let ixs = stage_payload_ixs(
         &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("set_hook_payload should succeed");
+        &issuer_key,
+        vec![0xaa; 256],
+        nullifier,
+        mint,
+        10,
+        recipient,
+        500,
+        default_light_args(),
+    );
+    rpc.create_and_send_transaction(&ixs, &authority.pubkey(), &[&authority])
+        .await
+        .expect("chunked payload should succeed");
 
     let (payload_key, _) = hook_payload_pda(&authority.pubkey());
     let payload: zksettle::instructions::transfer_hook::HookPayload = rpc
@@ -99,19 +160,21 @@ async fn set_hook_payload_stores_fields() {
     assert_eq!(payload.amount, 500);
     assert_eq!(payload.epoch, 10);
     assert_eq!(payload.proof_and_witness.len(), 256);
+    assert!(payload.finalized);
 }
 
 #[tokio::test]
-async fn set_hook_payload_rejects_zero_nullifier() {
+async fn finalize_rejects_zero_nullifier() {
     let mut rpc = boot_harness().await;
     let (authority, issuer_key) = registered_issuer(&mut rpc).await;
 
+    init_and_write_proof(&mut rpc, &authority, &issuer_key, 256).await;
+
     let result = rpc
         .create_and_send_transaction(
-            &[set_hook_payload_ix(
+            &[finalize_hook_payload_ix(
                 &authority.pubkey(),
                 &issuer_key,
-                vec![0xaa; 256],
                 [0u8; 32],
                 Pubkey::new_unique(),
                 10,
@@ -133,16 +196,17 @@ async fn set_hook_payload_rejects_zero_nullifier() {
 }
 
 #[tokio::test]
-async fn set_hook_payload_rejects_zero_amount() {
+async fn finalize_rejects_zero_amount() {
     let mut rpc = boot_harness().await;
     let (authority, issuer_key) = registered_issuer(&mut rpc).await;
 
+    init_and_write_proof(&mut rpc, &authority, &issuer_key, 256).await;
+
     let result = rpc
         .create_and_send_transaction(
-            &[set_hook_payload_ix(
+            &[finalize_hook_payload_ix(
                 &authority.pubkey(),
                 &issuer_key,
-                vec![0xaa; 256],
                 nonzero_nullifier(),
                 Pubkey::new_unique(),
                 10,
@@ -180,22 +244,16 @@ async fn init_extra_account_meta_list_succeeds() {
 }
 
 #[tokio::test]
-async fn set_hook_payload_rejects_oversized_proof() {
+async fn init_hook_payload_rejects_oversized_proof() {
     let mut rpc = boot_harness().await;
     let (authority, issuer_key) = registered_issuer(&mut rpc).await;
 
     let result = rpc
         .create_and_send_transaction(
-            &[set_hook_payload_ix(
+            &[init_hook_payload_ix(
                 &authority.pubkey(),
                 &issuer_key,
-                vec![0xaa; MAX_HOOK_PROOF_BYTES + 1],
-                nonzero_nullifier(),
-                Pubkey::new_unique(),
-                10,
-                Pubkey::new_unique(),
-                500,
-                default_light_args(),
+                (MAX_HOOK_PROOF_BYTES + 1) as u32,
             )],
             &authority.pubkey(),
             &[&authority],
@@ -261,13 +319,7 @@ async fn close_hook_payload_reclaims_rent() {
         .expect("authority exists")
         .lamports;
 
-    rpc.create_and_send_transaction(
-        &[close_hook_payload_ix(&authority.pubkey())],
-        &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("close_hook_payload should succeed");
+    close_payload(&mut rpc, &authority).await;
 
     let account = rpc.get_account(payload_key).await.expect("fetch");
     assert!(account.is_none(), "PDA should be closed");
@@ -287,15 +339,7 @@ async fn close_hook_payload_then_restage() {
     let (authority, issuer_key) = registered_issuer(&mut rpc).await;
 
     stage_default_payload(&mut rpc, &authority, &issuer_key, 0xbb, 128, 1000).await;
-
-    rpc.create_and_send_transaction(
-        &[close_hook_payload_ix(&authority.pubkey())],
-        &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("close");
-
+    close_payload(&mut rpc, &authority).await;
     stage_default_payload(&mut rpc, &authority, &issuer_key, 0xcc, 128, 2000).await;
 
     let (payload_key, _) = hook_payload_pda(&authority.pubkey());
@@ -316,7 +360,6 @@ async fn close_hook_payload_wrong_authority_fails() {
 
     let wrong = helpers::funded_authority(&mut rpc, 10_000_000_000).await;
 
-    // Attacker signs but targets the legit PDA — seed mismatch yields ConstraintSeeds.
     let (legit_pda, _) = hook_payload_pda(&authority.pubkey());
     let result = rpc
         .create_and_send_transaction(
@@ -358,44 +401,26 @@ async fn transfer_hook_wiring_up_to_gnark_boundary() {
     let mint_kp = mint_with_extra_meta(&mut rpc, &authority).await;
 
     let recipient = Pubkey::new_unique();
-    rpc.create_and_send_transaction(
-        &[set_hook_payload_ix(
-            &authority.pubkey(),
-            &issuer_key,
-            vec![0xaa; 256],
-            nonzero_nullifier(),
-            mint_kp.pubkey(),
-            10,
-            recipient,
-            500,
-            default_light_args(),
-        )],
+    let ixs = stage_payload_ixs(
         &authority.pubkey(),
-        &[&authority],
+        &issuer_key,
+        vec![0xaa; 256],
+        nonzero_nullifier(),
+        mint_kp.pubkey(),
+        10,
+        recipient,
+        500,
+        default_light_args(),
+    );
+    rpc.create_and_send_transaction(&ixs, &authority.pubkey(), &[&authority])
+        .await
+        .expect("stage payload");
+
+    let result = settle(
+        &mut rpc, &authority, &mint_kp.pubkey(), &recipient,
+        &issuer_key, &merkle_tree_kp.pubkey(), 500,
     )
-    .await
-    .expect("set_hook_payload");
-
-    let (registry_key, tree_creator_key, tree_config_key) =
-        settle_pda_keys(&merkle_tree_kp.pubkey());
-
-    let result = rpc
-        .create_and_send_transaction(
-            &[helpers::settle_hook_ix(
-                &authority.pubkey(),
-                &mint_kp.pubkey(),
-                &recipient,
-                &issuer_key,
-                &registry_key,
-                &merkle_tree_kp.pubkey(),
-                &tree_config_key,
-                &tree_creator_key,
-                500,
-            )],
-            &authority.pubkey(),
-            &[&authority],
-        )
-        .await;
+    .await;
 
     assert_rpc_error(
         result,
@@ -441,7 +466,6 @@ async fn transfer_hook_full_e2e_with_gnark_proof() {
 
     let issuer_key = helpers::issuer_pda(&authority.pubkey());
 
-    // init_attestation_tree
     let merkle_tree_kp = Keypair::new();
     rpc.create_and_send_transaction(
         &[helpers::init_attestation_tree_ix(
@@ -461,84 +485,51 @@ async fn transfer_hook_full_e2e_with_gnark_proof() {
     let amount: u64 = 1000;
     let epoch: u64 = 0;
 
-    // set_hook_payload with real proof
-    rpc.create_and_send_transaction(
-        &[set_hook_payload_ix(
-            &authority.pubkey(),
-            &issuer_key,
-            proof_and_witness.clone(),
-            nullifier,
-            mint_kp.pubkey(),
-            epoch,
-            recipient,
-            amount,
-            default_light_args(),
-        )],
+    let ixs = stage_payload_ixs(
         &authority.pubkey(),
-        &[&authority],
+        &issuer_key,
+        proof_and_witness.clone(),
+        nullifier,
+        mint_kp.pubkey(),
+        epoch,
+        recipient,
+        amount,
+        default_light_args(),
+    );
+    rpc.create_and_send_transaction(&ixs, &authority.pubkey(), &[&authority])
+        .await
+        .expect("stage payload with real proof");
+
+    settle(
+        &mut rpc, &authority, &mint_kp.pubkey(), &recipient,
+        &issuer_key, &merkle_tree_kp.pubkey(), amount,
     )
     .await
-    .expect("set_hook_payload with real proof");
+    .expect("settle_hook should succeed with valid gnark proof");
 
-    let (registry_key, tree_creator_key, tree_config_key) =
-        settle_pda_keys(&merkle_tree_kp.pubkey());
+    // Replay same nullifier — must close + re-init before re-staging
+    close_payload(&mut rpc, &authority).await;
 
-    let result = rpc
-        .create_and_send_transaction(
-            &[helpers::settle_hook_ix(
-                &authority.pubkey(),
-                &mint_kp.pubkey(),
-                &recipient,
-                &issuer_key,
-                &registry_key,
-                &merkle_tree_kp.pubkey(),
-                &tree_config_key,
-                &tree_creator_key,
-                amount,
-            )],
-            &authority.pubkey(),
-            &[&authority],
-        )
-        .await;
-
-    result.expect("settle_hook should succeed with valid gnark proof");
-
-    // Replay same nullifier → should fail with Light address collision
-    rpc.create_and_send_transaction(
-        &[set_hook_payload_ix(
-            &authority.pubkey(),
-            &issuer_key,
-            proof_and_witness,
-            nullifier,
-            mint_kp.pubkey(),
-            epoch,
-            recipient,
-            amount,
-            default_light_args(),
-        )],
+    let replay_ixs = stage_payload_ixs(
         &authority.pubkey(),
-        &[&authority],
-    )
-    .await
-    .expect("re-stage same payload");
+        &issuer_key,
+        proof_and_witness,
+        nullifier,
+        mint_kp.pubkey(),
+        epoch,
+        recipient,
+        amount,
+        default_light_args(),
+    );
+    rpc.create_and_send_transaction(&replay_ixs, &authority.pubkey(), &[&authority])
+        .await
+        .expect("re-stage same payload");
 
-    let replay = rpc
-        .create_and_send_transaction(
-            &[helpers::settle_hook_ix(
-                &authority.pubkey(),
-                &mint_kp.pubkey(),
-                &recipient,
-                &issuer_key,
-                &registry_key,
-                &merkle_tree_kp.pubkey(),
-                &tree_config_key,
-                &tree_creator_key,
-                amount,
-            )],
-            &authority.pubkey(),
-            &[&authority],
-        )
-        .await;
+    let replay = settle(
+        &mut rpc, &authority, &mint_kp.pubkey(), &recipient,
+        &issuer_key, &merkle_tree_kp.pubkey(), amount,
+    )
+    .await;
 
     assert!(
         replay.is_err(),
