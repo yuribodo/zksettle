@@ -13,7 +13,7 @@ import { DisplayHeading } from "@/components/ui/display-heading";
 import { cn } from "@/lib/cn";
 import { MarketCell } from "./market-cell";
 
-if (typeof window !== "undefined") {
+if (typeof globalThis.window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger, useGSAP);
 }
 

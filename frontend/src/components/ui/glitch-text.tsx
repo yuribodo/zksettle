@@ -2,10 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 
-const CHARS = "0123456789abcdef@#$%&*!?<>{}[]~^/\\|";
+const CHARS = String.raw`0123456789abcdef@#$%&*!?<>{}[]~^/\|`;
+
+function secureRandom(): number {
+  return crypto.getRandomValues(new Uint32Array(1))[0]! / 0x100000000;
+}
 
 function randomChar(): string {
-  return CHARS[Math.floor(Math.random() * CHARS.length)]!;
+  return CHARS[Math.floor(secureRandom() * CHARS.length)]!;
 }
 
 function scramble(text: string): string {
@@ -15,11 +19,11 @@ function scramble(text: string): string {
     .join("");
 }
 
-export type GlitchTextProps = {
+export type GlitchTextProps = Readonly<{
   text: string;
   active?: boolean;
   className?: string;
-};
+}>;
 
 export function GlitchText({
   text,
@@ -57,60 +61,59 @@ export function GlitchText({
     let glitchIdx = -1;
     let glitchEnd = 0;
 
-    const tick = (now: number) => {
-      if (cancelled) return;
-
-      if (phase === "decode") {
-        if (now - lastResolve > 45) {
-          while (resolved < text.length && text[resolved] === " ") resolved++;
-          if (resolved < text.length) resolved++;
-          lastResolve = now;
-          if (resolved >= text.length) {
-            phase = "idle";
-            idleTimer = now;
-            setDisplay(text);
-            rafRef.current = requestAnimationFrame(tick);
-            return;
-          }
-        }
-
-        if (now - lastFrame > 35) {
-          const chars = text.split("").map((c, i) => {
-            if (c === " ") return " ";
-            if (i < resolved) return c;
-            return randomChar();
-          });
-          setDisplay(chars.join(""));
-          lastFrame = now;
-        }
-      } else {
-        if (glitchIdx >= 0 && now < glitchEnd) {
-          setDisplay(
-            text
-              .split("")
-              .map((c, i) => (i === glitchIdx ? randomChar() : c))
-              .join(""),
-          );
-        } else if (glitchIdx >= 0) {
-          setDisplay(text);
-          glitchIdx = -1;
-        }
-
-        if (
-          glitchIdx < 0 &&
-          now - idleTimer > 3000 + Math.random() * 2000
-        ) {
-          const candidates: number[] = [];
-          for (let i = 0; i < text.length; i++) {
-            if (text[i] !== " ") candidates.push(i);
-          }
-          glitchIdx =
-            candidates[Math.floor(Math.random() * candidates.length)]!;
-          glitchEnd = now + 120;
+    const tickDecode = (now: number) => {
+      if (now - lastResolve > 45) {
+        while (resolved < text.length && text[resolved] === " ") resolved++;
+        if (resolved < text.length) resolved++;
+        lastResolve = now;
+        if (resolved >= text.length) {
+          phase = "idle";
           idleTimer = now;
+          setDisplay(text);
+          return;
         }
       }
 
+      if (now - lastFrame > 35) {
+        const chars = text.split("").map((c, i) => {
+          if (c === " ") return " ";
+          if (i < resolved) return c;
+          return randomChar();
+        });
+        setDisplay(chars.join(""));
+        lastFrame = now;
+      }
+    };
+
+    const tickIdle = (now: number) => {
+      if (glitchIdx >= 0 && now < glitchEnd) {
+        setDisplay(
+          text
+            .split("")
+            .map((c, i) => (i === glitchIdx ? randomChar() : c))
+            .join(""),
+        );
+      } else if (glitchIdx >= 0) {
+        setDisplay(text);
+        glitchIdx = -1;
+      }
+
+      if (glitchIdx < 0 && now - idleTimer > 3000 + secureRandom() * 2000) {
+        const candidates: number[] = [];
+        for (let i = 0; i < text.length; i++) {
+          if (text[i] !== " ") candidates.push(i);
+        }
+        glitchIdx =
+          candidates[Math.floor(secureRandom() * candidates.length)]!;
+        glitchEnd = now + 120;
+        idleTimer = now;
+      }
+    };
+
+    const tick = (now: number) => {
+      if (cancelled) return;
+      if (phase === "decode") tickDecode(now);
+      else tickIdle(now);
       rafRef.current = requestAnimationFrame(tick);
     };
 

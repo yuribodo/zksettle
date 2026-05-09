@@ -20,11 +20,11 @@ export function MarketCell({
   market,
   index,
   total,
-}: {
+}: Readonly<{
   market: Market;
   index: number;
   total: number;
-}) {
+}>) {
   return (
     <div
       data-markets-cell
@@ -79,7 +79,7 @@ export function MarketCell({
   );
 }
 
-function CornerBracket({ position }: { position: CornerPosition }) {
+function CornerBracket({ position }: Readonly<{ position: CornerPosition }>) {
   return (
     <svg
       aria-hidden

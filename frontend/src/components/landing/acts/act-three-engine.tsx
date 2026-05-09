@@ -15,7 +15,7 @@ import { useCanvasStage } from "@/components/landing/canvas/use-canvas-stage";
 
 import { useActPin } from "./use-act-pin";
 
-if (typeof window !== "undefined") {
+if (typeof globalThis.window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger, useGSAP);
 }
 
@@ -160,6 +160,10 @@ export function ActThreeEngine() {
 
   const { eyebrow, headline, chapters, demoCta } = COPY.engine;
 
+  let buttonLabel = demoCta;
+  if (running) buttonLabel = "Generating proof...";
+  else if (done) buttonLabel = "Generate again →";
+
   return (
     <section
       ref={containerRef}
@@ -225,11 +229,7 @@ export function ActThreeEngine() {
               disabled={running}
               className="inline-flex items-center justify-center rounded-[var(--radius-3)] bg-forest px-4 py-2.5 text-base font-medium text-canvas transition-colors duration-150 ease-[var(--ease-brand)] hover:bg-forest-hover disabled:pointer-events-none disabled:opacity-50"
             >
-              {running
-                ? "Generating proof..."
-                : done
-                  ? "Generate again →"
-                  : demoCta}
+              {buttonLabel}
             </button>
           </div>
         </div>
@@ -254,11 +254,11 @@ function EngineStepCell({
   chapter,
   index,
   isRevealed,
-}: {
+}: Readonly<{
   chapter: EngineChapter;
   index: number;
   isRevealed: boolean;
-}) {
+}>) {
   return (
     <div
       data-engine-cell
@@ -373,10 +373,10 @@ function EngineStepCell({
 function CornerBracket({
   position,
   active,
-}: {
+}: Readonly<{
   position: CornerPosition;
   active: boolean;
-}) {
+}>) {
   return (
     <svg
       aria-hidden

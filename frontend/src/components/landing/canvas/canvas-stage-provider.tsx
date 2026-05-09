@@ -24,7 +24,7 @@ function probeWebGL(): boolean {
     const test = document.createElement("canvas");
     const gl = test.getContext("webgl2") ?? test.getContext("webgl");
     if (!gl) return false;
-    const lose = (gl as WebGLRenderingContext).getExtension(
+    const lose = gl.getExtension(
       "WEBGL_lose_context",
     );
     lose?.loseContext();
@@ -34,7 +34,7 @@ function probeWebGL(): boolean {
   }
 }
 
-export function CanvasStageProvider({ children }: { children: ReactNode }) {
+export function CanvasStageProvider({ children }: Readonly<{ children: ReactNode }>) {
   const reduceMotion = useReducedMotion();
   const [determined, setDetermined] = useState(false);
   const [enabled, setEnabled] = useState(false);
@@ -48,7 +48,7 @@ export function CanvasStageProvider({ children }: { children: ReactNode }) {
       setDetermined(true);
       return;
     }
-    const isMobile = window.matchMedia(
+    const isMobile = globalThis.matchMedia(
       `(max-width: ${DESKTOP_MIN_WIDTH - 1}px)`,
     ).matches;
     if (isMobile) {
@@ -93,7 +93,7 @@ export function CanvasStageProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function CanvasLoadingOverlay({ visible }: { visible: boolean }) {
+function CanvasLoadingOverlay({ visible }: Readonly<{ visible: boolean }>) {
   const [mounted, setMounted] = useState(true);
 
   useEffect(() => {
@@ -205,7 +205,7 @@ function CanvasLoadingOverlay({ visible }: { visible: boolean }) {
       </div>
 
       <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/30">
-        compiling proof
+        {"compiling proof "}
         <span className="ml-2 inline-block animate-veil-cursor">▍</span>
       </p>
     </div>

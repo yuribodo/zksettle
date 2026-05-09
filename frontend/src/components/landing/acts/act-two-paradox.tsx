@@ -6,7 +6,7 @@ import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useCanvasStage } from "@/components/landing/canvas/use-canvas-stage";
 
-if (typeof window !== "undefined") {
+if (typeof globalThis.window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger, useGSAP);
 }
 
@@ -68,7 +68,7 @@ export function ActTwoParadox() {
             tl.to(
               h1Words,
               { opacity: 0, filter: "blur(4px)", stagger: 0.01, duration: 0.04 },
-              0.20,
+              0.2,
             );
           }
 
@@ -214,12 +214,12 @@ export function ActTwoParadox() {
 
 /* ── Helpers ────────────────────────────────────────────────────────────── */
 
-function WordSplit({ text }: { text: string }) {
+function WordSplit({ text }: Readonly<{ text: string }>) {
   const words = text.split(" ");
   return (
     <>
       {words.map((word, i) => (
-        <span key={i} data-word className="inline-block">
+        <span key={`${i}-${word}`} data-word className="inline-block">
           {word}
           {i < words.length - 1 ? " " : ""}
         </span>

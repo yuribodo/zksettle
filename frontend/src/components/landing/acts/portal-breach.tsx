@@ -6,7 +6,7 @@ import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useCanvasStage } from "@/components/landing/canvas/use-canvas-stage";
 
-if (typeof window !== "undefined") {
+if (typeof globalThis.window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger, useGSAP);
 }
 
@@ -59,12 +59,12 @@ export function PortalBreach() {
 
           tl.to(
             ring,
-            { scale: 1.4, opacity: 0.6, duration: 0.20, ease: "power2.inOut" },
-            0.10,
+            { scale: 1.4, opacity: 0.6, duration: 0.2, ease: "power2.inOut" },
+            0.1,
           );
           tl.to(
             innerRing,
-            { scale: 1.1, opacity: 0.4, duration: 0.20, ease: "power2.inOut" },
+            { scale: 1.1, opacity: 0.4, duration: 0.2, ease: "power2.inOut" },
             0.12,
           );
 
@@ -77,7 +77,7 @@ export function PortalBreach() {
               repeat: 3,
               ease: "power1.inOut",
             },
-            0.30,
+            0.3,
           );
 
           /* ── Collapse + flood (0.35→0.65) ── */
@@ -113,7 +113,7 @@ export function PortalBreach() {
           tl.to(
             ring,
             { opacity: 0, scale: 0, duration: 0.08, ease: "power2.out" },
-            0.50,
+            0.5,
           );
 
           tl.to(section, { x: 0, duration: 0.02, ease: "power2.out" }, 0.48);

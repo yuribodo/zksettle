@@ -7,11 +7,11 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 import { useReducedMotion } from "@/hooks/use-reduced-motion";
 
-if (typeof window !== "undefined") {
+if (typeof globalThis.window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger);
 }
 
-export function SmoothScrollProvider({ children }: { children: ReactNode }) {
+export function SmoothScrollProvider({ children }: Readonly<{ children: ReactNode }>) {
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
