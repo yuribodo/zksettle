@@ -1,12 +1,27 @@
 "use client";
 
-import { Plus, Search, Trash, Xmark } from "iconoir-react";
+import { Clock, Plus, Search, Trash, Xmark } from "iconoir-react";
 import { useEffect, useState, type SyntheticEvent } from "react";
 import { toast } from "sonner";
 
+import { EmptyState } from "@/components/dashboard/empty-state";
 import { StatusPill } from "@/components/dashboard/status-pill";
+import { TruncatedHash } from "@/components/dashboard/truncated-hash";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   useCredential,
   useIssueCredential,
@@ -20,7 +35,7 @@ import {
 import { useRegisterWallet } from "@/hooks/use-register-wallet";
 import { ApiError } from "@/lib/api/client";
 import type { Credential } from "@/lib/api/schemas";
-import { truncateWallet } from "@/lib/format";
+import { cn } from "@/lib/cn";
 import { bytesToHex, isValidWalletHex, normalizeWalletHex } from "@/lib/wallet";
 
 function formatTimestamp(unixSeconds: number): string {
@@ -135,161 +150,180 @@ export function WalletsCredentialsPanel() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section
-        aria-labelledby="register-heading"
-        className="rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6"
-      >
-        <span
-          id="register-heading"
-          className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase"
-        >
-          Register wallet
-        </span>
-        <p className="mt-1 text-sm text-stone">
-          Add a wallet to the membership tree. Paste a 32-byte pubkey as 64 hex
-          chars (with or without <span className="font-mono">0x</span>).
-        </p>
-
-        <form
-          onSubmit={onRegister}
-          className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center"
-        >
-          <Input
-            value={registerInput}
-            onChange={(e) => {
-              setRegisterInput(e.target.value);
-              register.reset();
-            }}
-            placeholder="0x… (64 hex chars)"
-            spellCheck={false}
-            autoComplete="off"
-            aria-invalid={registerInput.length > 0 && !registerInputValid}
-            aria-describedby="register-help"
-            className="font-mono"
-            disabled={register.isPending}
-          />
-          <Button
-            type="submit"
-            variant="primary"
-            size="md"
-            disabled={!registerInputValid || register.isPending}
+      {/* ── Register wallet ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase">
+            Register wallet
+          </CardTitle>
+          <CardDescription className="text-sm text-stone">
+            Add a wallet to the membership tree. Paste a 32-byte pubkey as 64 hex
+            chars (with or without <span className="font-mono">0x</span>).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form
+            onSubmit={onRegister}
+            className="flex flex-col gap-3 sm:flex-row sm:items-center"
           >
-            <Plus aria-hidden="true" className="size-4" />
-            {register.isPending ? "Registering…" : "Register"}
-          </Button>
-        </form>
+            <Input
+              value={registerInput}
+              onChange={(e) => {
+                setRegisterInput(e.target.value);
+                register.reset();
+              }}
+              placeholder="0x… (64 hex chars)"
+              spellCheck={false}
+              autoComplete="off"
+              aria-invalid={registerInput.length > 0 && !registerInputValid}
+              aria-describedby="register-help"
+              className="font-mono"
+              disabled={register.isPending}
+            />
+            <Button
+              type="submit"
+              variant="primary"
+              size="md"
+              disabled={!registerInputValid || register.isPending}
+            >
+              <Plus aria-hidden="true" className="size-4" />
+              {register.isPending ? "Registering…" : "Register"}
+            </Button>
+          </form>
 
-        {registerInput.length > 0 && !registerInputValid ? (
-          <p id="register-help" className="mt-2 font-mono text-xs text-rust">
-            Wallet must be 64 hex characters.
-          </p>
-        ) : null}
-      </section>
+          {registerInput.length > 0 && !registerInputValid ? (
+            <p id="register-help" className="mt-2 font-mono text-xs text-rust">
+              Wallet must be 64 hex characters.
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
 
-      <section
-        aria-labelledby="lookup-heading"
-        className="rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6"
-      >
-        <span
-          id="lookup-heading"
-          className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase"
-        >
-          Look up wallet credential
-        </span>
-        <p className="mt-1 text-sm text-stone">
-          Paste a 32-byte wallet pubkey as 64 hex chars (with or without <span className="font-mono">0x</span>).
-        </p>
+      <Separator />
 
-        <form onSubmit={lookup} className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <Input
-            value={walletInput}
-            onChange={(e) => setWalletInput(e.target.value)}
-            placeholder="0x… (64 hex chars)"
-            spellCheck={false}
-            autoComplete="off"
-            aria-invalid={walletInput.length > 0 && !inputValid}
-            aria-describedby="wallet-help"
-            className="font-mono"
-          />
-          <Button type="submit" variant="primary" size="md" disabled={!inputValid}>
-            <Search aria-hidden="true" className="size-4" />
-            Look up
-          </Button>
-        </form>
+      {/* ── Look up wallet credential ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase">
+            Look up wallet credential
+          </CardTitle>
+          <CardDescription className="text-sm text-stone">
+            Paste a 32-byte wallet pubkey as 64 hex chars (with or without <span className="font-mono">0x</span>).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={lookup} className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Input
+              value={walletInput}
+              onChange={(e) => setWalletInput(e.target.value)}
+              placeholder="0x… (64 hex chars)"
+              spellCheck={false}
+              autoComplete="off"
+              aria-invalid={walletInput.length > 0 && !inputValid}
+              aria-describedby="wallet-help"
+              className="font-mono"
+            />
+            <Button type="submit" variant="primary" size="md" disabled={!inputValid}>
+              <Search aria-hidden="true" className="size-4" />
+              Look up
+            </Button>
+          </form>
 
-        {walletInput.length > 0 && !inputValid ? (
-          <p id="wallet-help" className="mt-2 font-mono text-xs text-rust">
-            Wallet must be 64 hex characters.
-          </p>
-        ) : null}
-      </section>
+          {walletInput.length > 0 && !inputValid ? (
+            <p id="wallet-help" className="mt-2 font-mono text-xs text-rust">
+              Wallet must be 64 hex characters.
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
 
       {activeWallet ? (
-        <CredentialCard
-          wallet={activeWallet}
-          query={credentialQuery}
-          issueJurisdiction={issueJurisdiction}
-          onIssueJurisdictionChange={setIssueJurisdiction}
-          onIssue={onIssue}
-          onRevoke={onRevoke}
-          issuePending={issue.isPending}
-          revokePending={revoke.isPending}
-        />
+        <>
+          <Separator />
+          <CredentialCard
+            wallet={activeWallet}
+            query={credentialQuery}
+            issueJurisdiction={issueJurisdiction}
+            onIssueJurisdictionChange={setIssueJurisdiction}
+            onIssue={onIssue}
+            onRevoke={onRevoke}
+            issuePending={issue.isPending}
+            revokePending={revoke.isPending}
+          />
+        </>
       ) : null}
 
-      <section
-        aria-labelledby="recent-heading"
-        className="rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6"
-      >
-        <div className="flex items-baseline justify-between">
-          <span
-            id="recent-heading"
-            className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase"
-          >
-            Recent lookups (this browser)
-          </span>
-          <span className="font-mono text-xs text-muted">{recent.length} stored</span>
-        </div>
+      <Separator />
 
-        {recent.length === 0 ? (
-          <p className="mt-4 font-mono text-xs text-muted">
-            No lookups yet. The last 8 wallets you check will appear here.
-          </p>
-        ) : (
-          <ul className="mt-4 flex flex-col divide-y divide-border-subtle">
-            {recent.map((entry) => (
-              <li
-                key={entry.wallet}
-                className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
-              >
-                <button
-                  type="button"
-                  onClick={() => pickRecent(entry.wallet)}
-                  className="flex flex-1 cursor-pointer items-center gap-3 text-left font-mono text-sm text-ink hover:text-forest focus-visible:rounded-[2px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
+      {/* ── Recent lookups ── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-baseline justify-between">
+            <CardTitle className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase">
+              Recent lookups (this browser)
+            </CardTitle>
+            <span className="font-mono text-xs text-muted">{recent.length} stored</span>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {recent.length === 0 ? (
+            <EmptyState
+              icon={Clock}
+              title="No lookups yet"
+              description="The last 8 wallets you check will appear here."
+              className="py-8"
+            />
+          ) : (
+            <ul className="flex flex-col divide-y divide-border-subtle">
+              {recent.map((entry) => (
+                <li
+                  key={entry.wallet}
+                  className={cn(
+                    "group/recent flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0",
+                    "rounded-[var(--radius-3)] transition-colors",
+                  )}
                 >
-                  <span>{truncateWallet(entry.wallet, 8, 8)}</span>
-                  <span className="font-mono text-[11px] text-muted">
-                    {new Date(entry.lastSeenAt).toLocaleString("en-US", {
-                      month: "short",
-                      day: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                </button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`Forget ${entry.wallet}`}
-                  onClick={() => forgetWallet(entry.wallet)}
-                >
-                  <Xmark aria-hidden="true" className="size-4" />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                  <button
+                    type="button"
+                    onClick={() => pickRecent(entry.wallet)}
+                    className={cn(
+                      "flex flex-1 cursor-pointer items-center gap-3 text-left",
+                      "rounded-[var(--radius-2)] px-1 py-0.5 -ml-1",
+                      "text-ink transition-colors hover:bg-surface-deep hover:text-forest",
+                      "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest",
+                    )}
+                  >
+                    <TruncatedHash
+                      value={entry.wallet}
+                      head={8}
+                      tail={8}
+                      copyable={false}
+                      className="text-sm"
+                    />
+                    <span className="font-mono text-[11px] text-muted">
+                      {new Date(entry.lastSeenAt).toLocaleString("en-US", {
+                        month: "short",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Forget ${entry.wallet}`}
+                    onClick={() => forgetWallet(entry.wallet)}
+                    className="opacity-0 transition-opacity group-hover/recent:opacity-100 focus-visible:opacity-100"
+                  >
+                    <Xmark aria-hidden="true" className="size-4" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -325,38 +359,39 @@ function CredentialCard({
   }, [errorInfo]);
 
   return (
-    <section
-      aria-labelledby="credential-heading"
-      className="rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <span
-            id="credential-heading"
-            className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase"
-          >
-            Credential
-          </span>
-          <p className="mt-1 font-mono text-sm text-ink break-all">{wallet}</p>
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <CardTitle className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase">
+              Credential
+            </CardTitle>
+            <TruncatedHash
+              value={wallet}
+              head={10}
+              tail={10}
+              className="text-sm text-ink"
+            />
+          </div>
+          <CredentialStatus
+            loading={isLoading}
+            notFound={errorInfo?.kind === "not-found"}
+            credential={credential ?? null}
+            authError={errorInfo?.kind === "auth"}
+            otherError={errorInfo?.kind === "other"}
+          />
         </div>
-        <CredentialStatus
-          loading={isLoading}
-          notFound={errorInfo?.kind === "not-found"}
-          credential={credential ?? null}
-          authError={errorInfo?.kind === "auth"}
-          otherError={errorInfo?.kind === "other"}
-        />
-      </div>
+      </CardHeader>
 
-      {isLoading ? (
-        <p className="mt-4 font-mono text-xs text-stone">Loading credential…</p>
-      ) : null}
+      <CardContent>
+        {isLoading ? <CredentialSkeleton /> : null}
 
-      {credential ? (
-        <CredentialDetails credential={credential} />
-      ) : null}
+        {credential ? (
+          <CredentialDetails credential={credential} />
+        ) : null}
 
-      <div className="mt-6 border-t border-border-subtle pt-5">
+        <Separator className="my-5" />
+
         {credential && !credential.revoked ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -365,15 +400,10 @@ function CredentialCard({
                 Zeros the wallet&apos;s leaf in the membership tree. Requires re-publish to take effect on-chain.
               </p>
             </div>
-            <Button
-              variant="ghost"
-              size="md"
-              onClick={onRevoke}
-              disabled={revokePending}
-            >
-              <Trash aria-hidden="true" className="size-4" />
-              {revokePending ? "Revoking…" : "Revoke"}
-            </Button>
+            <RevokeConfirmDialog
+              onConfirm={onRevoke}
+              revokePending={revokePending}
+            />
           </div>
         ) : null}
 
@@ -383,7 +413,7 @@ function CredentialCard({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <label className="flex flex-col gap-1.5 sm:max-w-[200px]">
                 <span className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">
-                  Jurisdiction (ISO α-2)
+                  Jurisdiction (ISO alpha-2)
                 </span>
                 <Input
                   value={issueJurisdiction}
@@ -405,9 +435,70 @@ function CredentialCard({
             </div>
           </div>
         ) : null}
+      </CardContent>
+    </Card>
+  );
+}
 
-      </div>
-    </section>
+function RevokeConfirmDialog({
+  onConfirm,
+  revokePending,
+}: Readonly<{ onConfirm: () => void; revokePending: boolean }>) {
+  const [open, setOpen] = useState(false);
+
+  const handleConfirm = () => {
+    onConfirm();
+    setOpen(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger
+        render={
+          <Button variant="ghost" size="md" disabled={revokePending}>
+            <Trash aria-hidden="true" className="size-4" />
+            {revokePending ? "Revoking…" : "Revoke"}
+          </Button>
+        }
+      />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Revoke credential</DialogTitle>
+          <DialogDescription>
+            This will zero the wallet&apos;s leaf in the membership tree. The change requires a re-publish to take effect on-chain. This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose
+            render={<Button variant="ghost" />}
+          >
+            Cancel
+          </DialogClose>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={handleConfirm}
+            disabled={revokePending}
+          >
+            <Trash aria-hidden="true" className="size-4" />
+            {revokePending ? "Revoking…" : "Yes, revoke"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CredentialSkeleton() {
+  return (
+    <div className="grid gap-y-3 sm:grid-cols-[140px_1fr]">
+      {(["issuer", "wallet", "status", "issued", "expires"] as const).map((field) => (
+        <div key={field} className="contents">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-4 w-48" />
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -436,21 +527,32 @@ function CredentialStatus({
 function CredentialDetails({ credential }: Readonly<{ credential: Credential }>) {
   const walletHex = bytesToHex(credential.wallet);
   return (
-    <dl className="mt-5 grid gap-y-3 sm:grid-cols-[140px_1fr]">
-      <dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Wallet</dt>
-      <dd className="font-mono text-sm text-ink break-all">{walletHex}</dd>
+    <Card className="bg-surface-deep ring-0">
+      <CardContent className="pt-1">
+        <dl className="grid gap-y-3 sm:grid-cols-[140px_1fr]">
+          <dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Wallet</dt>
+          <dd>
+            <TruncatedHash
+              value={walletHex}
+              head={10}
+              tail={10}
+              className="text-sm text-ink"
+            />
+          </dd>
 
-      <dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Leaf index</dt>
-      <dd className="font-mono text-sm text-ink">{credential.leaf_index}</dd>
+          <dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Leaf index</dt>
+          <dd className="font-mono text-sm text-ink">{credential.leaf_index}</dd>
 
-      <dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Jurisdiction</dt>
-      <dd className="font-mono text-sm text-ink">{credential.jurisdiction}</dd>
+          <dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Jurisdiction</dt>
+          <dd className="font-mono text-sm text-ink">{credential.jurisdiction}</dd>
 
-      <dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Issued at</dt>
-      <dd className="font-mono text-sm text-ink">{formatTimestamp(credential.issued_at)}</dd>
+          <dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Issued at</dt>
+          <dd className="font-mono text-sm text-ink">{formatTimestamp(credential.issued_at)}</dd>
 
-      <dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Revoked</dt>
-      <dd className="font-mono text-sm text-ink">{credential.revoked ? "yes" : "no"}</dd>
-    </dl>
+          <dt className="font-mono text-[11px] tracking-[0.08em] text-muted uppercase">Revoked</dt>
+          <dd className="font-mono text-sm text-ink">{credential.revoked ? "yes" : "no"}</dd>
+        </dl>
+      </CardContent>
+    </Card>
   );
 }

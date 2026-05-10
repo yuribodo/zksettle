@@ -9,6 +9,7 @@ import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/auth-context";
 import { createQueryClient } from "@/lib/api/query-client";
 import { SOLANA_NETWORK, SOLANA_RPC_URL } from "@/lib/config";
@@ -35,7 +36,9 @@ export function Providers({ children }: Readonly<{ children: React.ReactNode }>)
         <WalletModalProvider>
           <QueryClientProvider client={queryClient}>
             <AuthProvider>
+              <TooltipProvider>
               {children}
+              </TooltipProvider>
               <Toaster
                 position="bottom-right"
                 toastOptions={{

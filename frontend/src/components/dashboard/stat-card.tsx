@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/cn";
 
 export interface StatCardProps {
@@ -7,9 +8,10 @@ export interface StatCardProps {
   value: ReactNode;
   sub?: ReactNode;
   className?: string;
+  isLoading?: boolean;
 }
 
-export function StatCard({ label, value, sub, className }: StatCardProps) {
+export function StatCard({ label, value, sub, className, isLoading }: Readonly<StatCardProps>) {
   return (
     <article
       className={cn(
@@ -20,10 +22,14 @@ export function StatCard({ label, value, sub, className }: StatCardProps) {
       <div className="font-mono text-[10px] font-medium tracking-[0.1em] text-muted uppercase">
         {label}
       </div>
-      <div className="font-display text-[clamp(28px,3vw,44px)] leading-[1.05] tracking-[-0.02em] text-ink">
-        {value}
-      </div>
-      {sub ? <div className="font-mono text-[13px] text-stone">{sub}</div> : null}
+      {isLoading ? (
+        <Skeleton className="h-10 w-24" />
+      ) : (
+        <div className="font-display text-[clamp(28px,3vw,44px)] leading-[1.05] tracking-[-0.02em] text-ink">
+          {value}
+        </div>
+      )}
+      {sub && !isLoading ? <div className="font-mono text-[13px] text-stone">{sub}</div> : null}
     </article>
   );
 }

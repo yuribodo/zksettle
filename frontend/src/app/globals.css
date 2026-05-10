@@ -1,6 +1,10 @@
 @import "lenis/dist/lenis.css" layer(lenis);
 @import "@solana/wallet-adapter-react-ui/styles.css" layer(wallet-adapter);
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
 
 @theme {
   --color-canvas: #fafaf7;
@@ -395,4 +399,50 @@ em {
 
 .wallet-adapter-modal-collapse-button svg {
   fill: var(--color-stone) !important;
+}
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+:root {
+  --background: #fafaf7;
+  --foreground: #1a1917;
+  --card: #f5f3ee;
+  --card-foreground: #1a1917;
+  --popover: #fafaf7;
+  --popover-foreground: #1a1917;
+  --primary: #0c3d2e;
+  --primary-foreground: #fafaf7;
+  --secondary: #f5f3ee;
+  --secondary-foreground: #1a1917;
+  --muted-foreground: #6b6762;
+  --accent: #e8f2ee;
+  --accent-foreground: #0c3d2e;
+  --destructive: #bc2a24;
+  --border: #e8e5df;
+  --input: #e8e5df;
+  --ring: #0c3d2e;
+  --radius: 6px;
 }

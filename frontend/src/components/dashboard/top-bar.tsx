@@ -25,7 +25,7 @@ export function TopBar() {
       aria-label="Dashboard top bar"
       className={cn(
         "sticky top-0 z-30 flex h-14 w-full items-center gap-4 bg-canvas/95 px-4 backdrop-blur-sm transition-colors md:px-8",
-        "border-b",
+        "border-b transition-[border-color] duration-200 ease-[var(--ease-brand)]",
         scrolled ? "border-border-subtle" : "border-transparent",
       )}
     >

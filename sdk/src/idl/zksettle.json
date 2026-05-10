@@ -649,6 +649,85 @@
       ]
     },
     {
+      "name": "resize_hook_payload",
+      "discriminator": [
+        178,
+        222,
+        42,
+        251,
+        26,
+        170,
+        146,
+        236
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "issuer"
+          ]
+        },
+        {
+          "name": "issuer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  115,
+                  115,
+                  117,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "hook_payload",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  111,
+                  107,
+                  45,
+                  112,
+                  97,
+                  121,
+                  108,
+                  111,
+                  97,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "authority"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "settle_hook",
       "docs": [
         "Direct-call settlement. Issuer authority signs and receives rent refund",
@@ -823,7 +902,7 @@
         "payload PDA is NOT closed here — SPL passes `owner` as read-only",
         "(`AccountMeta::new_readonly`), blocking `close = owner`. Authority",
         "calls `close_hook_payload` after the transfer to reclaim rent and",
-        "unblock the next payload staging cycle."
+        "unblock the next `init_hook_payload`."
       ],
       "discriminator": [
         105,
@@ -1550,41 +1629,51 @@
     },
     {
       "code": 6035,
+      "name": "MerkleTreeTooSmall",
+      "msg": "Pre-allocated merkle tree account is too small for configured depth/buffer"
+    },
+    {
+      "code": 6036,
+      "name": "MerkleTreeWrongOwner",
+      "msg": "Pre-allocated merkle tree account is not owned by SPL account compression"
+    },
+    {
+      "code": 6037,
       "name": "BubblegumTailInvalid",
       "msg": "Trailing Bubblegum account count is invalid for remaining_accounts split"
     },
     {
-      "code": 6036,
+      "code": 6038,
       "name": "BubblegumLeafOwnerMismatch",
       "msg": "Bubblegum leaf owner does not match settlement recipient"
     },
     {
-      "code": 6037,
+      "code": 6039,
       "name": "MintHookMismatch",
       "msg": "Mint's TransferHook extension does not point to this program"
     },
     {
-      "code": 6038,
+      "code": 6040,
       "name": "ChunkOutOfBounds",
       "msg": "Chunk write exceeds expected_proof_len"
     },
     {
-      "code": 6039,
+      "code": 6041,
       "name": "ChunkNotSequential",
       "msg": "Chunk offset does not match high_water_mark (sequential writes required)"
     },
     {
-      "code": 6040,
+      "code": 6042,
       "name": "PayloadAlreadyFinalized",
       "msg": "Cannot write to a finalized payload"
     },
     {
-      "code": 6041,
+      "code": 6043,
       "name": "PayloadNotReady",
       "msg": "Payload must be finalized before settlement"
     },
     {
-      "code": 6042,
+      "code": 6044,
       "name": "ProofIncomplete",
       "msg": "Proof length does not match expected_proof_len at finalize"
     }
@@ -2087,9 +2176,10 @@
       "docs": [
         "Pre-staged Light CPI arguments stored in the hook payload so the Token-2022",
         "Execute entry — which only receives `amount: u64` as instruction data — can",
-        "still drive a Light CPI. Clients must stage the payload via the chunked flow",
-        "(`init_hook_payload` → `write_hook_proof` → `finalize_hook_payload`) before the",
-        "Token-2022 transfer, otherwise the tree-root index and validity proof go stale."
+        "still drive a Light CPI. Clients stage via the chunked path",
+        "(`init_hook_payload` → `write_hook_proof` → `finalize_hook_payload`) and",
+        "include `finalize` + Token-2022 transfer in a single atomic transaction,",
+        "otherwise the tree-root index and validity proof go stale."
       ],
       "type": {
         "kind": "struct",

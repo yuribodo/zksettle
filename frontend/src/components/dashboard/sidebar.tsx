@@ -48,8 +48,8 @@ export function Sidebar() {
                       href={item.href}
                       aria-current={isActive ? "page" : undefined}
                       className={cn(
-                        "relative flex cursor-pointer items-center gap-3 rounded-[var(--radius-3)] px-3 py-2 text-sm transition-colors",
-                        "text-quill hover:text-ink",
+                        "relative flex cursor-pointer items-center gap-3 rounded-[var(--radius-3)] px-3 py-2 text-sm transition-colors duration-150 ease-[var(--ease-brand)]",
+                        "text-quill hover:bg-surface-deep hover:text-ink",
                         "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest",
                         isActive && "bg-surface-deep text-ink",
                       )}

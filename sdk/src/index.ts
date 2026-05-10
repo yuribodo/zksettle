@@ -1,9 +1,14 @@
 export { prove, loadCircuit, Prover, computeNullifier, type NullifierInputs } from "./prove/index.js";
 export {
   buildInitHookPayloadIx,
+  buildResizeHookPayloadIx,
   buildWriteChunkIx,
   buildFinalizeHookPayloadIx,
   uploadProofChunked,
+  checkIssuerExists,
+  buildRegisterIssuerIx,
+  checkHookPayloadExists,
+  buildCloseHookPayloadIx,
   CHUNK_SIZE,
 } from "./wrap/index.js";
 export { findIssuerPda, findHookPayloadPda, findRegistryPda, findTreeCreatorPda, findTreeConfigPda } from "./wrap/pda.js";

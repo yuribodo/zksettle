@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useCallback, type ReactNode } from "react";
 import {
   Flash,
   ArrowUpRight,
@@ -11,13 +11,15 @@ import {
   Sparks,
 } from "iconoir-react";
 import { AnimatePresence, motion } from "motion/react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { ProofStepCard } from "@/components/dashboard/proof-step-card";
 import { ProveProgressBar } from "@/components/dashboard/prove-progress-bar";
-import { useProveFlow } from "@/hooks/use-prove-flow";
+import { PublicKey as SolPublicKey } from "@solana/web3.js";
+import { useProveFlow, type TransferParams } from "@/hooks/use-prove-flow";
 import { STEPS, type FlowState } from "@/lib/prove-flow";
 import { useWallet } from "@/hooks/use-wallet-connection";
 
@@ -51,6 +53,7 @@ function CopyButton({ text, label }: Readonly<{ text: string; label: string }>) 
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      toast.success("Copied to clipboard");
       setTimeout(() => setCopied(false), 1500);
     } catch {
       /* noop */
@@ -159,11 +162,17 @@ function IntroCard({
   canStart,
   onStart,
   onDemo,
+  transferParams,
+  onTransferParamsChange,
+  formError,
 }: Readonly<{
   connected: boolean;
   canStart: boolean;
   onStart: () => void;
   onDemo: () => void;
+  transferParams: TransferParams;
+  onTransferParamsChange: (params: TransferParams) => void;
+  formError: string | null;
 }>) {
   return (
     <motion.section
@@ -172,29 +181,79 @@ function IntroCard({
       exit={{ opacity: 0, y: -6, transition: { duration: 0.2 } }}
       className="rounded-[var(--radius-6)] border border-forest/20 bg-surface p-6"
     >
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-        <div className="max-w-lg">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="size-5 text-forest" strokeWidth={1.5} aria-hidden="true" />
-            <h2 className="text-sm font-medium text-ink">
-              End-to-end compliance proof
-            </h2>
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="max-w-lg">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="size-5 text-forest" strokeWidth={1.5} aria-hidden="true" />
+              <h2 className="text-sm font-medium text-ink">
+                End-to-end compliance proof
+              </h2>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-stone">
+              This page generates a zero-knowledge proof that your wallet holds a valid issuer
+              credential, is not on the sanctions list, and belongs to a permitted jurisdiction
+              — then submits it on-chain for verification. The entire flow runs in your browser.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Badge variant="default">Noir circuit</Badge>
+              <Badge variant="default">Barretenberg WASM</Badge>
+              <Badge variant="default">Solana devnet</Badge>
+            </div>
           </div>
-          <p className="mt-2 text-xs leading-relaxed text-stone">
-            This page generates a zero-knowledge proof that your wallet holds a valid issuer
-            credential, is not on the sanctions list, and belongs to a permitted jurisdiction
-            — then submits it on-chain for verification. The entire flow runs in your browser.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Badge variant="default">Noir circuit</Badge>
-            <Badge variant="default">Barretenberg WASM</Badge>
-            <Badge variant="default">Solana devnet</Badge>
+
+          <div className="flex shrink-0 flex-col gap-2">
+            {!connected && (
+              <>
+                <ConnectWalletButton />
+                <p className="text-center text-[11px] text-muted">
+                  Connect a wallet to begin
+                </p>
+              </>
+            )}
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-col gap-2">
-          {connected ? (
-            <>
+        {connected && (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="flex flex-col gap-1">
+                <span className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase">Mint address</span>
+                <input
+                  type="text"
+                  placeholder="Token mint public key"
+                  value={transferParams.mint}
+                  onChange={(e) => onTransferParamsChange({ ...transferParams, mint: e.target.value })}
+                  className="h-9 w-full rounded-[var(--radius-2)] border border-border-subtle bg-canvas px-3 font-mono text-xs text-ink placeholder:text-muted transition-colors hover:border-border focus-visible:border-forest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase">Recipient address</span>
+                <input
+                  type="text"
+                  placeholder="Destination wallet public key"
+                  value={transferParams.recipient}
+                  onChange={(e) => onTransferParamsChange({ ...transferParams, recipient: e.target.value })}
+                  className="h-9 w-full rounded-[var(--radius-2)] border border-border-subtle bg-canvas px-3 font-mono text-xs text-ink placeholder:text-muted transition-colors hover:border-border focus-visible:border-forest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
+                />
+              </label>
+            </div>
+            <label className="flex flex-col gap-1 sm:max-w-[calc(50%-0.375rem)]">
+              <span className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase">Amount</span>
+              <input
+                type="number"
+                min={1}
+                value={transferParams.amount}
+                onChange={(e) => onTransferParamsChange({ ...transferParams, amount: Number(e.target.value) || 0 })}
+                className="h-9 w-full rounded-[var(--radius-2)] border border-border-subtle bg-canvas px-3 font-mono text-xs text-ink placeholder:text-muted transition-colors hover:border-border focus-visible:border-forest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
+              />
+            </label>
+
+            {formError && (
+              <p className="text-xs text-red-500">{formError}</p>
+            )}
+
+            <div className="flex items-center gap-3">
               <Button onClick={onStart} disabled={!canStart}>
                 <Flash className="size-4" strokeWidth={1.5} aria-hidden="true" />
                 Start proof flow
@@ -203,16 +262,9 @@ function IntroCard({
                 <Sparks className="size-4" strokeWidth={1.5} aria-hidden="true" />
                 Run demo
               </Button>
-            </>
-          ) : (
-            <>
-              <ConnectWalletButton />
-              <p className="text-center text-[11px] text-muted">
-                Connect a wallet to begin
-              </p>
-            </>
-          )}
-        </div>
+            </div>
+          </>
+        )}
       </div>
     </motion.section>
   );
@@ -358,6 +410,34 @@ export function ProveFlowPanel() {
   const { state, startFlow, startDemo, reset, canStart, isRunning, isDone, txUrl } =
     useProveFlow();
 
+  const [transferParams, setTransferParams] = useState<TransferParams>({
+    mint: "",
+    recipient: "",
+    amount: 1000,
+  });
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const handleStart = useCallback(() => {
+    if (!transferParams.mint.trim() || !transferParams.recipient.trim()) {
+      setFormError("Mint and recipient addresses are required.");
+      return;
+    }
+    try { new SolPublicKey(transferParams.mint); } catch {
+      setFormError("Invalid mint address.");
+      return;
+    }
+    try { new SolPublicKey(transferParams.recipient); } catch {
+      setFormError("Invalid recipient address.");
+      return;
+    }
+    if (transferParams.amount <= 0) {
+      setFormError("Amount must be greater than zero.");
+      return;
+    }
+    setFormError(null);
+    startFlow(transferParams);
+  }, [transferParams, startFlow]);
+
   const hasStarted = state.currentStep >= 0;
   const hasError = state.steps.some((s) => s.status === "error");
 
@@ -376,8 +456,11 @@ export function ProveFlowPanel() {
             key="intro"
             connected={connected}
             canStart={canStart}
-            onStart={startFlow}
+            onStart={handleStart}
             onDemo={startDemo}
+            transferParams={transferParams}
+            onTransferParamsChange={setTransferParams}
+            formError={formError}
           />
         )}
 

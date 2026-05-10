@@ -13,7 +13,7 @@ use crate::state::{BubblegumTreeRegistry, Issuer, BUBBLEGUM_REGISTRY_SEED, BUBBL
 
 pub use handlers::{
     close_hook_payload_handler, finalize_hook_payload_handler, init_extra_account_meta_list_handler,
-    init_hook_payload_handler, write_hook_proof_handler,
+    init_hook_payload_handler, resize_hook_payload_handler, write_hook_proof_handler,
 };
 pub use settlement::{execute_hook_handler, settle_hook_handler};
 pub use types::{
@@ -21,12 +21,10 @@ pub use types::{
     HOOK_PAYLOAD_SEED, MAX_HOOK_PROOF_BYTES,
 };
 
-/// Creates the payload PDA with dynamic space based on the actual proof
-/// length. Uses `#[instruction]` to peel `expected_proof_len` from the
-/// `init_hook_payload` instruction data, keeping the PDA under the 10KB
-/// CPI init limit.
+/// Creates the payload PDA with header-only space (see `HookPayload::BASE_SPACE`).
+/// Follow up with one or more `resize_hook_payload` calls to grow the
+/// account to `BASE_SPACE + expected_proof_len` before writing chunks.
 #[derive(Accounts)]
-#[instruction(expected_proof_len: u32)]
 pub struct InitHookPayload<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -38,18 +36,37 @@ pub struct InitHookPayload<'info> {
     )]
     pub issuer: Account<'info, Issuer>,
 
-    // Seeded by `authority.key()` alone, not `nullifier_hash`: Token-2022's
-    // Execute entry resolves the payload PDA from TLV `AddressConfig`, which
-    // only sees `ExecuteInstruction` data (amount) and account keys —
-    // nullifier-seeded PDAs are not addressable from the hook path. Trade-off:
-    // one outstanding payload per authority, parallel hook transfers from the
-    // same authority serialize on this PDA.
     #[account(
         init,
         payer = authority,
-        space = 8 + HookPayload::BASE_SPACE + expected_proof_len as usize,
+        space = 8 + HookPayload::BASE_SPACE,
         seeds = [HOOK_PAYLOAD_SEED, authority.key().as_ref()],
         bump,
+    )]
+    pub hook_payload: Account<'info, HookPayload>,
+
+    pub system_program: Program<'info, System>,
+}
+
+/// Grows the payload PDA towards its target size. Solana caps `realloc` at
+/// 10 KiB per instruction, so the client calls this 1–2 times after init.
+#[derive(Accounts)]
+pub struct ResizeHookPayload<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        seeds = [ISSUER_SEED, authority.key().as_ref()],
+        bump = issuer.bump,
+        has_one = authority @ ZkSettleError::UnauthorizedIssuer,
+    )]
+    pub issuer: Account<'info, Issuer>,
+
+    #[account(
+        mut,
+        seeds = [HOOK_PAYLOAD_SEED, authority.key().as_ref()],
+        bump = hook_payload.bump,
+        constraint = !hook_payload.finalized @ ZkSettleError::PayloadAlreadyFinalized,
     )]
     pub hook_payload: Account<'info, HookPayload>,
 

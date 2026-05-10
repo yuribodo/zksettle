@@ -9,8 +9,8 @@ use spl_transfer_hook_interface::instruction::ExecuteInstruction;
 use crate::error::ZkSettleError;
 
 use super::{
-    types::{ExtraAccountMetaInput, StagedLightArgs, EXTRA_ACCOUNT_META_LIST_SEED, MAX_HOOK_PROOF_BYTES},
-    CloseHookPayload, InitExtraAccountMetaList, InitHookPayload, ModifyHookPayload,
+    types::{ExtraAccountMetaInput, HookPayload, StagedLightArgs, EXTRA_ACCOUNT_META_LIST_SEED, MAX_HOOK_PROOF_BYTES},
+    CloseHookPayload, InitExtraAccountMetaList, InitHookPayload, ModifyHookPayload, ResizeHookPayload,
 };
 
 pub fn init_hook_payload_handler(
@@ -28,8 +28,45 @@ pub fn init_hook_payload_handler(
     payload.expected_proof_len = expected_proof_len;
     payload.high_water_mark = 0;
     payload.finalized = false;
-    payload.proof_and_witness = vec![0u8; len];
     payload.bump = ctx.bumps.hook_payload;
+    Ok(())
+}
+
+/// Grows the hook-payload account towards its target size. Solana caps
+/// `realloc` at 10 KiB per instruction, so the client may need to call
+/// this multiple times. Once at target size the proof vector is allocated.
+pub fn resize_hook_payload_handler(ctx: Context<ResizeHookPayload>) -> Result<()> {
+    let hook_info = ctx.accounts.hook_payload.to_account_info();
+    let expected = ctx.accounts.hook_payload.expected_proof_len as usize;
+    let target = 8 + HookPayload::BASE_SPACE + expected;
+    let current_len = hook_info.data_len();
+
+    if current_len >= target {
+        return Ok(());
+    }
+
+    let new_len = target.min(current_len + 10_240);
+    let rent = Rent::get()?;
+    let needed = rent.minimum_balance(new_len);
+    let lamports = hook_info.lamports();
+    if needed > lamports {
+        anchor_lang::system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: ctx.accounts.authority.to_account_info(),
+                    to: hook_info.clone(),
+                },
+            ),
+            needed - lamports,
+        )?;
+    }
+    hook_info.realloc(new_len, true)?;
+
+    if new_len >= target {
+        let payload = &mut ctx.accounts.hook_payload;
+        payload.proof_and_witness = vec![0u8; expected];
+    }
     Ok(())
 }
 

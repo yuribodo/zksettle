@@ -104,6 +104,10 @@ pub mod zksettle {
         instructions::transfer_hook::init_hook_payload_handler(ctx, expected_proof_len)
     }
 
+    pub fn resize_hook_payload(ctx: Context<ResizeHookPayload>) -> Result<()> {
+        instructions::transfer_hook::resize_hook_payload_handler(ctx)
+    }
+
     pub fn write_hook_proof(
         ctx: Context<ModifyHookPayload>,
         offset: u32,

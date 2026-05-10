@@ -1,16 +1,30 @@
 "use client";
 
-import { Copy, Refresh } from "iconoir-react";
+import { Copy, Refresh, WarningTriangle } from "iconoir-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { StatCard } from "@/components/dashboard/stat-card";
 import { StatusPill } from "@/components/dashboard/status-pill";
+import { TruncatedHash } from "@/components/dashboard/truncated-hash";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useRoots, usePublishRoots } from "@/hooks/use-roots";
 import { ApiError } from "@/lib/api/client";
 import type { Roots } from "@/lib/api/schemas";
-import { fmtCompact, truncateWallet } from "@/lib/format";
+import { cn } from "@/lib/cn";
+import { fmtCompact } from "@/lib/format";
 
 const ROOT_FIELDS: Array<{ key: keyof Pick<Roots, "membership_root" | "sanctions_root" | "jurisdiction_root">; label: string; description: string }> = [
   {
@@ -45,12 +59,6 @@ function statCardValue(
   return format(roots);
 }
 
-function rootDisplayValue(isLoading: boolean, value: string | undefined): string {
-  if (isLoading) return "loading…";
-  if (!value) return "—";
-  return truncateWallet(value, 10, 8);
-}
-
 function describeError(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 401 || err.status === 403) {
@@ -68,6 +76,7 @@ export function IssuerStatusPanel() {
   const { data: roots, isLoading, isError, error, refetch, isFetching } = useRoots();
   const publish = usePublishRoots();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (isError) toast.error(describeError(error));
@@ -84,6 +93,7 @@ export function IssuerStatusPanel() {
   };
 
   const onPublish = async () => {
+    setConfirmOpen(false);
     try {
       const res = await publish.mutateAsync();
       toast.success(
@@ -105,6 +115,7 @@ export function IssuerStatusPanel() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Status bar */}
       <section className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius-6)] border border-border-subtle bg-surface px-5 py-4">
         <div className="flex items-center gap-3">
           <StatusPill kind={status.kind} label={status.label} />
@@ -126,7 +137,7 @@ export function IssuerStatusPanel() {
           <Button
             variant="primary"
             size="sm"
-            onClick={onPublish}
+            onClick={() => setConfirmOpen(true)}
             disabled={publish.isPending || isLoading || isError}
           >
             {publish.isPending ? "Publishing…" : "Publish roots"}
@@ -134,67 +145,127 @@ export function IssuerStatusPanel() {
         </div>
       </section>
 
+      <Separator className="bg-border-subtle" />
+
+      {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2">
         <StatCard
           label="Wallet count"
           value={statCardValue(isLoading, roots, (r) => fmtCompact(r.wallet_count))}
           sub="Credentialed wallets in the membership tree"
+          isLoading={isLoading}
         />
         <StatCard
           label="Last publish"
           value={statCardValue(isLoading, roots, (r) => formatSlot(r.last_publish_slot))}
           sub="Most recent on-chain root commit"
+          isLoading={isLoading}
         />
       </div>
 
-      <section
-        aria-labelledby="roots-heading"
-        className="rounded-[var(--radius-6)] border border-border-subtle bg-surface p-6"
-      >
-        <div className="flex items-baseline justify-between">
-          <span
-            id="roots-heading"
-            className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase"
-          >
-            Merkle roots
-          </span>
-          <span className="font-mono text-xs text-muted">Current state</span>
-        </div>
+      <Separator className="bg-border-subtle" />
 
-        {!isError ? (
-          <ul className="mt-4 flex flex-col divide-y divide-border-subtle">
-            {ROOT_FIELDS.map((field) => {
-              const value = roots?.[field.key];
-              const display = rootDisplayValue(isLoading, value);
-              return (
-                <li
-                  key={field.key}
-                  className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
-                >
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium text-ink">{field.label}</span>
-                    <span className="text-xs text-stone">{field.description}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <code className="font-mono text-xs text-quill">{display}</code>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={!value}
-                      onClick={() => value && copy(value, field.key)}
-                      aria-label={`Copy ${field.label}`}
-                    >
-                      <Copy aria-hidden="true" className="size-4" />
-                      {copiedKey === field.key ? "Copied" : "Copy"}
-                    </Button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        ) : null}
-      </section>
+      {/* Merkle roots */}
+      <Card className="border-border-subtle bg-surface">
+        <CardHeader>
+          <div className="flex items-baseline justify-between">
+            <CardTitle
+              id="roots-heading"
+              className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase"
+            >
+              Merkle roots
+            </CardTitle>
+            <span className="font-mono text-xs text-muted">Current state</span>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isError ? null : (
+            <ul
+              aria-labelledby="roots-heading"
+              className="flex flex-col divide-y divide-border-subtle"
+            >
+              {ROOT_FIELDS.map((field) => {
+                const value = roots?.[field.key];
+                let rootDisplay: React.ReactNode;
+                if (isLoading) {
+                  rootDisplay = <Skeleton className="h-5 w-40" />;
+                } else if (value) {
+                  rootDisplay = (
+                    <TruncatedHash
+                      value={value}
+                      head={10}
+                      tail={8}
+                      className="text-xs text-quill"
+                      copyable
+                    />
+                  );
+                } else {
+                  rootDisplay = <span className="font-mono text-xs text-muted">—</span>;
+                }
+                return (
+                  <li
+                    key={field.key}
+                    className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                  >
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-sm font-medium text-ink">{field.label}</span>
+                      <span className="text-xs text-stone">{field.description}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {rootDisplay}
+                      {/* Keep the manual copy button for users who prefer an explicit action */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={!value}
+                        onClick={() => value && copy(value, field.key)}
+                        aria-label={`Copy ${field.label}`}
+                        className={cn(!value && "hidden")}
+                      >
+                        <Copy aria-hidden="true" className="size-4" />
+                        {copiedKey === field.key ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
+      {/* Publish confirmation dialog */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <WarningTriangle className="size-5 text-forest" aria-hidden="true" />
+              Confirm publish
+            </DialogTitle>
+            <DialogDescription>
+              This will commit the current Merkle roots on-chain. The action cannot be
+              undone — downstream verifiers will immediately start using the new roots.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose
+              className={cn(
+                "inline-flex h-8 cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-3)] border border-ink bg-transparent px-3 text-sm font-medium text-ink transition-colors hover:bg-ink hover:text-canvas",
+              )}
+            >
+              Cancel
+            </DialogClose>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={onPublish}
+              disabled={publish.isPending}
+            >
+              {publish.isPending ? "Publishing…" : "Yes, publish"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

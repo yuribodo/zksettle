@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useReducer, type Dispatch } from "react";
+import { useCallback, useReducer, useRef, type Dispatch } from "react";
 import type { Connection, PublicKey, Transaction } from "@solana/web3.js";
 
 import { useWallet, useConnection } from "@/hooks/use-wallet-connection";
@@ -25,9 +25,15 @@ import {
 } from "@/lib/prove-flow";
 import type { ProofInputs, ProofResult } from "@/types/proof";
 
+export interface TransferParams {
+  mint: string;
+  recipient: string;
+  amount: number;
+}
+
 export interface UseProveFlowReturn {
   state: FlowState;
-  startFlow: () => Promise<void>;
+  startFlow: (params: TransferParams) => Promise<void>;
   startDemo: () => Promise<void>;
   reset: () => void;
   canStart: boolean;
@@ -133,17 +139,21 @@ async function runStepProofGeneration(
   paths: Awaited<ReturnType<typeof runStepMerklePaths>>,
   ensureApi: () => Promise<import("@aztec/bb.js").Barretenberg>,
   generate: (inputs: ProofInputs) => Promise<ProofResult>,
+  transferParams: TransferParams,
 ) {
   dispatch({ type: "STEP_RUNNING", step: 3 });
   const { membership, sanctions, roots, jurisdictionProof, zkPrivateKey } = paths;
-  const mintBytes = publicKey.toBytes();
-  const recipientBytes = publicKey.toBytes();
+  const { PublicKey: SolPublicKey } = await import("@solana/web3.js");
+  const mintPubkey = new SolPublicKey(transferParams.mint);
+  const recipientPubkey = new SolPublicKey(transferParams.recipient);
+  const mintBytes = mintPubkey.toBytes();
+  const recipientBytes = recipientPubkey.toBytes();
   const mintLo = toHex(mintBytes.slice(0, 16));
   const mintHi = toHex(mintBytes.slice(16, 32));
   const recipientLo = toHex(recipientBytes.slice(0, 16));
   const recipientHi = toHex(recipientBytes.slice(16, 32));
   const epoch = String(Math.floor(Date.now() / 1000 / 86400));
-  const amount = "1000";
+  const amount = String(transferParams.amount);
   const timestamp = String(Math.floor(Date.now() / 1000));
   const credentialExpiry = String(credential.issued_at + CREDENTIAL_VALIDITY_SECS);
 
@@ -194,54 +204,178 @@ async function runStepSubmit(
   proofResult: ProofResult,
   publicKey: PublicKey,
   connection: Connection,
-  sendTransaction: (tx: Transaction, conn: Connection) => Promise<string>,
-  submitCtx: { zkPrivateKey: string; credentialExpiry: string; jurisdictionProof: { path: string[]; path_indices: number[] } },
+  signAllTransactions: (txs: Transaction[]) => Promise<Transaction[]>,
+  submitCtx: {
+    zkPrivateKey: string;
+    credentialExpiry: string;
+    jurisdictionProof: { path: string[]; path_indices: number[] };
+    roots: import("@/lib/api/schemas").Roots;
+  },
+  transferParams: TransferParams,
 ): Promise<string | undefined> {
   dispatch({ type: "STEP_RUNNING", step: 4 });
 
   const start = performance.now();
-  const [{ uploadProofChunked }, { BN }] = await Promise.all([
+  const [sdk, { BN }, { PublicKey: SolPublicKey, Transaction }] = await Promise.all([
     import("@zksettle/sdk"),
     import("@coral-xyz/anchor"),
+    import("@solana/web3.js"),
   ]);
+  const {
+    checkIssuerExists, buildRegisterIssuerIx,
+    checkHookPayloadExists, buildCloseHookPayloadIx,
+    buildInitHookPayloadIx, buildResizeHookPayloadIx,
+    buildWriteChunkIx, buildFinalizeHookPayloadIx,
+    CHUNK_SIZE,
+  } = sdk;
 
-  const nullifierHex = proofResult.publicInputs[1] ?? "";
-  const cleanHex = nullifierHex.startsWith("0x") ? nullifierHex.slice(2) : nullifierHex;
-  const nullifierBytes = new Uint8Array(
-    cleanHex.match(/.{1,2}/g)?.map((b) => Number.parseInt(b, 16)) ?? [],
-  );
+  const hexToBytes = (hex: string): Uint8Array => {
+    const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+    return new Uint8Array(clean.match(/.{1,2}/g)?.map((b) => Number.parseInt(b, 16)) ?? []);
+  };
 
-  const result = await uploadProofChunked(
-    {
-      connection,
-      wallet: publicKey,
-      proof: proofResult.proof,
-      nullifierHash: nullifierBytes,
-      transferContext: {
-        mint: publicKey,
-        recipient: publicKey,
-        amount: new BN(1000),
-        epoch: Math.floor(Date.now() / 1000 / 86400),
-        privateKey: submitCtx.zkPrivateKey,
-        credentialExpiry: submitCtx.credentialExpiry,
-        jurisdictionPath: submitCtx.jurisdictionProof.path.map((h) =>
-          h.startsWith("0x") ? h : `0x${h}`,
-        ),
-        jurisdictionPathIndices: submitCtx.jurisdictionProof.path_indices,
-      },
-    },
-    (tx) => sendTransaction(tx, connection),
-  );
+  const confirmTx = async (sig: string) => {
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+  };
 
-  const signature = result.finalizeSignature;
-  dispatch({ type: "SET_TX", signature });
+  const sendSigned = async (signed: Transaction) => {
+    const sig = await connection.sendRawTransaction(signed.serialize(), {
+      skipPreflight: true,
+      maxRetries: 3,
+    });
+    await confirmTx(sig);
+    return sig;
+  };
+
+  // ── Pre-requisites (issuer registration, stale cleanup) ──
+  // These need separate signing since they must complete before the proof upload.
+  const issuerExists = await checkIssuerExists(publicKey, connection);
+  if (!issuerExists) {
+    const roots = submitCtx.roots;
+    const ix = await buildRegisterIssuerIx(publicKey, {
+      merkleRoot: hexToBytes(roots.membership_root),
+      sanctionsRoot: hexToBytes(roots.sanctions_root),
+      jurisdictionRoot: hexToBytes(roots.jurisdiction_root),
+    }, connection);
+    const tx = new Transaction().add(ix);
+    tx.feePayer = publicKey;
+    tx.recentBlockhash = (await connection.getLatestBlockhash("confirmed")).blockhash;
+    const [signed] = await signAllTransactions([tx]);
+    await sendSigned(signed!);
+  }
+
+  const stalePayload = await checkHookPayloadExists(publicKey, connection);
+  if (stalePayload) {
+    const ix = await buildCloseHookPayloadIx(publicKey, connection);
+    const tx = new Transaction().add(ix);
+    tx.feePayer = publicKey;
+    tx.recentBlockhash = (await connection.getLatestBlockhash("confirmed")).blockhash;
+    const [signed] = await signAllTransactions([tx]);
+    await sendSigned(signed!);
+  }
+
+  // ── Build ALL proof upload transactions upfront ──
+  const proofBytes = proofResult.proof;
+  const nullifierBytes = hexToBytes(proofResult.publicInputs[1] ?? "");
+  const mintPubkey = new SolPublicKey(transferParams.mint);
+  const recipientPubkey = new SolPublicKey(transferParams.recipient);
+  const chunkSize = CHUNK_SIZE;
+  const writesPerTx = 2;
+
+  const initIx = await buildInitHookPayloadIx(publicKey, proofBytes.length, connection);
+
+  // Solana caps realloc at 10 KiB per instruction. Compute how many
+  // resize instructions are needed to grow from header-only to full size.
+  const BASE_SPACE = 293;
+  const headerSize = 8 + BASE_SPACE;
+  const targetSize = headerSize + proofBytes.length;
+  const resizeIxs = [];
+  let currentSize = headerSize;
+  while (currentSize < targetSize) {
+    resizeIxs.push(await buildResizeHookPayloadIx(publicKey, connection));
+    currentSize = Math.min(targetSize, currentSize + 10_240);
+  }
+
+  const writeIxs = [];
+  for (let offset = 0; offset < proofBytes.length; offset += chunkSize) {
+    const chunk = proofBytes.slice(offset, Math.min(offset + chunkSize, proofBytes.length));
+    writeIxs.push(await buildWriteChunkIx(publicKey, offset, chunk, connection));
+  }
+
+  const epoch = Math.floor(Date.now() / 1000 / 86400);
+  const finalizeIx = await buildFinalizeHookPayloadIx(publicKey, {
+    nullifierHash: nullifierBytes,
+    mint: mintPubkey,
+    epoch,
+    recipient: recipientPubkey,
+    amount: new BN(transferParams.amount),
+  }, connection);
+
+  // ── Batch 1: init + resize (own blockhash + Phantom popup) ──
+  const initResizeTxs: Transaction[] = [];
+  const initTx = new Transaction().add(initIx);
+  if (resizeIxs.length > 0) initTx.add(resizeIxs[0]!);
+  initResizeTxs.push(initTx);
+  for (let i = 1; i < resizeIxs.length; i++) {
+    initResizeTxs.push(new Transaction().add(resizeIxs[i]!));
+  }
+
+  const bh1 = await connection.getLatestBlockhash("confirmed");
+  for (const tx of initResizeTxs) {
+    tx.feePayer = publicKey;
+    tx.recentBlockhash = bh1.blockhash;
+  }
+  const signedInitResize = await signAllTransactions(initResizeTxs);
+  for (const tx of signedInitResize) {
+    await sendSigned(tx!);
+  }
+
+  // ── Batch 2: writes only (fresh blockhash + Phantom popup) ──
+  const writeTxs: Transaction[] = [];
+  for (let i = 0; i < writeIxs.length; i += writesPerTx) {
+    const tx = new Transaction();
+    for (const ix of writeIxs.slice(i, i + writesPerTx)) tx.add(ix);
+    writeTxs.push(tx);
+  }
+
+  const bh2 = await connection.getLatestBlockhash("confirmed");
+  for (const tx of writeTxs) {
+    tx.feePayer = publicKey;
+    tx.recentBlockhash = bh2.blockhash;
+  }
+  const signedWrites = await signAllTransactions(writeTxs);
+
+  // Send writes sequentially — the on-chain handler enforces that each
+  // chunk offset matches high_water_mark, so ordering must be preserved.
+  let lastWriteSig = "";
+  for (const tx of signedWrites) {
+    lastWriteSig = await connection.sendRawTransaction(tx!.serialize(), {
+      skipPreflight: true,
+      maxRetries: 5,
+    });
+  }
+
+  // Confirming the last write guarantees all prior writes landed (each
+  // write's offset must match the cumulative high_water_mark).
+  if (lastWriteSig) await confirmTx(lastWriteSig);
+
+  // ── Batch 3: finalize (own fresh blockhash + Phantom popup) ──
+  const finalizeTx = new Transaction().add(finalizeIx);
+  const bh3 = await connection.getLatestBlockhash("confirmed");
+  finalizeTx.feePayer = publicKey;
+  finalizeTx.recentBlockhash = bh3.blockhash;
+  const [signedFinalize] = await signAllTransactions([finalizeTx]);
+  const finalSig = await sendSigned(signedFinalize!);
+
+  dispatch({ type: "SET_TX", signature: finalSig });
   dispatch({
     type: "STEP_SUCCESS",
     step: 4,
-    data: { signature },
+    data: { signature: finalSig },
     durationMs: performance.now() - start,
   });
-  return signature;
+  return finalSig;
 }
 
 async function runStepConfirm(
@@ -273,39 +407,52 @@ interface LiveFlowContext {
   walletHex: string;
   publicKey: PublicKey;
   connection: Connection;
-  sendTransaction: (tx: Transaction, conn: Connection) => Promise<string>;
+  signAllTransactions: (txs: Transaction[]) => Promise<Transaction[]>;
   generate: (inputs: ProofInputs) => Promise<ProofResult>;
   ensureApi: () => Promise<import("@aztec/bb.js").Barretenberg>;
   derivePrivateKey: () => Promise<string>;
+  transferParams: TransferParams;
+}
+
+function handleCredentialError(dispatch: Dispatch<FlowAction>, err: unknown): void {
+  const msg = stepError(dispatch, 1, err, "Failed to fetch credential");
+  if (msg.includes("404")) {
+    dispatch({ type: "STEP_ERROR", step: 1, error: "No credential found for this wallet. Issue one from the Wallets & Credentials page, or try demo mode." });
+  }
+}
+
+function handleSubmitError(dispatch: Dispatch<FlowAction>, err: unknown): void {
+  console.error("[zksettle] Submit step error:", err);
+  try { console.error("[zksettle] Error JSON:", JSON.stringify(err, Object.getOwnPropertyNames(err as object))); } catch { /* */ }
+  const errRecord = err as Record<string, unknown>;
+  const inner = errRecord?.error;
+  if (inner) console.error("[zksettle] Inner error:", inner);
+  const logs = (errRecord?.logs ?? (inner as Record<string, unknown>)?.logs) as string[] | undefined;
+  if (logs) console.error("[zksettle] Transaction logs:", logs);
+  const message = err instanceof Error ? err.message : String(errRecord?.message ?? "Transaction failed");
+  const isRejected = message.includes("rejected") || message.includes("User rejected");
+  dispatch({ type: "STEP_ERROR", step: 4, error: isRejected ? "Transaction rejected by wallet." : message });
 }
 
 async function runLiveFlow(ctx: LiveFlowContext): Promise<void> {
-  const { dispatch, walletHex, publicKey, connection, sendTransaction, generate, ensureApi, derivePrivateKey } = ctx;
+  const { dispatch, walletHex, publicKey, connection, signAllTransactions, generate, ensureApi, derivePrivateKey, transferParams } = ctx;
   let credential;
   try { credential = await runStepCredential(dispatch, walletHex); }
-  catch (err) {
-    const msg = stepError(dispatch, 1, err, "Failed to fetch credential");
-    if (msg.includes("404")) {
-      dispatch({ type: "STEP_ERROR", step: 1, error: "No credential found for this wallet. Issue one from the Wallets & Credentials page, or try demo mode." });
-    }
-    return;
-  }
+  catch (err) { handleCredentialError(dispatch, err); return; }
 
   let paths;
   try { paths = await runStepMerklePaths(dispatch, walletHex, derivePrivateKey); }
   catch (err) { stepError(dispatch, 2, err, "Failed to fetch Merkle paths"); return; }
 
   let step3Result;
-  try { step3Result = await runStepProofGeneration(dispatch, publicKey, credential, paths, ensureApi, generate); }
+  try { step3Result = await runStepProofGeneration(dispatch, publicKey, credential, paths, ensureApi, generate, transferParams); }
   catch (err) { stepError(dispatch, 3, err, "Proof generation failed"); return; }
 
   let txSignature: string | undefined;
   try {
-    txSignature = await runStepSubmit(dispatch, step3Result.proofResult, publicKey, connection, sendTransaction, step3Result);
+    txSignature = await runStepSubmit(dispatch, step3Result.proofResult, publicKey, connection, signAllTransactions, { ...step3Result, roots: paths.roots }, transferParams);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Transaction failed";
-    const isRejected = message.includes("rejected") || message.includes("User rejected");
-    dispatch({ type: "STEP_ERROR", step: 4, error: isRejected ? "Transaction rejected by wallet." : message });
+    handleSubmitError(dispatch, err);
     return;
   }
 
@@ -320,7 +467,7 @@ async function runLiveFlow(ctx: LiveFlowContext): Promise<void> {
 
 export function useProveFlow(): UseProveFlowReturn {
   const [state, dispatch] = useReducer(flowReducer, INITIAL_STATE);
-  const { connected, publicKey, sendTransaction } = useWallet();
+  const { connected, publicKey, signAllTransactions } = useWallet();
   const { connection } = useConnection();
 
   const walletHex = publicKey
@@ -330,6 +477,7 @@ export function useProveFlow(): UseProveFlowReturn {
   const { generate, ensureApi } = useProofGeneration();
   const { derivePrivateKey } = useZkPrivateKey();
 
+  const runningRef = useRef(false);
   const isRunning = state.steps.some((s) => s.status === "running");
   const isDone = state.steps.at(-1)?.status === "success";
   const txUrl = state.txSignature
@@ -337,7 +485,10 @@ export function useProveFlow(): UseProveFlowReturn {
     : null;
 
   const runFlow = useCallback(
-    async (mode: "live" | "demo") => {
+    async (mode: "live" | "demo", params?: TransferParams) => {
+      if (runningRef.current) return;
+      runningRef.current = true;
+      try {
       dispatch({ type: "START_FLOW", mode });
 
       dispatch({ type: "STEP_RUNNING", step: 0 });
@@ -353,17 +504,23 @@ export function useProveFlow(): UseProveFlowReturn {
         return;
       }
 
-      if (!walletHex) {
+      if (!walletHex || !params) {
         dispatch({ type: "STEP_ERROR", step: 1, error: "Wallet not resolved." });
         return;
       }
 
-      await runLiveFlow({ dispatch, walletHex, publicKey, connection, sendTransaction, generate, ensureApi, derivePrivateKey });
+      if (!signAllTransactions) {
+        dispatch({ type: "STEP_ERROR", step: 1, error: "Wallet does not support batch transaction signing." });
+        return;
+      }
+
+      await runLiveFlow({ dispatch, walletHex, publicKey, connection, signAllTransactions, generate, ensureApi, derivePrivateKey, transferParams: params });
+      } finally { runningRef.current = false; }
     },
-    [connected, publicKey, walletHex, connection, sendTransaction, generate, ensureApi, derivePrivateKey],
+    [connected, publicKey, walletHex, connection, signAllTransactions, generate, ensureApi, derivePrivateKey],
   );
 
-  const startFlow = useCallback(() => runFlow("live"), [runFlow]);
+  const startFlow = useCallback((params: TransferParams) => runFlow("live", params), [runFlow]);
   const startDemo = useCallback(() => runFlow("demo"), [runFlow]);
   const reset = useCallback(() => dispatch({ type: "RESET" }), []);
 
