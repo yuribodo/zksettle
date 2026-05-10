@@ -42,9 +42,7 @@ async function ensureTxIsSendable(
   // Wallet adapters typically set these via prepareTransaction(), but not all
   // wallet implementations do — set them eagerly so the tx is sendable
   // regardless of the connected wallet's behavior.
-  if (!tx.feePayer) {
-    tx.feePayer = payer;
-  }
+  tx.feePayer ??= payer;
   if (!tx.recentBlockhash) {
     const { blockhash } = await connection.getLatestBlockhash("confirmed");
     tx.recentBlockhash = blockhash;

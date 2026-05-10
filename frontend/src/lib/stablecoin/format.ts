@@ -8,7 +8,7 @@ export function isValidPubkey(value: string): boolean {
   const trimmed = value.trim();
   if (trimmed.length === 0) return false;
   try {
-    void new PublicKey(trimmed);
+    new PublicKey(trimmed);
     return true;
   } catch {
     return false;
