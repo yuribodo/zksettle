@@ -52,10 +52,19 @@ export function AdminPanels() {
     );
   }
 
-  if (isLoading || !treasury) {
+  if (isLoading) {
     return (
       <p className="rounded-[var(--radius-6)] border border-border-subtle bg-surface px-5 py-4 text-sm text-muted">
         Loading treasury…
+      </p>
+    );
+  }
+
+  if (!treasury) {
+    return (
+      <p className="rounded-[var(--radius-6)] border border-border-subtle bg-surface px-5 py-4 text-sm text-stone">
+        Treasury not initialized for this mint. The stablecoin program must
+        initialize the treasury before admin controls are available.
       </p>
     );
   }

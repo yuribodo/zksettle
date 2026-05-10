@@ -1,7 +1,7 @@
 import { PublicKey } from "@solana/web3.js";
 
 export const STABLECOIN_PROGRAM_ID = new PublicKey(
-  "2CdXRSPo6QLfLBJTikmrqmBiWwa1HpuuYJ2Qu6Yy3Liv",
+  "8UCELgX3D64aWPJcJre7AtuoSre5eWjHdAFsRUkeqCMe",
 );
 
 export const STABLECOIN_DECIMALS = 6;

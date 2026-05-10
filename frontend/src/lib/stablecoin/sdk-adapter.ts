@@ -23,14 +23,8 @@ type SdkRedemptionRequest = import("@zksettle/sdk").RedemptionRequest;
 
 let sdkPromise: Promise<SdkModule> | null = null;
 
-// Use an indirect specifier to prevent vite/rollup from eagerly resolving
-// the SDK at test-collection time. Without this, vitest fails on a fresh
-// checkout before `sdk/dist/` is built, even though only a handful of tests
-// actually exercise the sdk adapter.
-const SDK_SPECIFIER = "@zksettle/sdk";
-
 function loadSdk(): Promise<SdkModule> {
-  sdkPromise ??= import(/* @vite-ignore */ SDK_SPECIFIER) as Promise<SdkModule>;
+  sdkPromise ??= import("@zksettle/sdk") as Promise<SdkModule>;
   return sdkPromise;
 }
 
