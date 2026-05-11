@@ -8,6 +8,10 @@ pub struct Migrator;
 
 #[async_trait::async_trait]
 impl MigratorTrait for Migrator {
+    fn migration_table_name() -> sea_orm::DynIden {
+        sea_orm::sea_query::Alias::new("seaql_migrations_indexer").into_iden()
+    }
+
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         vec![
             Box::new(m20260430_001_create_events_table::Migration),
