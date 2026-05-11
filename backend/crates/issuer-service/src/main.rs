@@ -45,10 +45,21 @@ async fn main() {
 
     let cfg = Config::from_env();
 
-    let keypair_bytes = std::fs::read(&cfg.keypair_path)
-        .unwrap_or_else(|e| panic!("failed to read keypair at {}: {e}", cfg.keypair_path));
-    let keypair_json: Vec<u8> = serde_json::from_slice(&keypair_bytes)
-        .unwrap_or_else(|e| panic!("failed to parse keypair JSON: {e}"));
+    let keypair_json: Vec<u8> = match std::env::var("ISSUER_KEYPAIR_JSON") {
+        Ok(env_json) if !env_json.trim().is_empty() => {
+            tracing::info!("loading issuer keypair from ISSUER_KEYPAIR_JSON env var");
+            serde_json::from_str(&env_json)
+                .unwrap_or_else(|e| panic!("failed to parse ISSUER_KEYPAIR_JSON: {e}"))
+        }
+        _ => {
+            tracing::info!(path = %cfg.keypair_path, "loading issuer keypair from file");
+            let keypair_bytes = std::fs::read(&cfg.keypair_path).unwrap_or_else(|e| {
+                panic!("failed to read keypair at {}: {e}", cfg.keypair_path)
+            });
+            serde_json::from_slice(&keypair_bytes)
+                .unwrap_or_else(|e| panic!("failed to parse keypair JSON: {e}"))
+        }
+    };
     let keypair = Keypair::try_from(keypair_json.as_slice())
         .unwrap_or_else(|e| panic!("invalid keypair bytes: {e}"));
     let program_id: Pubkey = cfg
