@@ -235,17 +235,25 @@ async function runStepSubmit(
     return new Uint8Array(clean.match(/.{1,2}/g)?.map((b) => Number.parseInt(b, 16)) ?? []);
   };
 
-  const confirmTx = async (sig: string) => {
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
-    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+  // `confirmTransaction({signature, blockhash, lastValidBlockHeight})` ties
+  // the wait-loop expiry to the SAME blockhash the tx was signed with.
+  // Fetching a fresh blockhash here decouples the timeout from actual tx
+  // expiry and can yield false timeouts / false success (Solana docs).
+  // Always pass the bh that was set on `tx.recentBlockhash` before signing.
+  type Blockhash = { blockhash: string; lastValidBlockHeight: number };
+  const confirmTx = async (sig: string, bh: Blockhash) => {
+    await connection.confirmTransaction(
+      { signature: sig, blockhash: bh.blockhash, lastValidBlockHeight: bh.lastValidBlockHeight },
+      "confirmed",
+    );
   };
 
-  const sendSigned = async (signed: Transaction) => {
+  const sendSigned = async (signed: Transaction, bh: Blockhash) => {
     const sig = await connection.sendRawTransaction(signed.serialize(), {
       skipPreflight: true,
       maxRetries: 3,
     });
-    await confirmTx(sig);
+    await confirmTx(sig, bh);
     return sig;
   };
 
@@ -261,9 +269,10 @@ async function runStepSubmit(
     }, connection);
     const tx = new Transaction().add(ix);
     tx.feePayer = publicKey;
-    tx.recentBlockhash = (await connection.getLatestBlockhash("confirmed")).blockhash;
+    const bhRegister = await connection.getLatestBlockhash("confirmed");
+    tx.recentBlockhash = bhRegister.blockhash;
     const [signed] = await signAllTransactions([tx]);
-    await sendSigned(signed!);
+    await sendSigned(signed!, bhRegister);
   }
 
   const stalePayload = await checkHookPayloadExists(publicKey, connection);
@@ -271,9 +280,10 @@ async function runStepSubmit(
     const ix = await buildCloseHookPayloadIx(publicKey, connection);
     const tx = new Transaction().add(ix);
     tx.feePayer = publicKey;
-    tx.recentBlockhash = (await connection.getLatestBlockhash("confirmed")).blockhash;
+    const bhClose = await connection.getLatestBlockhash("confirmed");
+    tx.recentBlockhash = bhClose.blockhash;
     const [signed] = await signAllTransactions([tx]);
-    await sendSigned(signed!);
+    await sendSigned(signed!, bhClose);
   }
 
   // ── Build ALL proof upload transactions upfront ──
@@ -327,7 +337,7 @@ async function runStepSubmit(
   }
   const signedInitResize = await signAllTransactions(initResizeTxs);
   for (const tx of signedInitResize) {
-    await sendSigned(tx!);
+    await sendSigned(tx!, bh1);
   }
 
   // ── Batch 2: writes only (fresh blockhash + Phantom popup) ──
@@ -357,7 +367,7 @@ async function runStepSubmit(
 
   // Confirming the last write guarantees all prior writes landed (each
   // write's offset must match the cumulative high_water_mark).
-  if (lastWriteSig) await confirmTx(lastWriteSig);
+  if (lastWriteSig) await confirmTx(lastWriteSig, bh2);
 
   // ── Batch 3: finalize (own fresh blockhash + Phantom popup) ──
   const finalizeTx = new Transaction().add(finalizeIx);
@@ -365,7 +375,7 @@ async function runStepSubmit(
   finalizeTx.feePayer = publicKey;
   finalizeTx.recentBlockhash = bh3.blockhash;
   const [signedFinalize] = await signAllTransactions([finalizeTx]);
-  await sendSigned(signedFinalize!);
+  await sendSigned(signedFinalize!, bh3);
 
   // ── Batch 4: settle_hook — invokes gnark verifier, emits ProofSettled,
   // closes the payload PDA and refunds rent. Without this the indexer
@@ -380,7 +390,7 @@ async function runStepSubmit(
   settleTx.feePayer = publicKey;
   settleTx.recentBlockhash = bh4.blockhash;
   const [signedSettle] = await signAllTransactions([settleTx]);
-  const finalSig = await sendSigned(signedSettle!);
+  const finalSig = await sendSigned(signedSettle!, bh4);
 
   dispatch({ type: "SET_TX", signature: finalSig });
   dispatch({
