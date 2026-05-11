@@ -301,6 +301,36 @@ export async function uploadProofChunked(
   const initSignature = await signAndSend(new Transaction().add(initIx));
   console.log("[zksettle-sdk] uploadProofChunked: initHookPayload sig:", initSignature);
 
+  // resize_hook_payload grows the PDA AND allocates `proof_and_witness`.
+  // Without it write_hook_proof panics copying into a zero-length Vec.
+  // Solana realloc cap = 10 KiB / ix, so large proofs need multiple calls.
+  // Loop terminates on observed on-chain account size: capture the
+  // header-only baseline right after init, then resize until the account
+  // has grown by `proofBytes.length` bytes. This avoids hardcoding
+  // HookPayload::BASE_SPACE (which can drift if StagedLightArgs changes).
+  const [hookPayloadPda] = findHookPayloadPda(opts.wallet, programId);
+  const baselineInfo = await opts.connection.getAccountInfo(hookPayloadPda);
+  if (!baselineInfo) {
+    throw new Error("hook_payload PDA missing after init");
+  }
+  const headerSize = baselineInfo.data.length;
+  const targetSize = headerSize + proofBytes.length;
+  let currentSize = headerSize;
+  while (currentSize < targetSize) {
+    const resizeIx = await buildResizeHookPayloadIx(
+      opts.wallet,
+      opts.connection,
+      programId,
+      program,
+    );
+    await signAndSend(new Transaction().add(resizeIx));
+    const after = await opts.connection.getAccountInfo(hookPayloadPda);
+    if (!after) {
+      throw new Error("hook_payload PDA missing after resize");
+    }
+    currentSize = after.data.length;
+  }
+
   const writeIxs: TransactionInstruction[] = [];
   for (let offset = 0; offset < proofBytes.length; offset += chunkSize) {
     const end = Math.min(offset + chunkSize, proofBytes.length);
