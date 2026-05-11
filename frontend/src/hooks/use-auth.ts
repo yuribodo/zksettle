@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 
 import { useWallet } from "@/hooks/use-wallet-connection";
-import { clearActiveApiKey } from "@/lib/api/active-key";
+import { clearActiveApiKey, setActiveApiKey, fetchActiveKeyStatus } from "@/lib/api/active-key";
+import { createApiKey } from "@/lib/api/endpoints";
 import { getMe, signIn as authSignIn, signOut as authSignOut } from "@/lib/auth";
 
 export const authMeQueryKey = ["auth", "me"] as const;
@@ -29,8 +30,17 @@ export function useSignIn() {
       }
       await authSignIn(publicKey, signMessage);
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: authMeQueryKey });
+      try {
+        const status = await fetchActiveKeyStatus();
+        if (!status.hasKey) {
+          const { api_key } = await createApiKey("dashboard");
+          await setActiveApiKey(api_key);
+        }
+      } catch {
+        // Non-fatal: user can still create a key manually via the gate
+      }
     },
   });
 }

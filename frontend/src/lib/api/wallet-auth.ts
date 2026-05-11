@@ -98,10 +98,25 @@ async function signAndCache(
   };
 }
 
-export async function getWalletAuthHeaders(): Promise<Record<string, string>> {
-  if (!registeredSigner) return {};
+function getPhantomFallback(): RegisteredSigner | null {
+  if (typeof globalThis.window === "undefined") return null;
+  const phantom =
+    (globalThis as unknown as { phantom?: { solana?: { isConnected: boolean; publicKey: PublicKey; signMessage: SignMessageFn } } }).phantom?.solana;
+  if (!phantom?.isConnected || !phantom.publicKey || typeof phantom.signMessage !== "function")
+    return null;
+  return {
+    publicKey: phantom.publicKey,
+    signMessage: (msg: Uint8Array) => phantom.signMessage(msg).then((r: { signature: Uint8Array } | Uint8Array) =>
+      r instanceof Uint8Array ? r : r.signature,
+    ),
+  };
+}
 
-  const { publicKey, signMessage } = registeredSigner;
+export async function getWalletAuthHeaders(): Promise<Record<string, string>> {
+  const signer = registeredSigner ?? getPhantomFallback();
+  if (!signer) return {};
+
+  const { publicKey, signMessage } = signer;
   const walletHex = bytesToHex(Array.from(publicKey.toBytes()));
   const now = Date.now();
 

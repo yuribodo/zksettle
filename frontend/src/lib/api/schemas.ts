@@ -89,7 +89,7 @@ export const EventDtoSchema = z.object({
   jurisdiction_root: z.string(),
   mint: z.string(),
   recipient: z.string(),
-  payer: z.string(),
+  payer: z.string().optional(),
   amount: z.number().int().nonnegative(),
   epoch: z.number().int().nonnegative(),
 });
