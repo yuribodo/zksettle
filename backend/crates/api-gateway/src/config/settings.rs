@@ -40,6 +40,10 @@ pub struct Config {
     pub cookie_secure: bool,
     pub cookie_same_site: CookieSameSite,
     pub login_rate_limit_per_minute: u32,
+    /// Shared bearer the gateway injects on the issuer-service hop.
+    /// Must equal the issuer-service `API_TOKEN`. Unset = no Authorization
+    /// header is injected (loopback dev with `ALLOW_UNAUTHENTICATED=true`).
+    pub upstream_token: Option<String>,
 }
 
 impl std::fmt::Debug for Config {
@@ -58,6 +62,10 @@ impl std::fmt::Debug for Config {
             .field("siws_domain", &self.siws_domain)
             .field("cookie_secure", &self.cookie_secure)
             .field("cookie_same_site", &self.cookie_same_site)
+            .field(
+                "upstream_token",
+                &self.upstream_token.as_ref().map(|_| "[REDACTED]"),
+            )
             .finish()
     }
 }
@@ -121,6 +129,10 @@ impl Config {
                 })?,
                 Err(_) => 5,
             },
+            upstream_token: read_var("GATEWAY_UPSTREAM_TOKEN")
+                .ok()
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty()),
         })
     }
 }
@@ -182,12 +194,42 @@ mod tests {
             cookie_secure: false,
             cookie_same_site: CookieSameSite::Lax,
             login_rate_limit_per_minute: 5,
+            upstream_token: Some("my_upstream_secret".into()),
         };
         let dbg = format!("{cfg:?}");
         assert!(!dbg.contains("my_admin_secret"));
         assert!(!dbg.contains("postgres://secret"));
         assert!(!dbg.contains("my_jwt_secret"));
+        assert!(!dbg.contains("my_upstream_secret"));
         assert!(dbg.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn from_env_empty_upstream_token_yields_none() {
+        // docker-compose passes `${API_TOKEN:-}` which becomes "" when unset.
+        // We must treat that as None so we don't inject `Authorization: Bearer `
+        // (literal trailing space) on every issuer hop.
+        std::env::set_var("GATEWAY_UPSTREAM_URL", "http://localhost:0");
+        std::env::set_var("GATEWAY_DATABASE_URL", "sqlite::memory:");
+        std::env::set_var("GATEWAY_UPSTREAM_TOKEN", "");
+
+        let cfg = Config::from_env().expect("config should load");
+        assert!(cfg.upstream_token.is_none());
+
+        std::env::set_var("GATEWAY_UPSTREAM_TOKEN", "   ");
+        let cfg = Config::from_env().expect("config should load");
+        assert!(
+            cfg.upstream_token.is_none(),
+            "whitespace-only token should be treated as unset"
+        );
+
+        std::env::set_var("GATEWAY_UPSTREAM_TOKEN", "  real-secret  ");
+        let cfg = Config::from_env().expect("config should load");
+        assert_eq!(cfg.upstream_token.as_deref(), Some("real-secret"));
+
+        std::env::remove_var("GATEWAY_UPSTREAM_TOKEN");
+        std::env::remove_var("GATEWAY_UPSTREAM_URL");
+        std::env::remove_var("GATEWAY_DATABASE_URL");
     }
 
     #[test]
