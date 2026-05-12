@@ -32,7 +32,7 @@ function formatCsvValue(key: keyof EventDto, value: string | number): string {
 export function buildCsvContent(events: EventDto[]): string {
   const header = CSV_COLUMNS.join(",");
   const rows = events.map((e) =>
-    CSV_COLUMNS.map((col) => escapeCsvField(formatCsvValue(col, e[col]))).join(","),
+    CSV_COLUMNS.map((col) => escapeCsvField(formatCsvValue(col, e[col] ?? ""))).join(","),
   );
   return [header, ...rows].join("\n");
 }
