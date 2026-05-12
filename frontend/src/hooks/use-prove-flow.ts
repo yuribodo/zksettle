@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useReducer, useRef, type Dispatch } from "react";
+import { TransactionExpiredBlockheightExceededError } from "@solana/web3.js";
 import type { Connection, PublicKey, Transaction } from "@solana/web3.js";
 
 import { useWallet, useConnection } from "@/hooks/use-wallet-connection";
@@ -241,6 +242,9 @@ async function runStepSubmit(
   // expiry and can yield false timeouts / false success (Solana docs).
   // Always pass the bh that was set on `tx.recentBlockhash` before signing.
   type Blockhash = { blockhash: string; lastValidBlockHeight: number };
+  const CONFIRM_FALLBACK_TIMEOUT_MS = 30_000;
+  const CONFIRM_FALLBACK_INITIAL_DELAY_MS = 1_000;
+  const CONFIRM_FALLBACK_MAX_DELAY_MS = 4_000;
   const confirmTx = async (sig: string, bh: Blockhash) => {
     try {
       await connection.confirmTransaction(
@@ -248,11 +252,16 @@ async function runStepSubmit(
         "confirmed",
       );
     } catch (err) {
+      // Narrow: only fall back on the strategy's edge-window expiry.
+      // Other errors (RPC/network/SendTransactionError) re-throw immediately
+      // so we don't burn 30s polling on a failure that won't resolve.
+      if (!(err instanceof TransactionExpiredBlockheightExceededError)) throw err;
       // BlockheightBasedTransactionConfirmationStrategy returns the moment
       // current height passes lastValidBlockHeight, even if the tx lands at
-      // the edge of the validity window. Fall back to direct signature-status
-      // polling so a late inclusion isn't reported as a false-negative expiry.
-      const deadline = Date.now() + 30_000;
+      // the edge of the validity window. Poll getSignatureStatus directly
+      // so a late inclusion isn't surfaced as a false-negative expiry.
+      const deadline = Date.now() + CONFIRM_FALLBACK_TIMEOUT_MS;
+      let delay = CONFIRM_FALLBACK_INITIAL_DELAY_MS;
       while (Date.now() < deadline) {
         const { value } = await connection.getSignatureStatus(sig, {
           searchTransactionHistory: true,
@@ -261,10 +270,13 @@ async function runStepSubmit(
           value?.confirmationStatus === "confirmed" ||
           value?.confirmationStatus === "finalized"
         ) {
-          if (value.err) throw new Error(`tx landed but failed: ${JSON.stringify(value.err)}`);
+          if (value.err) {
+            throw new Error("tx landed but failed on chain", { cause: value.err });
+          }
           return;
         }
-        await new Promise((r) => setTimeout(r, 1500));
+        await new Promise((r) => setTimeout(r, delay));
+        delay = Math.min(delay * 2, CONFIRM_FALLBACK_MAX_DELAY_MS);
       }
       throw err;
     }
