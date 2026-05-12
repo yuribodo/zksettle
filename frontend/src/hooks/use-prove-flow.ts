@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useReducer, useRef, type Dispatch } from "react";
+import { TransactionExpiredBlockheightExceededError } from "@solana/web3.js";
 import type { Connection, PublicKey, Transaction } from "@solana/web3.js";
 
 import { useWallet, useConnection } from "@/hooks/use-wallet-connection";
@@ -234,9 +235,45 @@ async function runStepSubmit(
     return new Uint8Array(clean.match(/.{1,2}/g)?.map((b) => Number.parseInt(b, 16)) ?? []);
   };
 
+  const CONFIRM_FALLBACK_TIMEOUT_MS = 30_000;
+  const CONFIRM_FALLBACK_INITIAL_DELAY_MS = 1_000;
+  const CONFIRM_FALLBACK_MAX_DELAY_MS = 4_000;
   const confirmTx = async (sig: string) => {
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
-    await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, "confirmed");
+    try {
+      await connection.confirmTransaction(
+        { signature: sig, blockhash, lastValidBlockHeight },
+        "confirmed",
+      );
+    } catch (err) {
+      // Narrow: only fall back on the strategy's edge-window expiry.
+      // Other errors (RPC/network/SendTransactionError) re-throw immediately
+      // so we don't burn 30s polling on a failure that won't resolve.
+      if (!(err instanceof TransactionExpiredBlockheightExceededError)) throw err;
+      // BlockheightBasedTransactionConfirmationStrategy returns the moment
+      // current height passes lastValidBlockHeight, even if the tx lands at
+      // the edge of the validity window. Poll getSignatureStatus directly
+      // so a late inclusion isn't surfaced as a false-negative expiry.
+      const deadline = Date.now() + CONFIRM_FALLBACK_TIMEOUT_MS;
+      let delay = CONFIRM_FALLBACK_INITIAL_DELAY_MS;
+      while (Date.now() < deadline) {
+        const { value } = await connection.getSignatureStatus(sig, {
+          searchTransactionHistory: true,
+        });
+        if (
+          value?.confirmationStatus === "confirmed" ||
+          value?.confirmationStatus === "finalized"
+        ) {
+          if (value.err) {
+            throw new Error("tx landed but failed on chain", { cause: value.err });
+          }
+          return;
+        }
+        await new Promise((r) => setTimeout(r, delay));
+        delay = Math.min(delay * 2, CONFIRM_FALLBACK_MAX_DELAY_MS);
+      }
+      throw err;
+    }
   };
 
   const sendSigned = async (signed: Transaction) => {
