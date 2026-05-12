@@ -6,6 +6,7 @@ import { Copy, Key, WarningTriangle } from "iconoir-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  clearActiveApiKey,
   fetchActiveKeyStatus,
   onActiveKeyChanged,
   setActiveApiKey,
@@ -23,6 +24,14 @@ export function RequireApiKey({ children }: Readonly<{ children: ReactNode }>) {
     const refresh = async () => {
       try {
         const next = await fetchActiveKeyStatus();
+        if (next.hasKey) {
+          const probe = await fetch("/api/proxy/usage", { credentials: "same-origin" });
+          if (probe.status === 401 || probe.status === 403) {
+            await clearActiveApiKey().catch(() => {});
+            if (!cancelled) setStatus({ hasKey: false });
+            return;
+          }
+        }
         if (!cancelled) setStatus(next);
       } catch {
         if (!cancelled) setStatus({ hasKey: false });
