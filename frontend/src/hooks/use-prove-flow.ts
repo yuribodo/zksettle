@@ -242,10 +242,32 @@ async function runStepSubmit(
   // Always pass the bh that was set on `tx.recentBlockhash` before signing.
   type Blockhash = { blockhash: string; lastValidBlockHeight: number };
   const confirmTx = async (sig: string, bh: Blockhash) => {
-    await connection.confirmTransaction(
-      { signature: sig, blockhash: bh.blockhash, lastValidBlockHeight: bh.lastValidBlockHeight },
-      "confirmed",
-    );
+    try {
+      await connection.confirmTransaction(
+        { signature: sig, blockhash: bh.blockhash, lastValidBlockHeight: bh.lastValidBlockHeight },
+        "confirmed",
+      );
+    } catch (err) {
+      // BlockheightBasedTransactionConfirmationStrategy returns the moment
+      // current height passes lastValidBlockHeight, even if the tx lands at
+      // the edge of the validity window. Fall back to direct signature-status
+      // polling so a late inclusion isn't reported as a false-negative expiry.
+      const deadline = Date.now() + 30_000;
+      while (Date.now() < deadline) {
+        const { value } = await connection.getSignatureStatus(sig, {
+          searchTransactionHistory: true,
+        });
+        if (
+          value?.confirmationStatus === "confirmed" ||
+          value?.confirmationStatus === "finalized"
+        ) {
+          if (value.err) throw new Error(`tx landed but failed: ${JSON.stringify(value.err)}`);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+      throw err;
+    }
   };
 
   const sendSigned = async (signed: Transaction, bh: Blockhash) => {
