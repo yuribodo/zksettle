@@ -183,6 +183,15 @@ async fn main() {
             .layer(Extension(ApiToken::new(token.clone())));
     }
 
+    tracing::info!(
+        public_routes = "/health,/roots,/credentials/{wallet},/proofs/membership/{wallet},/proofs/sanctions/{wallet},/proofs/jurisdiction/{wallet}",
+        protected_routes = "/credentials,/credentials/{wallet} (DELETE),/wallets,/roots/publish",
+        prove_groth16_enabled = prover.is_some(),
+        auth_enabled = cfg.api_token.is_some(),
+        allow_unauthenticated = allow_unauth,
+        "route table assembled"
+    );
+
     let app = public_routes
         .merge(protected_routes)
         .layer(Extension(SharedRpc(rpc)))
