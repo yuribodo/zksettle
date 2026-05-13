@@ -342,7 +342,19 @@ export async function uploadProofChunked(
   const headerSize = baselineInfo.data.length;
   const targetSize = headerSize + proofBytes.length;
   let currentSize = headerSize;
-  while (currentSize < targetSize) {
+  // Bound the loop on proof size + small buffer. `confirmTransaction`
+  // resolves without throwing if the resize ix reverts on-chain (err in
+  // value), so without a guard a reverting resize would spin forever on the
+  // pre-resize account size. Stall-detect by comparing currentSize to the
+  // size observed at the start of this iteration.
+  const maxResizeAttempts = Math.ceil(proofBytes.length / 10_240) + 2;
+  for (let attempt = 0; currentSize < targetSize; attempt++) {
+    if (attempt >= maxResizeAttempts) {
+      throw new Error(
+        `hook_payload resize stalled at ${currentSize}/${targetSize} bytes after ${attempt} attempts`,
+      );
+    }
+    const prevSize = currentSize;
     const resizeIx = await buildResizeHookPayloadIx(
       opts.wallet,
       opts.connection,
@@ -370,6 +382,11 @@ export async function uploadProofChunked(
       throw new Error("hook_payload PDA missing after resize");
     }
     currentSize = after.data.length;
+    if (currentSize === prevSize) {
+      throw new Error(
+        `hook_payload resize did not grow account (still ${currentSize} bytes); resize ix likely reverted`,
+      );
+    }
   }
 
   const writeIxs: TransactionInstruction[] = [];
