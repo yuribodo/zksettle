@@ -145,6 +145,7 @@ pub async fn test_state() -> Arc<AppState> {
         cookie_secure: false,
         cookie_same_site: CookieSameSite::Lax,
         login_rate_limit_per_minute: 5,
+        upstream_token: None,
     };
     Arc::new(AppState {
         config,
@@ -186,6 +187,7 @@ mod tests {
             cookie_secure: false,
             cookie_same_site: CookieSameSite::Lax,
             login_rate_limit_per_minute: 5,
+            upstream_token: None,
         };
         let state = Arc::new(AppState {
             config,

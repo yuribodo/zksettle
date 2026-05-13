@@ -92,15 +92,34 @@ pub async fn proxy_to_upstream(
         .unwrap_or_default();
     let upstream_base = pick_upstream(path, &state.config);
     let url = format!("{upstream_base}{path}{query}");
+    let is_issuer = upstream_base == state.config.upstream_url.as_str();
 
     let body_bytes = axum::body::to_bytes(req.into_body(), 1024 * 1024)
         .await
         .map_err(|e| GatewayError::Upstream(e.to_string()))?;
 
+    // Strip end-user `Authorization` (hop-by-hop) first, then inject the
+    // gateway↔issuer shared bearer. `HeaderMap::insert` overwrites — single
+    // canonical value, no duplicates. Indexer leg gets no bearer.
+    // Never log this token: it must not appear in error messages or tracing events.
+    let mut headers = filter_hop_by_hop(&req_headers);
+    if is_issuer {
+        if let Some(token) = state.config.upstream_token.as_deref() {
+            match format!("Bearer {token}").parse() {
+                Ok(v) => {
+                    headers.insert(axum::http::header::AUTHORIZATION, v);
+                }
+                Err(_) => warn!(
+                    "GATEWAY_UPSTREAM_TOKEN contains invalid header bytes; auth not injected"
+                ),
+            }
+        }
+    }
+
     let upstream_req = UpstreamRequest {
         method,
         url,
-        headers: filter_hop_by_hop(&req_headers),
+        headers,
         body: body_bytes,
     };
 
@@ -168,6 +187,7 @@ mod tests {
                 cookie_secure: false,
                 cookie_same_site: CookieSameSite::Lax,
                 login_rate_limit_per_minute: 5,
+                upstream_token: None,
             },
             db,
             rate_limiter: RateLimitStore::new(),
@@ -287,6 +307,156 @@ mod tests {
         assert_eq!(mock.sent_count(), 0);
     }
 
+    async fn state_with_cfg(
+        mock: Arc<MockHttpUpstream>,
+        upstream_token: Option<&str>,
+        indexer_url: Option<&str>,
+    ) -> Arc<AppState> {
+        let db = crate::test_db().await;
+        crate::test_cleanup(&db).await;
+        key_store::insert(&db, "zks_test", "alice".into(), Tier::Developer, 0, None)
+            .await
+            .unwrap();
+        Arc::new(AppState {
+            config: Config {
+                port: 4000,
+                upstream_url: "http://upstream.example".into(),
+                log_level: "error".into(),
+                admin_key: None,
+                allow_open_keys: true,
+                cors_allowed_origins: vec![],
+                indexer_url: indexer_url.map(String::from),
+                database_url: String::new(),
+                jwt_secret: None,
+                jwt_ttl_secs: 86400,
+                siws_domain: None,
+                cookie_secure: false,
+                cookie_same_site: CookieSameSite::Lax,
+                login_rate_limit_per_minute: 5,
+                upstream_token: upstream_token.map(String::from),
+            },
+            db,
+            rate_limiter: RateLimitStore::new(),
+            login_rate_limiter: Arc::new(crate::rate_limit::LoginRateLimiter::new()),
+            upstream: mock,
+            nonce_store: crate::nonce_store::NonceStore::new(),
+        })
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn upstream_token_injected_for_issuer_route() {
+        let mock = Arc::new(MockHttpUpstream::new());
+        mock.queue_ok();
+        let state = state_with_cfg(mock.clone(), Some("secret-xyz"), None).await;
+
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("/v1/credentials")
+            .body(Body::empty())
+            .unwrap();
+
+        proxy_to_upstream(
+            State(state.clone()),
+            AuthenticatedKey(record(Tier::Developer)),
+            req,
+        )
+        .await
+        .unwrap();
+
+        let sent = mock.last_sent().expect("mock recorded send");
+        assert_eq!(
+            sent.headers.get("authorization").unwrap(),
+            "Bearer secret-xyz"
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn upstream_token_not_injected_for_indexer_route() {
+        let mock = Arc::new(MockHttpUpstream::new());
+        mock.queue_ok();
+        let state = state_with_cfg(
+            mock.clone(),
+            Some("secret-xyz"),
+            Some("http://indexer.example"),
+        )
+        .await;
+
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/v1/events?limit=5")
+            .body(Body::empty())
+            .unwrap();
+
+        proxy_to_upstream(
+            State(state.clone()),
+            AuthenticatedKey(record(Tier::Developer)),
+            req,
+        )
+        .await
+        .unwrap();
+
+        let sent = mock.last_sent().expect("mock recorded send");
+        assert!(!sent.headers.contains_key("authorization"));
+        assert!(sent.url.starts_with("http://indexer.example"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn upstream_token_overrides_client_authorization() {
+        let mock = Arc::new(MockHttpUpstream::new());
+        mock.queue_ok();
+        let state = state_with_cfg(mock.clone(), Some("secret-xyz"), None).await;
+
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("/v1/wallets")
+            .header("authorization", "Bearer zks_user")
+            .body(Body::empty())
+            .unwrap();
+
+        proxy_to_upstream(
+            State(state.clone()),
+            AuthenticatedKey(record(Tier::Developer)),
+            req,
+        )
+        .await
+        .unwrap();
+
+        let sent = mock.last_sent().expect("mock recorded send");
+        assert_eq!(sent.headers.get_all("authorization").iter().count(), 1);
+        assert_eq!(
+            sent.headers.get("authorization").unwrap(),
+            "Bearer secret-xyz"
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn upstream_token_none_not_injected() {
+        let mock = Arc::new(MockHttpUpstream::new());
+        mock.queue_ok();
+        let state = state_with_cfg(mock.clone(), None, None).await;
+
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("/v1/credentials")
+            .body(Body::empty())
+            .unwrap();
+
+        proxy_to_upstream(
+            State(state.clone()),
+            AuthenticatedKey(record(Tier::Developer)),
+            req,
+        )
+        .await
+        .unwrap();
+
+        let sent = mock.last_sent().expect("mock recorded send");
+        assert!(!sent.headers.contains_key("authorization"));
+    }
+
     #[test]
     fn hop_by_hop_matches_all_entries() {
         for &h in HOP_BY_HOP {
@@ -341,6 +511,7 @@ mod tests {
             cookie_secure: false,
             cookie_same_site: CookieSameSite::Lax,
             login_rate_limit_per_minute: 5,
+            upstream_token: None,
         }
     }
 

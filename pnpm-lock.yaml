@@ -13,9 +13,6 @@ importers:
 
   frontend:
     dependencies:
-      '@aztec/bb.js':
-        specifier: 3.0.0-nightly.20260102
-        version: 3.0.0-nightly.20260102
       '@base-ui/react':
         specifier: ^1.4.1
         version: 1.4.1(@types/react@19.2.14)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
@@ -52,6 +49,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.100.5
         version: 5.100.9(react@19.0.0)
+      '@zkpassport/poseidon2':
+        specifier: ^0.6.2
+        version: 0.6.2
       '@zksettle/sdk':
         specifier: workspace:*
         version: link:../sdk
@@ -1988,6 +1988,9 @@ packages:
   '@wallet-standard/wallet@1.1.0':
     resolution: {integrity: sha512-Gt8TnSlDZpAl+RWOOAB/kuvC7RpcdWAlFbHNoi4gsXsfaWa1QCT6LBcfIYTPdOZC9OVZUDwqGuGAcqZejDmHjg==}
     engines: {node: '>=16'}
+
+  '@zkpassport/poseidon2@0.6.2':
+    resolution: {integrity: sha512-6sFHX9kAcrmDmBEEndvjZ8DA9FomunirQ5oCV6oD7bqr/lP0n0OBSRn86SZgQBXwRR+vq7sk16y31OgRBIOJ5Q==}
 
   abort-controller@3.0.0:
     resolution: {integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==}
@@ -7146,6 +7149,8 @@ snapshots:
   '@wallet-standard/wallet@1.1.0':
     dependencies:
       '@wallet-standard/base': 1.1.0
+
+  '@zkpassport/poseidon2@0.6.2': {}
 
   abort-controller@3.0.0:
     dependencies:

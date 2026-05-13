@@ -39,7 +39,12 @@ export interface ProofInputs {
 }
 
 export interface ProofResult {
-  /** UltraHonk proof bytes. */
+  /**
+   * Groth16 bundle: `proof || public-witness` bytes (~752B). This is exactly
+   * what `uploadProofChunked` stages into `hook_payload.proof_and_witness`;
+   * the on-chain `split_proof_and_witness` peels the trailing 364 witness
+   * bytes off before deserialising the gnark proof.
+   */
   proof: Uint8Array;
   /** Public inputs in the order declared by the circuit (length 11). */
   publicInputs: string[];

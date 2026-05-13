@@ -9,6 +9,7 @@ mod rotation;
 mod state;
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::middleware;
 use axum::routing::{get, post};
@@ -16,11 +17,12 @@ use axum::{Extension, Router};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signer::Signer;
-use tokio::sync::{watch, RwLock};
+use tokio::sync::{watch, RwLock, Semaphore};
 use zksettle_rpc::{RealSolanaRpc, SolanaRpc};
 
 use auth::{AllowUnauthenticated, ApiToken};
-use config::Config;
+use config::{Config, SunspotConfig};
+use handlers::prove_groth16::{sha256_file_hex, ProverPaths, ProverPermits};
 use state::{IssuerState, PublishLock};
 
 /// Shared Solana RPC handle for handlers + rotation task.
@@ -164,6 +166,17 @@ async fn main() {
         .route("/wallets", post(handlers::add_wallet::handler))
         .route("/roots/publish", post(handlers::publish::handler));
 
+    let prover = build_prover_extensions(cfg.sunspot.as_ref());
+    if let Some((paths, permits)) = prover.clone() {
+        protected_routes = protected_routes
+            .route(
+                "/prove/groth16",
+                post(handlers::prove_groth16::handler),
+            )
+            .layer(Extension(paths))
+            .layer(Extension(permits));
+    }
+
     if let Some(ref token) = cfg.api_token {
         protected_routes = protected_routes
             .layer(middleware::from_fn(auth::require_bearer))
@@ -193,4 +206,73 @@ async fn shutdown_signal(shutdown_tx: watch::Sender<()>) {
     tokio::signal::ctrl_c().await.ok();
     tracing::info!("shutdown signal received");
     let _ = shutdown_tx.send(());
+}
+
+/// Validate Sunspot artefact paths, enforce ACIR hash pinning, and build the
+/// shared `ProverPaths` + `ProverPermits` extensions. Returns `None` when no
+/// Sunspot env vars are configured (route stays unregistered, rest of service
+/// runs). Panics on ACIR hash drift — circuit recompiles must update the
+/// pinned constant explicitly.
+fn build_prover_extensions(
+    sunspot: Option<&SunspotConfig>,
+) -> Option<(ProverPaths, ProverPermits)> {
+    let sc = sunspot?;
+
+    for (label, path) in [
+        ("bin", &sc.bin),
+        ("acir", &sc.acir),
+        ("ccs", &sc.ccs),
+        ("pk", &sc.pk),
+    ] {
+        if !path.exists() {
+            tracing::warn!(
+                kind = label,
+                path = %path.display(),
+                "Sunspot artefact missing; /prove/groth16 disabled"
+            );
+            return None;
+        }
+    }
+
+    let actual_hash = match sha256_file_hex(&sc.acir) {
+        Ok(h) => h,
+        Err(e) => {
+            tracing::error!(
+                path = %sc.acir.display(),
+                error = %e,
+                "could not hash ACIR; /prove/groth16 disabled"
+            );
+            return None;
+        }
+    };
+    if actual_hash != sc.acir_sha256 {
+        panic!(
+            "ACIR hash mismatch — refusing to start.\n  expected: {}\n  got:      {}\n  path:     {}\n\
+            If the circuit was recompiled, regenerate artefacts and update DEFAULT_ACIR_SHA256.",
+            sc.acir_sha256,
+            actual_hash,
+            sc.acir.display(),
+        );
+    }
+
+    tracing::info!(
+        bin = %sc.bin.display(),
+        acir = %sc.acir.display(),
+        acir_sha256 = %actual_hash,
+        ccs = %sc.ccs.display(),
+        pk = %sc.pk.display(),
+        max_concurrency = sc.max_concurrency,
+        timeout_secs = sc.timeout_secs,
+        "Sunspot prover wired; /prove/groth16 active",
+    );
+
+    let paths = ProverPaths {
+        bin: sc.bin.clone(),
+        acir: sc.acir.clone(),
+        ccs: sc.ccs.clone(),
+        pk: sc.pk.clone(),
+        timeout: Duration::from_secs(sc.timeout_secs),
+    };
+    let permits = ProverPermits(Arc::new(Semaphore::new(sc.max_concurrency)));
+    Some((paths, permits))
 }

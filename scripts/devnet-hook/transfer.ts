@@ -218,6 +218,31 @@ async function main() {
       .rpc();
     console.log(`Payload init: tx ${initSig}`);
 
+    // 1a-bis. resize_hook_payload — grow PDA + allocate proof_and_witness vec.
+    // Required before write_hook_proof or the vec stays length 0.
+    // Solana caps realloc at 10 KiB / ix, so loop until on-chain data.length
+    // has grown by proofBytes.length bytes (avoids hardcoding BASE_SPACE).
+    const baselineInfo = await connection.getAccountInfo(hookPayloadPda);
+    if (!baselineInfo) throw new Error("hook_payload PDA missing after init");
+    const headerSize = baselineInfo.data.length;
+    const targetSize = headerSize + proofBytes.length;
+    let currentSize = headerSize;
+    while (currentSize < targetSize) {
+      const resizeSig = await program.methods
+        .resizeHookPayload()
+        .accounts({
+          authority: wallet.publicKey,
+          issuer: issuerPda,
+          hookPayload: hookPayloadPda,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
+      console.log(`Payload resized: tx ${resizeSig}`);
+      const after = await connection.getAccountInfo(hookPayloadPda);
+      if (!after) throw new Error("hook_payload PDA missing after resize");
+      currentSize = after.data.length;
+    }
+
     // 1b. write_hook_proof — upload proof in one chunk (< 1KB fits single tx)
     const writeSig = await program.methods
       .writeHookProof(0, proofBytes)

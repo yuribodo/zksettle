@@ -65,7 +65,41 @@ pub struct WalletAuth {
     pub wallet_bytes: [u8; 32],
 }
 
-const REPLAY_WINDOW_SECS: u64 = 300;
+pub(crate) const REPLAY_WINDOW_SECS: u64 = 300;
+
+/// Parse the `X-Wallet-Timestamp` header and reject anything outside the
+/// `REPLAY_WINDOW_SECS` ± `now()` envelope. Returns the parsed timestamp so
+/// callers can fold it into the signed-over message verbatim.
+pub(crate) fn parse_replay_timestamp(ts_header: &str) -> Result<u64, &'static str> {
+    let timestamp: u64 = ts_header.parse().map_err(|_| "invalid timestamp")?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    if now.abs_diff(timestamp) > REPLAY_WINDOW_SECS {
+        return Err("timestamp outside replay window");
+    }
+    Ok(timestamp)
+}
+
+/// Ed25519-verify `sig_header` against `message` under the given 32-byte
+/// wallet pubkey. Common verification core for `WalletAuth` (path-scoped
+/// GETs) and `/prove/groth16` (header-scoped POST with body-hash binding) so
+/// the two callers cannot drift on signature semantics.
+pub(crate) fn verify_wallet_signature(
+    wallet_bytes: &[u8; 32],
+    sig_header: &str,
+    message: &[u8],
+) -> Result<(), &'static str> {
+    let sig = solana_sdk::signature::Signature::from_str(sig_header)
+        .map_err(|_| "malformed signature")?;
+    let pubkey = solana_sdk::pubkey::Pubkey::try_from(&wallet_bytes[..])
+        .map_err(|_| "invalid pubkey")?;
+    if !sig.verify(pubkey.as_ref(), message) {
+        return Err("signature verification failed");
+    }
+    Ok(())
+}
 
 impl<S: Send + Sync> FromRequestParts<S> for WalletAuth {
     type Rejection = ServiceError;
@@ -117,33 +151,12 @@ impl<S: Send + Sync> FromRequestParts<S> for WalletAuth {
                 ServiceError::Unauthorized("missing X-Wallet-Timestamp header".into())
             })?;
 
-        let timestamp: u64 = ts_header
-            .parse()
-            .map_err(|_| ServiceError::Unauthorized("invalid timestamp".into()))?;
-
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        if now.abs_diff(timestamp) > REPLAY_WINDOW_SECS {
-            return Err(ServiceError::Unauthorized("timestamp outside replay window".into()));
-        }
+        let timestamp = parse_replay_timestamp(ts_header)
+            .map_err(|e| ServiceError::Unauthorized(e.into()))?;
 
         let message = format!("zksettle:{wallet_hex}:{timestamp}");
-
-        let sig = solana_sdk::signature::Signature::from_str(sig_header).map_err(|_| {
-            ServiceError::Unauthorized("malformed signature".into())
-        })?;
-
-        let pubkey =
-            solana_sdk::pubkey::Pubkey::try_from(wallet_bytes.as_slice()).map_err(|_| {
-                ServiceError::Unauthorized("invalid pubkey".into())
-            })?;
-
-        if !sig.verify(pubkey.as_ref(), message.as_bytes()) {
-            return Err(ServiceError::Unauthorized("signature verification failed".into()));
-        }
+        verify_wallet_signature(&wallet_bytes, sig_header, message.as_bytes())
+            .map_err(|e| ServiceError::Unauthorized(e.into()))?;
 
         Ok(WalletAuth {
             wallet_hex,

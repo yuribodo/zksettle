@@ -3365,6 +3365,7 @@ dependencies = [
  "solana-rpc-client",
  "solana-sdk",
  "subtle",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tower",

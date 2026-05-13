@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Barretenberg, UltraHonkBackend } from "@aztec/bb.js";
 import {
   Noir,
   type CompiledCircuit,
   type InputMap,
 } from "@noir-lang/noir_js";
 
+import { proveGroth16 } from "@/lib/api/endpoints";
 import type { ProofInputs, ProofResult } from "@/types/proof";
 
 const ARTIFACT_URL = "/circuits/zksettle_slice.json";
@@ -47,14 +47,10 @@ function toNoirInputs(inputs: ProofInputs): InputMap {
 
 interface ProverHandles {
   noir: Noir;
-  backend: UltraHonkBackend;
-  api: Barretenberg;
 }
 
 interface UseProofGenerationResult {
   generate: (inputs: ProofInputs) => Promise<ProofResult>;
-  /** Get the Barretenberg API instance (initializes prover if needed). */
-  ensureApi: () => Promise<Barretenberg>;
   proof: ProofResult | null;
   isGenerating: boolean;
   error: Error | null;
@@ -63,12 +59,12 @@ interface UseProofGenerationResult {
 }
 
 /**
- * Generate compliance proofs in the browser. The heavy lifting (witness
- * solving, UltraHonk proving, CRS download) happens inside `@aztec/bb.js`,
- * which spawns its own internal worker pool — this hook intentionally does
- * not wrap a separate Web Worker. That avoids a Turbopack `import.meta.url`
- * issue with the Noir wasm-bindgen init code, and matches the canonical
- * pattern in `noir-lang/noir-examples`.
+ * Generate compliance proofs. Witness solving runs in the browser via
+ * `@noir-lang/noir_js` (the ACIR is fetched from `/circuits/...` and reused
+ * across regenerations); proving itself is delegated to the server-side
+ * Sunspot/Groth16 endpoint so the bundle format matches the on-chain
+ * `gnark_verifier_solana`. Heavy `@aztec/bb.js` (Barretenberg + UltraHonk
+ * backend) was removed entirely as part of the same migration.
  */
 export function useProofGeneration(): UseProofGenerationResult {
   const proverRef = useRef<ProverHandles | null>(null);
@@ -80,9 +76,6 @@ export function useProofGeneration(): UseProofGenerationResult {
 
   useEffect(() => {
     return () => {
-      proverRef.current?.api.destroy().catch(() => {
-        // best-effort cleanup; swallow during unmount
-      });
       proverRef.current = null;
       proverInitRef.current = null;
     };
@@ -92,10 +85,9 @@ export function useProofGeneration(): UseProofGenerationResult {
     if (proverRef.current) {
       return Promise.resolve(proverRef.current);
     }
-    // Coalesce concurrent callers (e.g. a double-click during the ~20s cold
-    // start) onto the same in-flight init promise. Without this, both calls
-    // would each spawn a Barretenberg worker pool and the loser's `api`
-    // would leak — `destroy()` is never called on the orphaned instance.
+    // Coalesce concurrent callers (e.g. a double-click) onto the same
+    // in-flight init promise so we fetch the ACIR once and reuse the Noir
+    // executor across regenerations.
     proverInitRef.current ??= (async () => {
         try {
           const res = await fetch(ARTIFACT_URL);
@@ -105,14 +97,8 @@ export function useProofGeneration(): UseProofGenerationResult {
             );
           }
           const circuit = (await res.json()) as CompiledCircuit;
-          const threads =
-            typeof navigator !== "undefined" && navigator.hardwareConcurrency
-              ? Math.min(navigator.hardwareConcurrency, 8)
-              : 4;
-          const api = await Barretenberg.new({ threads });
           const noir = new Noir(circuit);
-          const backend = new UltraHonkBackend(circuit.bytecode, api);
-          const handles: ProverHandles = { noir, backend, api };
+          const handles: ProverHandles = { noir };
           proverRef.current = handles;
           return handles;
         } catch (err) {
@@ -124,11 +110,6 @@ export function useProofGeneration(): UseProofGenerationResult {
     return proverInitRef.current;
   }, []);
 
-  const ensureApi = useCallback(async (): Promise<Barretenberg> => {
-    const { api } = await ensureProver();
-    return api;
-  }, [ensureProver]);
-
   const generate = useCallback(
     async (inputs: ProofInputs): Promise<ProofResult> => {
       if (globalThis.window === undefined) {
@@ -139,9 +120,12 @@ export function useProofGeneration(): UseProofGenerationResult {
       setProof(null);
       const start = performance.now();
       try {
-        const { noir, backend } = await ensureProver();
+        const { noir } = await ensureProver();
+        // Browser still solves the witness via @noir-lang/noir_js — only
+        // proving moves to the server. The `witness` Uint8Array is the same
+        // gzipped Noir witness format that `sunspot prove` consumes.
         const { witness } = await noir.execute(toNoirInputs(inputs));
-        const { proof: proofBytes, publicInputs } = await backend.generateProof(witness);
+        const { proof: proofBytes, publicInputs } = await proveGroth16(witness);
         const result: ProofResult = {
           proof: proofBytes,
           publicInputs,
@@ -162,7 +146,6 @@ export function useProofGeneration(): UseProofGenerationResult {
 
   return {
     generate,
-    ensureApi,
     proof,
     isGenerating,
     error,

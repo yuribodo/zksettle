@@ -4,6 +4,7 @@ export {
   buildResizeHookPayloadIx,
   buildWriteChunkIx,
   buildFinalizeHookPayloadIx,
+  buildSettleHookIx,
   uploadProofChunked,
   checkIssuerExists,
   buildRegisterIssuerIx,

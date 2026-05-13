@@ -20,7 +20,6 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
-    "@aztec/bb.js": "3.0.0-nightly.20260102",
     "@base-ui/react": "^1.4.1",
     "@coral-xyz/anchor": "^0.31.1",
     "@gsap/react": "^2.1.2",
@@ -33,6 +32,7 @@
     "@solana/wallet-adapter-solflare": "^0.6.33",
     "@solana/web3.js": "^1.98.4",
     "@tanstack/react-query": "^5.100.5",
+    "@zkpassport/poseidon2": "^0.6.2",
     "@zksettle/sdk": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

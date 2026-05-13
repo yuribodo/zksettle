@@ -31,6 +31,7 @@ services:
       GATEWAY_ALLOW_OPEN_KEYS: "true"
       GATEWAY_JWT_SECRET: "${GATEWAY_JWT_SECRET:?set GATEWAY_JWT_SECRET}"
       GATEWAY_SIWS_DOMAIN: "${GATEWAY_SIWS_DOMAIN:-localhost:3000}"
+      GATEWAY_UPSTREAM_TOKEN: "${API_TOKEN:-}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,6 +48,7 @@ services:
       PROGRAM_ID: "${PROGRAM_ID:?set PROGRAM_ID}"
       KEYPAIR_PATH: "/keys/id.json"
       RPC_URL: "${RPC_URL:-http://127.0.0.1:8899}"
+      API_TOKEN: "${API_TOKEN:-}"
     volumes:
       - ${KEYPAIR_FILE:-~/.config/solana/id.json}:/keys/id.json:ro
 

@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch, apiFetchBinary } from "./client";
 import {
   ApiKeyResponseSchema,
   CredentialSchema,
@@ -73,6 +73,79 @@ export const revokeCredential = (wallet: string) =>
 
 export const publishRoots = () =>
   apiFetch<{ slot: number; registered: boolean }>("/v1/roots/publish", { method: "POST" });
+
+const GROTH16_WITNESS_HEADER_LEN = 12;
+const GROTH16_FIELD_LEN = 32;
+const GROTH16_NUM_PUBLIC_INPUTS = 11;
+const GROTH16_PUBLIC_WITNESS_LEN =
+  GROTH16_WITNESS_HEADER_LEN + GROTH16_NUM_PUBLIC_INPUTS * GROTH16_FIELD_LEN;
+// Real proofs are 388 B; cap well above that to prevent a malformed
+// `x-proof-len` header from triggering a runaway Uint8Array allocation
+// before the length-mismatch check fires.
+const GROTH16_PROOF_MAX_LEN = 4096;
+
+export interface Groth16ProofBundle {
+  /**
+   * Concatenated `proof || public-witness` bytes — what the on-chain verifier
+   * deserialises from `hook_payload.proof_and_witness`. `split_proof_and_witness`
+   * peels the trailing `12 + 11*32 = 364` witness bytes back off, so the bundle
+   * MUST contain both halves; uploading only the proof slice yields a
+   * `ProofConversionError` on-chain.
+   */
+  proof: Uint8Array;
+  /** 11 BE 32-byte field elements parsed from the public-witness, as `0x`-hex strings. */
+  publicInputs: string[];
+}
+
+/**
+ * Server-side Sunspot Groth16 prover. Posts the gzipped Noir witness emitted
+ * by `noir.execute(...)` and returns the bundle the on-chain `gnark_verifier_solana`
+ * verifier consumes. `publicInputs` mirrors the legacy `bb.js` shape so callers
+ * keep `ProofResult` unchanged.
+ */
+export const proveGroth16 = async (witnessGz: Uint8Array): Promise<Groth16ProofBundle> => {
+  const { body, headers } = await apiFetchBinary("/v1/prove/groth16", {
+    method: "POST",
+    body: witnessGz,
+  });
+
+  const proofLen = Number.parseInt(headers.get("x-proof-len") ?? "", 10);
+  const witnessLen = Number.parseInt(headers.get("x-witness-len") ?? "", 10);
+  if (!Number.isFinite(proofLen) || !Number.isFinite(witnessLen)) {
+    throw new Error(
+      `proveGroth16: missing/invalid length headers (proof=${proofLen}, witness=${witnessLen})`,
+    );
+  }
+  if (proofLen < 0 || proofLen > GROTH16_PROOF_MAX_LEN) {
+    throw new Error(
+      `proveGroth16: proof length ${proofLen} outside sane bounds (0..${GROTH16_PROOF_MAX_LEN})`,
+    );
+  }
+  if (proofLen + witnessLen !== body.length) {
+    throw new Error(
+      `proveGroth16: length mismatch (proof=${proofLen} + witness=${witnessLen} != body=${body.length})`,
+    );
+  }
+  if (witnessLen !== GROTH16_PUBLIC_WITNESS_LEN) {
+    throw new Error(
+      `proveGroth16: unexpected public-witness length ${witnessLen} (expected ${GROTH16_PUBLIC_WITNESS_LEN})`,
+    );
+  }
+
+  const pwBody = body.subarray(proofLen + GROTH16_WITNESS_HEADER_LEN, proofLen + witnessLen);
+  const publicInputs: string[] = [];
+  for (let i = 0; i < GROTH16_NUM_PUBLIC_INPUTS; i++) {
+    const off = i * GROTH16_FIELD_LEN;
+    const field = pwBody.subarray(off, off + GROTH16_FIELD_LEN);
+    let hex = "0x";
+    for (const b of field) hex += b.toString(16).padStart(2, "0");
+    publicInputs.push(hex);
+  }
+  // Copy the full `proof || public-witness` bundle so callers don't accidentally
+  // retain the backing fetch buffer. This is exactly what `uploadProofChunked`
+  // stages into `hook_payload.proof_and_witness`.
+  return { proof: new Uint8Array(body), publicInputs };
+};
 
 export const createApiKey = async (owner: string): Promise<ApiKeyResponse> =>
   ApiKeyResponseSchema.parse(

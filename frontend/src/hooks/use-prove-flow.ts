@@ -138,7 +138,6 @@ async function runStepProofGeneration(
   publicKey: PublicKey,
   credential: { issued_at: number; wallet: number[]; leaf_index: number; jurisdiction: string; revoked: boolean },
   paths: Awaited<ReturnType<typeof runStepMerklePaths>>,
-  ensureApi: () => Promise<import("@aztec/bb.js").Barretenberg>,
   generate: (inputs: ProofInputs) => Promise<ProofResult>,
   transferParams: TransferParams,
 ) {
@@ -149,17 +148,23 @@ async function runStepProofGeneration(
   const recipientPubkey = new SolPublicKey(transferParams.recipient);
   const mintBytes = mintPubkey.toBytes();
   const recipientBytes = recipientPubkey.toBytes();
-  const mintLo = toHex(mintBytes.slice(0, 16));
-  const mintHi = toHex(mintBytes.slice(16, 32));
-  const recipientLo = toHex(recipientBytes.slice(0, 16));
-  const recipientHi = toHex(recipientBytes.slice(16, 32));
+  // Limb split must match on-chain `pubkey_to_limbs`
+  // (programs/zksettle/src/instructions/verify_proof/helpers.rs:32): the LOW
+  // limb carries the *trailing* 16 bytes of the pubkey, the HIGH limb the
+  // *leading* 16. Swapping these silently passes the circuit (which just
+  // hashes whatever it gets) but trips `check_bindings`' `MintMismatch` /
+  // `RecipientMismatch` on `settle_hook`, since the on-chain re-derive uses
+  // the canonical order against the witness positions.
+  const mintLo = toHex(mintBytes.slice(16, 32));
+  const mintHi = toHex(mintBytes.slice(0, 16));
+  const recipientLo = toHex(recipientBytes.slice(16, 32));
+  const recipientHi = toHex(recipientBytes.slice(0, 16));
   const epoch = String(Math.floor(Date.now() / 1000 / 86400));
   const amount = String(transferParams.amount);
-  const timestamp = String(Math.floor(Date.now() / 1000));
+  const timestamp = String(Number(epoch) * 86_400);
   const credentialExpiry = String(credential.issued_at + CREDENTIAL_VALIDITY_SECS);
 
-  const api = await ensureApi();
-  const nullifier = await computeNullifier(api, {
+  const nullifier = await computeNullifier({
     privateKey: zkPrivateKey,
     mintLo,
     mintHi,
@@ -217,7 +222,7 @@ async function runStepSubmit(
   dispatch({ type: "STEP_RUNNING", step: 4 });
 
   const start = performance.now();
-  const [sdk, { BN }, { PublicKey: SolPublicKey, Transaction }] = await Promise.all([
+  const [sdk, { BN }, { PublicKey: SolPublicKey, Transaction, ComputeBudgetProgram }] = await Promise.all([
     import("@zksettle/sdk"),
     import("@coral-xyz/anchor"),
     import("@solana/web3.js"),
@@ -235,15 +240,30 @@ async function runStepSubmit(
     return new Uint8Array(clean.match(/.{1,2}/g)?.map((b) => Number.parseInt(b, 16)) ?? []);
   };
 
+  // `confirmTransaction({signature, blockhash, lastValidBlockHeight})` ties
+  // the wait-loop expiry to the SAME blockhash the tx was signed with.
+  // Fetching a fresh blockhash here decouples the timeout from actual tx
+  // expiry and can yield false timeouts / false success (Solana docs).
+  // Always pass the bh that was set on `tx.recentBlockhash` before signing.
+  type Blockhash = { blockhash: string; lastValidBlockHeight: number };
+  type ConfirmCommitment = "processed" | "confirmed" | "finalized";
   const CONFIRM_FALLBACK_TIMEOUT_MS = 30_000;
   const CONFIRM_FALLBACK_INITIAL_DELAY_MS = 1_000;
   const CONFIRM_FALLBACK_MAX_DELAY_MS = 4_000;
-  const confirmTx = async (sig: string) => {
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+  // Intermediate batches (init/resize/writes/finalize) use "processed" to skip
+  // the ~5-15s confirmed-commitment wait. The next batch fetches a fresh
+  // "confirmed" blockhash before signing, so account-state visibility is still
+  // covered for the leader. Settle stays at "confirmed" — it's the final tx
+  // and the indexer keys off ProofSettled landing in a confirmed block.
+  const confirmTx = async (
+    sig: string,
+    bh: Blockhash,
+    commitment: ConfirmCommitment = "confirmed",
+  ) => {
     try {
       await connection.confirmTransaction(
-        { signature: sig, blockhash, lastValidBlockHeight },
-        "confirmed",
+        { signature: sig, blockhash: bh.blockhash, lastValidBlockHeight: bh.lastValidBlockHeight },
+        commitment,
       );
     } catch (err) {
       // Narrow: only fall back on the strategy's edge-window expiry.
@@ -260,11 +280,15 @@ async function runStepSubmit(
         const { value } = await connection.getSignatureStatus(sig, {
           searchTransactionHistory: true,
         });
-        if (
-          value?.confirmationStatus === "confirmed" ||
-          value?.confirmationStatus === "finalized"
-        ) {
-          if (value.err) {
+        const reached =
+          commitment === "processed"
+            ? value?.confirmationStatus === "processed" ||
+              value?.confirmationStatus === "confirmed" ||
+              value?.confirmationStatus === "finalized"
+            : value?.confirmationStatus === "confirmed" ||
+              value?.confirmationStatus === "finalized";
+        if (reached) {
+          if (value?.err) {
             throw new Error("tx landed but failed on chain", { cause: value.err });
           }
           return;
@@ -276,12 +300,18 @@ async function runStepSubmit(
     }
   };
 
-  const sendSigned = async (signed: Transaction) => {
+  type SendOpts = { skipPreflight?: boolean; maxRetries?: number };
+  const sendSigned = async (
+    signed: Transaction,
+    bh: Blockhash,
+    commitment: ConfirmCommitment = "confirmed",
+    sendOpts: SendOpts = {},
+  ) => {
     const sig = await connection.sendRawTransaction(signed.serialize(), {
-      skipPreflight: true,
-      maxRetries: 3,
+      skipPreflight: sendOpts.skipPreflight ?? true,
+      maxRetries: sendOpts.maxRetries ?? 3,
     });
-    await confirmTx(sig);
+    await confirmTx(sig, bh, commitment);
     return sig;
   };
 
@@ -297,9 +327,10 @@ async function runStepSubmit(
     }, connection);
     const tx = new Transaction().add(ix);
     tx.feePayer = publicKey;
-    tx.recentBlockhash = (await connection.getLatestBlockhash("confirmed")).blockhash;
+    const bhRegister = await connection.getLatestBlockhash("confirmed");
+    tx.recentBlockhash = bhRegister.blockhash;
     const [signed] = await signAllTransactions([tx]);
-    await sendSigned(signed!);
+    await sendSigned(signed!, bhRegister, "processed");
   }
 
   const stalePayload = await checkHookPayloadExists(publicKey, connection);
@@ -307,9 +338,10 @@ async function runStepSubmit(
     const ix = await buildCloseHookPayloadIx(publicKey, connection);
     const tx = new Transaction().add(ix);
     tx.feePayer = publicKey;
-    tx.recentBlockhash = (await connection.getLatestBlockhash("confirmed")).blockhash;
+    const bhClose = await connection.getLatestBlockhash("confirmed");
+    tx.recentBlockhash = bhClose.blockhash;
     const [signed] = await signAllTransactions([tx]);
-    await sendSigned(signed!);
+    await sendSigned(signed!, bhClose, "processed");
   }
 
   // ── Build ALL proof upload transactions upfront ──
@@ -322,16 +354,14 @@ async function runStepSubmit(
 
   const initIx = await buildInitHookPayloadIx(publicKey, proofBytes.length, connection);
 
-  // Solana caps realloc at 10 KiB per instruction. Compute how many
-  // resize instructions are needed to grow from header-only to full size.
-  const BASE_SPACE = 293;
-  const headerSize = 8 + BASE_SPACE;
-  const targetSize = headerSize + proofBytes.length;
+  // Solana caps realloc at 10 KiB per instruction. Pre-count resize ixs so
+  // they batch into one Phantom popup with init. Upper-bound the count from
+  // proof size alone so we never under-allocate (extra resizes are idempotent
+  // no-ops on-chain). Avoids hardcoding HookPayload::BASE_SPACE on the client.
+  const resizeCount = Math.ceil(proofBytes.length / 10_240);
   const resizeIxs = [];
-  let currentSize = headerSize;
-  while (currentSize < targetSize) {
+  for (let i = 0; i < resizeCount; i++) {
     resizeIxs.push(await buildResizeHookPayloadIx(publicKey, connection));
-    currentSize = Math.min(targetSize, currentSize + 10_240);
   }
 
   const writeIxs = [];
@@ -365,7 +395,7 @@ async function runStepSubmit(
   }
   const signedInitResize = await signAllTransactions(initResizeTxs);
   for (const tx of signedInitResize) {
-    await sendSigned(tx!);
+    await sendSigned(tx, bh1, "processed");
   }
 
   // ── Batch 2: writes only (fresh blockhash + Phantom popup) ──
@@ -395,15 +425,24 @@ async function runStepSubmit(
 
   // Confirming the last write guarantees all prior writes landed (each
   // write's offset must match the cumulative high_water_mark).
-  if (lastWriteSig) await confirmTx(lastWriteSig);
+  if (lastWriteSig) await confirmTx(lastWriteSig, bh2, "processed");
 
   // ── Batch 3: finalize (own fresh blockhash + Phantom popup) ──
-  const finalizeTx = new Transaction().add(finalizeIx);
+  // Finalize is the final on-chain tx in this flow (settle_hook integration
+  // pending Light CPI wiring). Attach a priority fee + bump maxRetries so the
+  // tx survives Alchemy devnet congestion: w/o a fee, leaders skip the tx and
+  // the blockhash window (60-90s) expires before inclusion, surfacing as
+  // `TransactionExpiredBlockheightExceededError`. 50k µLamports/CU × default
+  // 200K CU ≈ 10,000 lamports ≈ 0.00001 SOL — negligible vs rent already paid.
+  const finalizeCuPriceIx = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50_000 });
+  const finalizeTx = new Transaction().add(finalizeCuPriceIx).add(finalizeIx);
   const bh3 = await connection.getLatestBlockhash("confirmed");
   finalizeTx.feePayer = publicKey;
   finalizeTx.recentBlockhash = bh3.blockhash;
   const [signedFinalize] = await signAllTransactions([finalizeTx]);
-  const finalSig = await sendSigned(signedFinalize!);
+  const finalSig = await sendSigned(signedFinalize!, bh3, "confirmed", {
+    maxRetries: 10,
+  });
 
   dispatch({ type: "SET_TX", signature: finalSig });
   dispatch({
@@ -415,17 +454,14 @@ async function runStepSubmit(
   return finalSig;
 }
 
-async function runStepConfirm(
-  dispatch: Dispatch<FlowAction>,
-  connection: Connection,
-  txSignature: string | undefined,
-): Promise<void> {
+async function runStepConfirm(dispatch: Dispatch<FlowAction>): Promise<void> {
+  // Step 4 (`runStepSubmit`) already awaited `confirmTransaction` for the
+  // finalize tx using its original signing blockhash. Re-confirming here with
+  // a freshly-fetched blockhash would (a) decouple the wait-loop expiry from
+  // the actual tx (Solana docs explicitly warn against this) and (b) be
+  // redundant. Keep this step purely for the UI step-machine.
   dispatch({ type: "STEP_RUNNING", step: 5 });
   const start = performance.now();
-  if (txSignature) {
-    const latestBlockhash = await connection.getLatestBlockhash("confirmed");
-    await connection.confirmTransaction({ signature: txSignature, ...latestBlockhash }, "confirmed");
-  }
   dispatch({
     type: "STEP_SUCCESS",
     step: 5,
@@ -446,7 +482,6 @@ interface LiveFlowContext {
   connection: Connection;
   signAllTransactions: (txs: Transaction[]) => Promise<Transaction[]>;
   generate: (inputs: ProofInputs) => Promise<ProofResult>;
-  ensureApi: () => Promise<import("@aztec/bb.js").Barretenberg>;
   derivePrivateKey: () => Promise<string>;
   transferParams: TransferParams;
 }
@@ -472,7 +507,7 @@ function handleSubmitError(dispatch: Dispatch<FlowAction>, err: unknown): void {
 }
 
 async function runLiveFlow(ctx: LiveFlowContext): Promise<void> {
-  const { dispatch, walletHex, publicKey, connection, signAllTransactions, generate, ensureApi, derivePrivateKey, transferParams } = ctx;
+  const { dispatch, walletHex, publicKey, connection, signAllTransactions, generate, derivePrivateKey, transferParams } = ctx;
   let credential;
   try { credential = await runStepCredential(dispatch, walletHex); }
   catch (err) { handleCredentialError(dispatch, err); return; }
@@ -482,7 +517,7 @@ async function runLiveFlow(ctx: LiveFlowContext): Promise<void> {
   catch (err) { stepError(dispatch, 2, err, "Failed to fetch Merkle paths"); return; }
 
   let step3Result;
-  try { step3Result = await runStepProofGeneration(dispatch, publicKey, credential, paths, ensureApi, generate, transferParams); }
+  try { step3Result = await runStepProofGeneration(dispatch, publicKey, credential, paths, generate, transferParams); }
   catch (err) { stepError(dispatch, 3, err, "Proof generation failed"); return; }
 
   let txSignature: string | undefined;
@@ -493,7 +528,7 @@ async function runLiveFlow(ctx: LiveFlowContext): Promise<void> {
     return;
   }
 
-  try { await runStepConfirm(dispatch, connection, txSignature); }
+  try { await runStepConfirm(dispatch); }
   catch (err) {
     if (txSignature) { stepError(dispatch, 5, err, "Confirmation failed"); }
     else { dispatch({ type: "STEP_SUCCESS", step: 5 }); }
@@ -511,7 +546,7 @@ export function useProveFlow(): UseProveFlowReturn {
     ? bytesToHex(Array.from(publicKey.toBytes()))
     : null;
 
-  const { generate, ensureApi } = useProofGeneration();
+  const { generate } = useProofGeneration();
   const { derivePrivateKey } = useZkPrivateKey();
 
   const runningRef = useRef(false);
@@ -551,10 +586,10 @@ export function useProveFlow(): UseProveFlowReturn {
         return;
       }
 
-      await runLiveFlow({ dispatch, walletHex, publicKey, connection, signAllTransactions, generate, ensureApi, derivePrivateKey, transferParams: params });
+      await runLiveFlow({ dispatch, walletHex, publicKey, connection, signAllTransactions, generate, derivePrivateKey, transferParams: params });
       } finally { runningRef.current = false; }
     },
-    [connected, publicKey, walletHex, connection, signAllTransactions, generate, ensureApi, derivePrivateKey],
+    [connected, publicKey, walletHex, connection, signAllTransactions, generate, derivePrivateKey],
   );
 
   const startFlow = useCallback((params: TransferParams) => runFlow("live", params), [runFlow]);
