@@ -132,9 +132,23 @@ impl Config {
             upstream_token: read_var("GATEWAY_UPSTREAM_TOKEN")
                 .ok()
                 .map(|s| s.trim().to_string())
-                .filter(|s| !s.is_empty()),
+                .filter(|s| !s.is_empty())
+                .map(validate_upstream_token)
+                .transpose()?,
         })
     }
+}
+
+// Reject tokens that can't form a valid `Authorization: Bearer <token>` header
+// at cfg load. proxy.rs's per-req fallback only `warn!`s, sending the req
+// upstream unauthenticated → silent 401 storm. Fail fast instead.
+fn validate_upstream_token(token: String) -> Result<String, GatewayError> {
+    axum::http::HeaderValue::from_str(&format!("Bearer {token}")).map_err(|_| {
+        GatewayError::Config(
+            "GATEWAY_UPSTREAM_TOKEN contains bytes invalid for an HTTP header".into(),
+        )
+    })?;
+    Ok(token)
 }
 
 fn parse_origins(raw: &str) -> Vec<String> {
@@ -152,6 +166,7 @@ fn read_var(name: &str) -> Result<String, GatewayError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn read_var_missing_reports_name() {
@@ -205,6 +220,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn from_env_empty_upstream_token_yields_none() {
         // docker-compose passes `${API_TOKEN:-}` which becomes "" when unset.
         // We must treat that as None so we don't inject `Authorization: Bearer `
@@ -233,6 +249,28 @@ mod tests {
     }
 
     #[test]
+    #[serial]
+    fn from_env_rejects_token_with_invalid_header_bytes() {
+        // Tokens containing CR/LF / control bytes can't form a valid
+        // `Authorization: Bearer …` HeaderValue. Per-request fallback would
+        // silently drop auth → 401 storm. Reject at startup instead.
+        std::env::set_var("GATEWAY_UPSTREAM_URL", "http://localhost:0");
+        std::env::set_var("GATEWAY_DATABASE_URL", "sqlite::memory:");
+        std::env::set_var("GATEWAY_UPSTREAM_TOKEN", "bad\nsecret");
+
+        let err = Config::from_env().unwrap_err().to_string();
+        assert!(
+            err.contains("GATEWAY_UPSTREAM_TOKEN"),
+            "expected token rejection, got: {err}"
+        );
+
+        std::env::remove_var("GATEWAY_UPSTREAM_TOKEN");
+        std::env::remove_var("GATEWAY_UPSTREAM_URL");
+        std::env::remove_var("GATEWAY_DATABASE_URL");
+    }
+
+    #[test]
+    #[serial]
     fn samesite_none_without_secure_is_rejected() {
         std::env::set_var("GATEWAY_UPSTREAM_URL", "http://localhost:0");
         std::env::set_var("GATEWAY_DATABASE_URL", "sqlite::memory:");
