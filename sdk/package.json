@@ -1,6 +1,6 @@
 {
   "name": "@zksettle/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Zero-knowledge compliance SDK for Solana stablecoins",
   "license": "MIT",
   "author": "ZKSettle Contributors",
@@ -42,7 +42,9 @@
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "engines": {
     "node": ">=20.10.0"
   },

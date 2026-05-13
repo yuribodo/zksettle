@@ -33,10 +33,11 @@ import {
   useRecordWallet,
 } from "@/hooks/use-recent-wallets";
 import { useRegisterWallet } from "@/hooks/use-register-wallet";
+import { clearActiveApiKey } from "@/lib/api/active-key";
 import { ApiError } from "@/lib/api/client";
 import type { Credential } from "@/lib/api/schemas";
 import { cn } from "@/lib/cn";
-import { bytesToHex, isValidWalletHex, normalizeWalletHex } from "@/lib/wallet";
+import { bytesToHex, isValidWalletHex, isValidWalletInput, normalizeWalletHex, normalizeWalletInput } from "@/lib/wallet";
 
 function formatTimestamp(unixSeconds: number): string {
   return new Date(unixSeconds * 1000).toLocaleString("en-US", {
@@ -51,10 +52,12 @@ function formatTimestamp(unixSeconds: number): string {
 function describeError(err: unknown): { kind: "not-found" | "auth" | "conflict" | "other"; message: string } {
   if (err instanceof ApiError) {
     if (err.status === 404) return { kind: "not-found", message: "No credential for this wallet." };
-    if (err.status === 401 || err.status === 403)
-      return { kind: "auth", message: "Not authorized. Select an active API key in the sidebar." };
+    if (err.status === 401 || err.status === 403) {
+      void clearActiveApiKey();
+      return { kind: "auth", message: "API key expired or invalid. Re-authenticate below." };
+    }
     if (err.status === 409) return { kind: "conflict", message: "Wallet already has a credential." };
-    if (err.status === 400) return { kind: "other", message: "Invalid wallet hex (need 64 chars)." };
+    if (err.status === 400) return { kind: "other", message: "Invalid wallet address." };
     return { kind: "other", message: err.message };
   }
   return { kind: "other", message: err instanceof Error ? err.message : "Unknown error" };
@@ -63,9 +66,11 @@ function describeError(err: unknown): { kind: "not-found" | "auth" | "conflict" 
 function describeRegisterError(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 409) return "Wallet is already registered in the membership tree.";
-    if (err.status === 400) return "Invalid wallet hex (need exactly 64 hex characters).";
-    if (err.status === 401 || err.status === 403)
-      return "Not authorized. Select an active API key in the sidebar.";
+    if (err.status === 400) return "Invalid wallet address.";
+    if (err.status === 401 || err.status === 403) {
+      void clearActiveApiKey();
+      return "API key expired or invalid. Re-authenticate below.";
+    }
     return err.message;
   }
   return err instanceof Error ? err.message : "Unknown error";
@@ -84,9 +89,9 @@ export function WalletsCredentialsPanel() {
   const { data: recent = [] } = useRecentWallets();
   const recordWallet = useRecordWallet();
   const forgetWallet = useForgetWallet();
-  const registerInputValid = isValidWalletHex(registerInput);
+  const registerInputValid = isValidWalletInput(registerInput);
 
-  const inputValid = isValidWalletHex(walletInput);
+  const inputValid = isValidWalletInput(walletInput);
 
   const runRegister = async (normalized: string): Promise<void> => {
     register.reset();
@@ -102,14 +107,15 @@ export function WalletsCredentialsPanel() {
 
   const onRegister = (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!registerInputValid) return;
-    void runRegister(normalizeWalletHex(registerInput));
+    const normalized = normalizeWalletInput(registerInput);
+    if (!normalized) return;
+    void runRegister(normalized);
   };
 
   const lookup = (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!inputValid) return;
-    const normalized = normalizeWalletHex(walletInput);
+    const normalized = normalizeWalletInput(walletInput);
+    if (!normalized) return;
     setActiveWallet(normalized);
     recordWallet(normalized);
     issue.reset();
@@ -157,8 +163,8 @@ export function WalletsCredentialsPanel() {
             Register wallet
           </CardTitle>
           <CardDescription className="text-sm text-stone">
-            Add a wallet to the membership tree. Paste a 32-byte pubkey as 64 hex
-            chars (with or without <span className="font-mono">0x</span>).
+            Add a wallet to the membership tree. Paste a Solana address (Base58)
+            or 64 hex chars.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -172,7 +178,7 @@ export function WalletsCredentialsPanel() {
                 setRegisterInput(e.target.value);
                 register.reset();
               }}
-              placeholder="0x… (64 hex chars)"
+              placeholder="Solana address or 0x… hex"
               spellCheck={false}
               autoComplete="off"
               aria-invalid={registerInput.length > 0 && !registerInputValid}
@@ -193,7 +199,7 @@ export function WalletsCredentialsPanel() {
 
           {registerInput.length > 0 && !registerInputValid ? (
             <p id="register-help" className="mt-2 font-mono text-xs text-rust">
-              Wallet must be 64 hex characters.
+              Enter a valid Solana address or 64 hex characters.
             </p>
           ) : null}
         </CardContent>
@@ -208,7 +214,7 @@ export function WalletsCredentialsPanel() {
             Look up wallet credential
           </CardTitle>
           <CardDescription className="text-sm text-stone">
-            Paste a 32-byte wallet pubkey as 64 hex chars (with or without <span className="font-mono">0x</span>).
+            Paste a Solana address (Base58) or 64 hex chars.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -216,7 +222,7 @@ export function WalletsCredentialsPanel() {
             <Input
               value={walletInput}
               onChange={(e) => setWalletInput(e.target.value)}
-              placeholder="0x… (64 hex chars)"
+              placeholder="Solana address or 0x… hex"
               spellCheck={false}
               autoComplete="off"
               aria-invalid={walletInput.length > 0 && !inputValid}
@@ -231,7 +237,7 @@ export function WalletsCredentialsPanel() {
 
           {walletInput.length > 0 && !inputValid ? (
             <p id="wallet-help" className="mt-2 font-mono text-xs text-rust">
-              Wallet must be 64 hex characters.
+              Enter a valid Solana address or 64 hex characters.
             </p>
           ) : null}
         </CardContent>

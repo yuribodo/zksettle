@@ -64,7 +64,7 @@ function formatDate(unixSeconds: number): string {
 function describeError(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 401 || err.status === 403) {
-      return "Not authorized. Select an active API key in the sidebar, or set GATEWAY_ALLOW_OPEN_KEYS=true on the gateway.";
+      return "Not authorized. Create or activate an API key, or set GATEWAY_ALLOW_OPEN_KEYS=true on the gateway.";
     }
     if (err.status === 500) {
       return "Key administration is disabled on the gateway. Set GATEWAY_ADMIN_KEY or GATEWAY_ALLOW_OPEN_KEYS=true.";

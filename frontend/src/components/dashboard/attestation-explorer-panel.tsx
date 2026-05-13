@@ -1,9 +1,10 @@
 "use client";
 
 import { Copy, NavArrowDown, Search, Xmark } from "iconoir-react";
-import { useEffect, useState, type ReactNode, type SyntheticEvent } from "react";
+import { useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
 import { toast } from "sonner";
 
+import { clearActiveApiKey } from "@/lib/api/active-key";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { StatusPill, type StatusKind } from "@/components/dashboard/status-pill";
 import { TruncatedHash } from "@/components/dashboard/truncated-hash";
@@ -28,9 +29,10 @@ import {
 } from "@/hooks/use-recent-wallets";
 import { useRoots } from "@/hooks/use-roots";
 import { useSanctionsProof } from "@/hooks/use-sanctions-proof";
+import { useConnectedWallet } from "@/hooks/use-wallet-connection";
 import { ApiError } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
-import { isValidWalletHex, normalizeWalletHex } from "@/lib/wallet";
+import { bytesToHex, isValidWalletHex, normalizeWalletHex } from "@/lib/wallet";
 
 const EMPTY_LEAF = "0".repeat(64);
 
@@ -72,8 +74,14 @@ function rootMismatchMessage(
 function describeProofError(err: unknown): { kind: "not-found" | "auth" | "other"; message: string } {
   if (err instanceof ApiError) {
     if (err.status === 404) return { kind: "not-found", message: "No proof found for this wallet." };
-    if (err.status === 401 || err.status === 403)
-      return { kind: "auth", message: "Not authorized. Select an active API key in the sidebar." };
+    if (err.status === 401 || err.status === 403) {
+      const body = err.body as Record<string, unknown> | undefined;
+      const detail = typeof body?.error === "string" ? body.error : "";
+      if (detail.includes("signature") || detail.includes("wallet"))
+        return { kind: "auth", message: "You can only look up proofs for your own connected wallet." };
+      void clearActiveApiKey();
+      return { kind: "auth", message: "API key expired or invalid. Re-authenticate below." };
+    }
     return { kind: "other", message: err.message };
   }
   return { kind: "other", message: err instanceof Error ? err.message : "Unknown error" };
@@ -98,8 +106,19 @@ export function AttestationExplorerPanel() {
   const { data: recent = [] } = useRecentWallets();
   const recordWallet = useRecordWallet();
   const forgetWallet = useForgetWallet();
+  const connectedPubkey = useConnectedWallet();
+  const connectedHex = connectedPubkey
+    ? bytesToHex(Array.from(connectedPubkey.toBytes()))
+    : null;
 
   const inputValid = isValidWalletHex(walletInput);
+
+  const useMyWallet = () => {
+    if (!connectedHex) return;
+    setWalletInput(connectedHex);
+    setActiveWallet(connectedHex);
+    recordWallet(connectedHex);
+  };
 
   const lookup = (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -111,7 +130,12 @@ export function AttestationExplorerPanel() {
 
   const pickRecent = (wallet: string) => {
     setWalletInput(wallet);
-    setActiveWallet(wallet);
+    if (wallet === activeWallet) {
+      membershipQuery.refetch();
+      sanctionsQuery.refetch();
+    } else {
+      setActiveWallet(wallet);
+    }
     recordWallet(wallet);
   };
 
@@ -147,6 +171,11 @@ export function AttestationExplorerPanel() {
               <Search aria-hidden="true" className="size-4" />
               Search
             </Button>
+            {connectedHex && (
+              <Button type="button" variant="ghost" size="md" onClick={useMyWallet}>
+                Use my wallet
+              </Button>
+            )}
           </form>
 
           {walletInput.length > 0 && !inputValid ? (

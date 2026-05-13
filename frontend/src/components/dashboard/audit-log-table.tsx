@@ -4,6 +4,7 @@ import { Download, Refresh, SearchEngine } from "iconoir-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { clearActiveApiKey } from "@/lib/api/active-key";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { StatusPill } from "@/components/dashboard/status-pill";
 import { TableSkeleton } from "@/components/dashboard/table-skeleton";
@@ -63,8 +64,10 @@ function formatDateTime(unixSeconds: number): string {
 
 function describeError(err: unknown): string {
   if (err instanceof ApiError) {
-    if (err.status === 401 || err.status === 403)
-      return "Not authorized. Select an active API key in the sidebar.";
+    if (err.status === 401 || err.status === 403) {
+      void clearActiveApiKey();
+      return "API key expired or invalid. Re-authenticate below.";
+    }
     if (err.status === 502) return "Indexer is unreachable from the gateway.";
     if (err.status === 500)
       return "Indexer URL not configured (or filter value invalid). Set GATEWAY_INDEXER_URL on the gateway and check filter inputs.";

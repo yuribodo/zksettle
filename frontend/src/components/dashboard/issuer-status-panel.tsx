@@ -4,6 +4,7 @@ import { Copy, Refresh, WarningTriangle } from "iconoir-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { clearActiveApiKey } from "@/lib/api/active-key";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { StatusPill } from "@/components/dashboard/status-pill";
 import { TruncatedHash } from "@/components/dashboard/truncated-hash";
@@ -62,7 +63,8 @@ function statCardValue(
 function describeError(err: unknown): string {
   if (err instanceof ApiError) {
     if (err.status === 401 || err.status === 403) {
-      return "Not authorized. Select an active API key in the sidebar.";
+      void clearActiveApiKey();
+      return "API key expired or invalid. Re-authenticate below.";
     }
     if (err.status === 502) {
       return "Upstream issuer-service is unreachable.";
