@@ -44,18 +44,18 @@ export const STEPS: readonly StepMeta[] = [
     id: "proof",
     title: "Generate proof",
     description:
-      "Compute the Noir compliance proof in-browser via Barretenberg WASM.",
+      "Generate the Groth16 compliance proof via the backend prover.",
   },
   {
     id: "submit",
-    title: "Submit on-chain",
+    title: "Finalize on-chain",
     description:
-      "Send the proof transaction to Solana devnet for verification.",
+      "Upload the proof and finalize the hook payload on Solana devnet.",
   },
   {
     id: "result",
-    title: "Settlement result",
-    description: "Confirm the on-chain settlement and view the Solscan link.",
+    title: "Finalize result",
+    description: "View the finalize signature on Solscan (settle CPI pending).",
   },
 ];
 
