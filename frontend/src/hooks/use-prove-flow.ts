@@ -202,7 +202,7 @@ async function runStepProofGeneration(
     },
     durationMs: proofResult.durationMs,
   });
-  return { proofResult, zkPrivateKey, credentialExpiry, jurisdictionProof };
+  return { proofResult, zkPrivateKey, credentialExpiry, jurisdictionProof, epoch };
 }
 
 async function runStepSubmit(
@@ -216,6 +216,7 @@ async function runStepSubmit(
     credentialExpiry: string;
     jurisdictionProof: { path: string[]; path_indices: number[] };
     roots: import("@/lib/api/schemas").Roots;
+    epoch: string;
   },
   transferParams: TransferParams,
 ): Promise<string | undefined> {
@@ -370,7 +371,10 @@ async function runStepSubmit(
     writeIxs.push(await buildWriteChunkIx(publicKey, offset, chunk, connection));
   }
 
-  const epoch = Math.floor(Date.now() / 1000 / 86400);
+  // Reuse the epoch bound into the witness at proof-generation time.
+  // Recomputing here would diverge across a UTC midnight crossing and trip
+  // `check_bindings`' epoch/timestamp check on settle.
+  const epoch = Number(submitCtx.epoch);
   const finalizeIx = await buildFinalizeHookPayloadIx(publicKey, {
     nullifierHash: nullifierBytes,
     mint: mintPubkey,
