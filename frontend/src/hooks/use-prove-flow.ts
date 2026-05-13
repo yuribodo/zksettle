@@ -417,19 +417,18 @@ async function runStepSubmit(
   }
   const signedWrites = await signAllTransactions(writeTxs);
 
-  // Send writes sequentially — the on-chain handler enforces that each
-  // chunk offset matches high_water_mark, so ordering must be preserved.
-  let lastWriteSig = "";
+  // Send AND confirm each write before sending the next. The on-chain
+  // handler enforces `offset == high_water_mark`, so two writes racing into
+  // the leader out of order would surface as a silent failure of the later
+  // write (its confirm result carries an err, but the in-flight earlier
+  // write's status is what we'd be watching). Per-tx confirm preserves
+  // strict ordering and surfaces per-chunk failures immediately.
   for (const tx of signedWrites) {
-    lastWriteSig = await connection.sendRawTransaction(tx!.serialize(), {
+    await sendSigned(tx!, bh2, "processed", {
       skipPreflight: true,
       maxRetries: 5,
     });
   }
-
-  // Confirming the last write guarantees all prior writes landed (each
-  // write's offset must match the cumulative high_water_mark).
-  if (lastWriteSig) await confirmTx(lastWriteSig, bh2, "processed");
 
   // ── Batch 3: finalize (own fresh blockhash + Phantom popup) ──
   // Finalize is the final on-chain tx in this flow (settle_hook integration
