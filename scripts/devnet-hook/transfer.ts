@@ -227,7 +227,16 @@ async function main() {
     const headerSize = baselineInfo.data.length;
     const targetSize = headerSize + proofBytes.length;
     let currentSize = headerSize;
-    while (currentSize < targetSize) {
+    // Bound on proof size + small buffer; throw on stall so a reverting
+    // resize ix surfaces fast instead of looping on the pre-resize size.
+    const maxResizeAttempts = Math.ceil(proofBytes.length / 10_240) + 2;
+    for (let attempt = 0; currentSize < targetSize; attempt++) {
+      if (attempt >= maxResizeAttempts) {
+        throw new Error(
+          `hook_payload resize stalled at ${currentSize}/${targetSize} bytes after ${attempt} attempts`,
+        );
+      }
+      const prevSize = currentSize;
       const resizeSig = await program.methods
         .resizeHookPayload()
         .accounts({
@@ -241,6 +250,11 @@ async function main() {
       const after = await connection.getAccountInfo(hookPayloadPda);
       if (!after) throw new Error("hook_payload PDA missing after resize");
       currentSize = after.data.length;
+      if (currentSize === prevSize) {
+        throw new Error(
+          `hook_payload resize did not grow account (still ${currentSize} bytes); resize ix likely reverted`,
+        );
+      }
     }
 
     // 1b. write_hook_proof — upload proof in one chunk (< 1KB fits single tx)
