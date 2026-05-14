@@ -17,8 +17,8 @@ services:
 
   api-gateway:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
       - "4000:4000"
     environment:
