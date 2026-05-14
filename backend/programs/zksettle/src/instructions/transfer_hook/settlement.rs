@@ -6,7 +6,7 @@ use crate::instructions::bubblegum_mint::{
     cpi_mint_compliance_attestation, cpi_mint_from_remaining_tail, split_light_and_bubblegum,
 };
 use crate::instructions::settle_core::{settle_core, SettlementParams};
-use crate::instructions::verify_proof::{verify_bundle, BindingInputs};
+use crate::instructions::verify_proof::{verify_bundle, BindingInputs, EPOCH_LEN_SECS};
 use crate::state::{BubblegumTreeRegistry, Issuer};
 
 use super::{types::HookPayload, ExecuteHook, SettleHook};
@@ -84,8 +84,11 @@ fn run_settlement(sctx: SettlementContext<'_, '_>) -> Result<()> {
         clock.unix_timestamp,
     )?;
 
-    let timestamp = u64::try_from(clock.unix_timestamp)
-        .map_err(|_| error!(ZkSettleError::NegativeClock))?;
+    let timestamp = sctx
+        .payload
+        .epoch
+        .checked_mul(EPOCH_LEN_SECS as u64)
+        .ok_or_else(|| error!(ZkSettleError::NegativeClock))?;
 
     crate::cu_probe!("pre-verify_bundle");
     verify_bundle(

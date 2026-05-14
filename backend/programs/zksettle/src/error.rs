@@ -60,7 +60,7 @@ pub enum ZkSettleError {
     SanctionsRootMismatch,
     #[msg("Witness jurisdiction_root does not match issuer PDA")]
     JurisdictionRootMismatch,
-    #[msg("Witness timestamp does not match on-chain clock")]
+    #[msg("Witness timestamp does not match epoch boundary")]
     TimestampMismatch,
     #[msg("Sanctions root must be non-zero")]
     ZeroSanctionsRoot,

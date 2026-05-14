@@ -7,7 +7,7 @@ use crate::instructions::settle_core::{settle_core, SettlementParams};
 
 use super::bindings::{verify_bundle, BindingInputs};
 use super::helpers::validate_epoch;
-use super::VerifyProof;
+use super::{VerifyProof, EPOCH_LEN_SECS};
 
 #[event]
 pub struct ProofSettled {
@@ -50,8 +50,9 @@ pub fn handler<'info>(
     let clock = Clock::get()?;
     validate_epoch(clock.unix_timestamp, epoch)?;
 
-    let timestamp = u64::try_from(clock.unix_timestamp)
-        .map_err(|_| error!(ZkSettleError::NegativeClock))?;
+    let timestamp = epoch
+        .checked_mul(EPOCH_LEN_SECS as u64)
+        .ok_or_else(|| error!(ZkSettleError::NegativeClock))?;
 
     verify_bundle(
         &proof_and_witness,

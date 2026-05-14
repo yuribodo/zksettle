@@ -122,7 +122,7 @@ mod bindings {
             amt: 1_000,
             sanctions_root: [3u8; 32],
             jurisdiction_root: [4u8; 32],
-            timestamp: 1_700_000_000,
+            timestamp: 42 * EPOCH_LEN_SECS as u64,
         }
     }
 
