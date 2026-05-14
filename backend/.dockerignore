@@ -1,8 +1,41 @@
+# Build context is backend/ (docker-compose.yml `context: ./backend` and
+# Railway service Dockerfile Path = Dockerfile w/ Root Directory = /backend).
+# Patterns are relative to backend/.
+#
+# Without this file docker tarballs backend/target/ (~56 GB) into the build
+# context, killing build time and disk. .gitignore is NOT consulted by
+# docker — this file is the only source of truth for build-context exclusions.
+
+# Heavy outputs
 target/
-node_modules/
-mutants.out/
-mutants.out.old/
-.git/
-.env*
+**/target/
+**/dist/
+**/node_modules/
+**/mutants.out/
+**/mutants.out.old/
+
+# Tests + local dev scratch
+tests/fixtures/
+
+# Secrets — never want these in image layers
+.env
+.env.*
+!.env.example
 *.pem
 *.key
+**/keypairs/
+
+# VCS metadata (defensive — backend/ shouldn't have its own .git, but if a
+# submodule ever appears, keep it out of the image)
+.git/
+.gitignore
+.gitattributes
+
+# Misc
+**/.DS_Store
+*.log
+*.proof
+*.wtns
+
+# Note: artefacts/zksettle_slice.{json,ccs,pk} are NOT excluded by anything
+# above and ship into the runtime image via COPY in Dockerfile.

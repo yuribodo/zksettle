@@ -1,31 +1,30 @@
-frontend/
-sdk/
-scripts/
-docs/
-video/
+# Railway is configured per service with Root Directory = /backend, so it
+# only uploads the backend/ subtree. Frontend / sdk / docs etc. are outside
+# that root and never reach Railway. Patterns below focus on what's inside
+# backend/ and apply during the upload phase.
+
+# Heavy outputs
 **/target/
-node_modules/
 **/node_modules/
 **/mutants.out/
 **/mutants.out.old/
-.git/
+
+# Local secrets — never push
 .env
 .env.*
 !.env.example
+
+# Local dev scratch
 *.proof
 *.wtns
 test-ledger/
 .anchor/
 .surfpool/
 .yarn/
+**/tests/fixtures/
 
-# The issuer-service Docker image bakes in Sunspot circuit artefacts from
-# circuits/target/zksettle_slice.{json,ccs,pk}. Keep that subtree shipped to
-# Railway; the rest of circuits/ (Noir source, intermediates) is not needed
-# at runtime. **/target/ above already excludes circuits/target by default,
-# so we re-include the dir then whitelist the 3 artefacts the runtime reads.
-!circuits/target/
-circuits/target/*
-!circuits/target/zksettle_slice.json
-!circuits/target/zksettle_slice.ccs
-!circuits/target/zksettle_slice.pk
+# VCS metadata
+.git/
+
+# Note: backend/artefacts/zksettle_slice.{json,ccs,pk} ship as part of the
+# normal upload — no whitelist needed since nothing above excludes them.

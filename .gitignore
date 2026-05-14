@@ -21,10 +21,9 @@ video/
 
 # Ship pre-built Sunspot circuit artefacts so the issuer-service Dockerfile
 # can bake them into the image without needing nargo/sunspot at build time.
-# Re-include the dir, re-exclude its contents, then whitelist the 3 artefacts
-# the runtime needs (ACIR JSON, gnark CCS, Groth16 proving key).
-!circuits/target/
-circuits/target/*
-!circuits/target/zksettle_slice.json
-!circuits/target/zksettle_slice.ccs
-!circuits/target/zksettle_slice.pk
+# Artefacts live under backend/artefacts/ (regen step copies them there from
+# circuits/target/). The *.pk rule above would otherwise hide the proving
+# key, so we whitelist the three runtime files explicitly.
+!backend/artefacts/zksettle_slice.json
+!backend/artefacts/zksettle_slice.ccs
+!backend/artefacts/zksettle_slice.pk

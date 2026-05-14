@@ -18,8 +18,8 @@ services:
 
   api-gateway:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      context: ./backend
+      dockerfile: Dockerfile
     ports:
       - "4000:4000"
     environment:
@@ -43,8 +43,8 @@ services:
 
   issuer-service:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      context: ./backend
+      dockerfile: Dockerfile
     ports:
       - "3000:3000"
     environment:
@@ -66,8 +66,8 @@ services:
 
   indexer:
     build:
-      context: .
-      dockerfile: backend/Dockerfile
+      context: ./backend
+      dockerfile: Dockerfile
     ports:
       - "3001:3001"
     environment:

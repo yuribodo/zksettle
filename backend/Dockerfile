@@ -1,15 +1,17 @@
 # syntax=docker/dockerfile:1.6
 #
-# Build context is the repo ROOT (see docker-compose.yml). All COPY paths are
-# rooted at the repo, not the backend/ subdir. The image bundles three runtime
-# pieces the issuer-service /prove/groth16 endpoint needs:
+# Build context is the backend/ directory (see docker-compose.yml and the
+# Railway service settings: Root Directory = /backend, Dockerfile Path =
+# Dockerfile). All COPY paths are relative to backend/. The image bundles
+# three runtime pieces the issuer-service /prove/groth16 endpoint needs:
 #   1. The three service binaries (api-gateway, issuer-service, indexer)
 #   2. The Sunspot Go CLI, built from source at the same rev pinned by the
-#      gnark-verifier-solana Cargo dep in backend/programs/zksettle/Cargo.toml
-#   3. The pre-built circuit artefacts (ACIR JSON, gnark CCS, Groth16 PK).
-#      These are produced by `nargo compile` + `sunspot setup` and committed
-#      under circuits/target/. Regenerating them requires updating
-#      DEFAULT_ACIR_SHA256 in backend/crates/issuer-service/src/config.rs.
+#      gnark-verifier-solana Cargo dep in programs/zksettle/Cargo.toml
+#   3. The pre-built circuit artefacts (ACIR JSON, gnark CCS, Groth16 PK)
+#      under backend/artefacts/. These are produced by `nargo compile` +
+#      `sunspot setup` (which writes to circuits/target/) and copied into
+#      backend/artefacts/ as a regen step. Regenerating them requires
+#      updating DEFAULT_ACIR_SHA256 in crates/issuer-service/src/config.rs.
 
 FROM golang:1.24-bookworm AS sunspot-builder
 WORKDIR /src
@@ -25,23 +27,22 @@ WORKDIR /app
 RUN apt-get update \
  && apt-get install -y --no-install-recommends clang libclang-dev libssl-dev pkg-config \
  && rm -rf /var/lib/apt/lists/*
-COPY backend/Cargo.toml backend/Cargo.lock backend/rust-toolchain.toml ./
-COPY backend/programs/ programs/
-COPY backend/crates/ crates/
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY programs/ programs/
+COPY crates/ crates/
 RUN cargo build --release --locked -p api-gateway -p issuer-service -p indexer
 
 FROM debian:bookworm-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates \
- && rm -rf /var/lib/apt/lists/*
-RUN useradd -r -s /usr/sbin/nologin appuser
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd -r -s /usr/sbin/nologin appuser
 COPY --from=builder /app/target/release/api-gateway /usr/local/bin/
 COPY --from=builder /app/target/release/issuer-service /usr/local/bin/
 COPY --from=builder /app/target/release/indexer /usr/local/bin/
 COPY --from=sunspot-builder /out/sunspot /usr/local/bin/sunspot
-COPY circuits/target/zksettle_slice.json /artefacts/zksettle_slice.json
-COPY circuits/target/zksettle_slice.ccs  /artefacts/zksettle_slice.ccs
-COPY circuits/target/zksettle_slice.pk   /artefacts/zksettle_slice.pk
-RUN chown -R appuser:appuser /artefacts
+COPY --chown=appuser:appuser artefacts/zksettle_slice.json /artefacts/zksettle_slice.json
+COPY --chown=appuser:appuser artefacts/zksettle_slice.ccs  /artefacts/zksettle_slice.ccs
+COPY --chown=appuser:appuser artefacts/zksettle_slice.pk   /artefacts/zksettle_slice.pk
 USER appuser
 CMD ["sh", "-c", "exec ${SERVICE:-api-gateway}"]
