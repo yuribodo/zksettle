@@ -42,6 +42,20 @@ export default function LoginPage() {
           </p>
         </div>
 
+        <div
+          role="alert"
+          className="flex w-full flex-col gap-1 rounded-[var(--radius-3)] border border-warning-text/30 bg-warning-bg px-4 py-3 text-left text-warning-text"
+        >
+          <p className="font-mono text-[10px] tracking-[0.1em] uppercase">
+            Devnet only
+          </p>
+          <p className="text-xs leading-relaxed">
+            ZKSettle runs on Solana <strong>devnet</strong>, not mainnet. Connect
+            a wallet configured for devnet — mainnet wallets will not work and
+            no real funds are involved.
+          </p>
+        </div>
+
         {connected ? (
           <div className="flex w-full flex-col gap-3">
             <div className="flex items-center justify-center gap-2 rounded-[var(--radius-3)] border border-border-subtle bg-surface px-4 py-3">
