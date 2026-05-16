@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, Plus, Search, Trash, Xmark } from "iconoir-react";
+import { Clock, Plus, Search, Trash, WarningTriangle, Xmark } from "iconoir-react";
 import { useEffect, useState, type SyntheticEvent } from "react";
 import { toast } from "sonner";
 
@@ -168,6 +168,18 @@ export function WalletsCredentialsPanel() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div
+            role="alert"
+            className="mb-3 flex items-start gap-2 rounded-[var(--radius-3)] border border-warning-text/40 bg-warning-bg px-3 py-2 text-warning-text"
+          >
+            <WarningTriangle aria-hidden="true" className="size-4 shrink-0 mt-0.5" strokeWidth={1.8} />
+            <div className="flex flex-col gap-0.5">
+              <span className="font-mono text-[10px] tracking-[0.1em] uppercase">Devnet only</span>
+              <span className="text-xs leading-snug">
+                Paste a <strong>devnet</strong> wallet address. Mainnet addresses will not work here.
+              </span>
+            </div>
+          </div>
           <form
             onSubmit={onRegister}
             className="flex flex-col gap-3 sm:flex-row sm:items-center"
@@ -218,6 +230,18 @@ export function WalletsCredentialsPanel() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <div
+            role="alert"
+            className="mb-3 flex items-start gap-2 rounded-[var(--radius-3)] border border-warning-text/40 bg-warning-bg px-3 py-2 text-warning-text"
+          >
+            <WarningTriangle aria-hidden="true" className="size-4 shrink-0 mt-0.5" strokeWidth={1.8} />
+            <div className="flex flex-col gap-0.5">
+              <span className="font-mono text-[10px] tracking-[0.1em] uppercase">Devnet only</span>
+              <span className="text-xs leading-snug">
+                Look up <strong>devnet</strong> wallets only — mainnet addresses are not supported.
+              </span>
+            </div>
+          </div>
           <form onSubmit={lookup} className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <Input
               value={walletInput}
