@@ -226,6 +226,12 @@ function IntroCard({
                   onChange={(e) => onTransferParamsChange({ ...transferParams, mint: e.target.value })}
                   className="h-9 w-full rounded-[var(--radius-2)] border border-border-subtle bg-canvas px-3 font-mono text-xs text-ink placeholder:text-muted transition-colors hover:border-border focus-visible:border-forest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
                 />
+                <span className="mt-1 text-[11px] leading-snug text-muted">
+                  Public key of the Token-2022 mint you&apos;re transferring (the
+                  asset itself, not a wallet). Paste an SPL mint deployed on
+                  devnet — e.g. the stablecoin mint configured for this
+                  environment.
+                </span>
               </label>
               <label className="flex flex-col gap-1">
                 <span className="font-mono text-[10px] tracking-[0.1em] text-muted uppercase">Recipient address</span>
