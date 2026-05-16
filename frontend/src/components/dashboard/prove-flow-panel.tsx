@@ -242,6 +242,9 @@ function IntroCard({
                   onChange={(e) => onTransferParamsChange({ ...transferParams, recipient: e.target.value })}
                   className="h-9 w-full rounded-[var(--radius-2)] border border-border-subtle bg-canvas px-3 font-mono text-xs text-ink placeholder:text-muted transition-colors hover:border-border focus-visible:border-forest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-forest"
                 />
+                <span className="mt-1 inline-flex items-center gap-1 self-start rounded-[var(--radius-2)] border border-warning-text/40 bg-warning-bg px-1.5 py-0.5 font-mono text-[10px] tracking-[0.05em] text-warning-text uppercase">
+                  Devnet wallet only — no mainnet
+                </span>
               </label>
             </div>
             <label className="flex flex-col gap-1 sm:max-w-[calc(50%-0.375rem)]">
